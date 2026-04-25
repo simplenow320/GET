@@ -48,6 +48,17 @@ All pages import design tokens (`BRAND`, `tone`, `line`, `type`, `r`, `ease`, `s
 ## Auth
 Session-based auth using scrypt password hashing + random session tokens (SHA-256 hashed at rest in the `sessions` table). The session token is set as an **httpOnly, Secure, SameSite=Lax cookie** named `gs` (30-day TTL). The frontend never reads or stores the raw token — `lib/api-client-react/src/custom-fetch.ts` sets `credentials: "include"` so the browser attaches it automatically. Bearer-token auth is still accepted for non-browser/CLI clients. RBAC is enforced backend-side via `requireProjectAccess(minRole)` middleware.
 
+### Sign in with Google
+"Continue with Google" button on `/login` and `/signup` triggers a top-level GET to `/api/auth/google`. Routes live in `artifacts/api-server/src/routes/oauth-google.ts` with helpers in `lib/oauth-google.ts` (no `google-auth-library` dep — direct fetches against `oauth2.googleapis.com/token` and `openidconnect.googleapis.com/v1/userinfo`).
+
+Flow:
+1. `GET /api/auth/google?next=...` mints an HMAC-signed `state = nonce.next.hmac(SESSION_SECRET)`, sets it in a 10-minute httpOnly `gs_oauth_state` cookie, and 302s to Google's authorize endpoint with `scope=openid email profile`.
+2. `GET /api/auth/google/callback` verifies that the cookie state == query state == valid HMAC, exchanges the code for an access token, fetches userinfo, refuses unverified emails (`email_verified=false`), then either looks up by `google_sub` → falls back to email match (and links `google_sub`) → falls back to creating a new passwordless user. Issues the same `gs` session cookie as password login and 302s to the validated `next` path.
+
+Friendly error codes surfaced to `/login?error=...`: `oauth_cancelled`, `oauth_state`, `oauth_exchange`, `oauth_unverified`, `oauth_unavailable`. The login page reads them once on mount, shows a destructive toast, and strips the param.
+
+`users.password_hash` is **nullable** (Google-only users have no password — they can set one later via `/forgot-password`). `users.google_sub` is a unique nullable text column carrying the OIDC `sub` so we link by stable identifier rather than email (which can change in Google).
+
 ### CSRF defense (defense in depth)
 1. **SameSite=Lax** on the session cookie blocks most cross-site form/fetch CSRF.
 2. **Origin-header gate** in `app.ts` runs on every mutating request (POST/PUT/PATCH/DELETE outside `/api/public/*`). It hardens against the case where Replit's edge proxy rewrites `SameSite=Lax` to `None` for iframe contexts. Rules: allowlisted Origin → pass; missing Origin + no session cookie → pass (curl/Bearer client); everything else → 403 "Bad origin".
@@ -90,6 +101,8 @@ All FK columns now have explicit `references()` with documented delete behavior:
 All under `/api`:
 - `GET /healthz`
 - `GET/POST /auth/me`, `/auth/signup`, `/auth/login`, `/auth/logout`
+- `POST /auth/forgot-password`, `POST /auth/reset-password`
+- `GET /auth/google`, `GET /auth/google/callback` — Google OAuth (sign-in / sign-up)
 - `GET/POST /projects`, `GET/PATCH/DELETE /projects/:id`
 - `GET /projects/stats`
 - `GET/POST /projects/:id/content`, `PATCH/DELETE /projects/:id/content/:fieldId`

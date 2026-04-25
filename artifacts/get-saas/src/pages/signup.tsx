@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo, PasswordInput } from "@/lib/ui";
+import { GoogleSignInButton, OrDivider } from "@/components/google-sign-in-button";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -96,6 +97,9 @@ export default function Signup() {
             Set up safe client editing in minutes.
           </p>
         </div>
+
+        <GoogleSignInButton next={params.next ?? undefined} label="Sign up with Google" />
+        <OrDivider />
 
         <Form {...form}>
           <form

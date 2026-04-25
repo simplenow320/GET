@@ -6,7 +6,13 @@ export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
+  // Nullable: users who signed up via Google OAuth have no password.
+  // They can later set one via the /forgot-password flow if they wish.
+  passwordHash: text("password_hash"),
+  // Stable Google account identifier (the OIDC `sub` claim). Unique when
+  // present; null for password-only accounts. We link by `sub` rather than
+  // by email because users can change their primary Google email.
+  googleSub: text("google_sub").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

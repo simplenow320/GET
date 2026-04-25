@@ -1,4 +1,5 @@
-import { Link, useLocation } from "wouter";
+import { useEffect, useRef } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo, PasswordInput } from "@/lib/ui";
+import { GoogleSignInButton, OrDivider } from "@/components/google-sign-in-button";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -25,6 +27,23 @@ function readNextParam(): string | null {
   return raw;
 }
 
+// Friendly messages for the `?error=` codes our Google OAuth callback
+// redirects with. The codes themselves are stable and safe to surface; we
+// translate to copy here so the route handler can stay terse.
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_cancelled: "Sign-in was cancelled. You can try again any time.",
+  oauth_state:
+    "Your sign-in session expired or was blocked. Please try again — make sure third-party cookies are allowed.",
+  oauth_exchange:
+    "Couldn't finish signing in with Google. Please try again in a moment.",
+  oauth_unverified:
+    "Your Google account email isn't verified. Verify it with Google and try again.",
+  oauth_unavailable:
+    "Sign-in with Google isn't available right now. Please use email and password.",
+  oauth_conflict:
+    "This email is already linked to a different Google account. Sign in with email and password, then link Google from your account settings.",
+};
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -35,6 +54,40 @@ export default function Login() {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
+
+  // Surface OAuth callback errors as a toast and strip the param so a
+  // refresh doesn't replay the message.
+  //
+  // Three subtleties to get right:
+  //   1. The global <Toaster/> registers its listener inside *its own* effect,
+  //      which on a fresh mount runs AFTER this one (sibling-effect order).
+  //      So we defer the toast() call by one tick.
+  //   2. Calling replaceState below changes wouter's `search`, re-runs this
+  //      effect, and would normally fire the previous cleanup — which would
+  //      cancel the deferred toast. We avoid that by NOT returning a cleanup
+  //      and instead deduping with a ref so each error code only ever fires
+  //      one toast over this component's lifetime.
+  //   3. We also strip the URL param INSIDE the deferred callback so the
+  //      `search` change can't race ahead of the toast dispatch.
+  const search = useSearch();
+  const handledErrorRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+    const code = params.get("error");
+    if (!code) return;
+    if (handledErrorRef.current === code) return;
+    const message = OAUTH_ERROR_MESSAGES[code];
+    if (!message) return;
+    handledErrorRef.current = code;
+    setTimeout(() => {
+      toast({ variant: "destructive", title: "Sign-in failed", description: message });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   function onSubmit(values: z.infer<typeof loginSchema>) {
     loginMutation.mutate(
@@ -91,6 +144,9 @@ export default function Login() {
             Sign in to manage your projects.
           </p>
         </div>
+
+        <GoogleSignInButton next={readNextParam() ?? undefined} />
+        <OrDivider />
 
         <Form {...form}>
           <form

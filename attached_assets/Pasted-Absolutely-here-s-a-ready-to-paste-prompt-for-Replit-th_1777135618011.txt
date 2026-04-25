@@ -1,0 +1,190 @@
+Absolutely — here’s a **ready-to-paste prompt** for Replit that tells it to do a **simple, punchy rewrite** of your landing page copy.
+
+---
+
+## Paste this into Replit
+
+```text
+Rewrite the landing page copy to be simple, punchy, clear, and not overly serious.
+
+IMPORTANT RULES:
+- Do NOT change my logo
+- Do NOT change my tagline
+- Keep the exact existing logo and tagline as they are
+- Do NOT invent a new brand voice
+- Do NOT make the page sound corporate, technical, or hypey
+- Do NOT add fluff
+- Do NOT overexplain
+- Do NOT make it sound like a security company
+- Keep it direct, friendly, and premium
+- Keep the tone light, confident, and to the point
+
+PAGE GOAL:
+The page should quickly explain the pain for:
+1. the vibe coder
+2. the client
+
+Then clearly explain that get solves both.
+
+COPY GOALS:
+- speak directly to the problem
+- show that setup is easy for the vibe coder
+- show that editing is easy for the client
+- show that it is safe / controlled without getting too technical
+- explain how it works in very few words
+- mention Replit-first clearly
+- mention that it can work with other code-first apps too
+- keep everything short and clean
+
+STYLE:
+- short sections
+- strong headlines
+- minimal body copy
+- no jargon
+- no long paragraphs
+- no enterprise buzzwords
+- no exaggerated claims
+- no cheesy startup language
+- no “revolutionary” / “game-changing” language
+- should feel like a premium, minimalist SaaS site
+
+KEEP THE HERO SIMPLE:
+- keep my existing logo
+- keep my existing tagline exactly
+- under that, add a short punchy pain/solution section
+
+REWRITE THE PAGE USING THIS FLOW:
+
+1. HERO
+Keep existing logo and tagline exactly as-is.
+
+2. PAIN / RELIEF
+Headline:
+“You build fast. Then the tiny edits start.”
+
+Body:
+Vibe coders get stuck making every text, image, and button change by hand.
+Clients get stuck waiting on simple updates they thought they could do themselves.
+
+Relief line:
+“get makes the handoff easy.”
+
+Body:
+You keep control of structure, permissions, and publishing.
+Your client gets a simple way to update approved content without touching code.
+
+3. SAFE / CONTROLLED
+Headline:
+“Built for safe handoff”
+
+Body:
+Clients can edit approved content.
+You keep control of layout, permissions, and what goes live.
+
+4. EASY SETUP
+Headline:
+“Built for Replit first”
+
+Body:
+Connect get to the apps you already build.
+Fast setup for Replit projects, with a path to other code-first apps too.
+
+5. EASY FOR CLIENTS
+Headline:
+“Simple for clients”
+
+Body:
+No code. No confusing backend. No messy handoff.
+Just a clean editing experience for the parts you approve.
+
+6. HOW IT WORKS
+Headline:
+“How it works”
+
+Use short step copy:
+Build your app
+Connect get
+Choose what can be edited
+Invite your client
+Review and publish
+
+7. SETUP TIME
+Headline:
+“Fast to set up”
+
+Body:
+Designed to feel like minutes, not a migration project.
+
+8. CTA
+Headline:
+“Build your app. Connect get. Let clients edit safely.”
+
+Button:
+“Start free”
+
+FINAL INSTRUCTIONS:
+- Make the wording feel tighter, cleaner, and more natural than the draft above
+- Keep the spirit of the copy, but improve it
+- Shorter is better
+- Make it sound like a real premium SaaS landing page
+- Keep the page minimal and centered
+- No top nav
+- No extra logos
+- No extra brand marks
+- No fake testimonials
+- No filler sections
+- The page should feel obvious in under 10 seconds
+```
+
+---
+
+## If Replit makes it too serious, follow with this
+
+```text
+Make the copy less serious, less corporate, and less wordy.
+
+I want it to sound:
+- punchy
+- calm
+- direct
+- premium
+- simple
+
+I do NOT want:
+- enterprise language
+- heavy security language
+- startup cliché language
+- long explanations
+- too many words
+
+Tighten every section.
+If a sentence can be shorter, shorten it.
+Make the page feel obvious and easy.
+```
+
+---
+
+## If Replit changes your brand stuff, follow with this
+
+```text
+Do not change my logo or tagline.
+Keep both exactly as they are.
+Only rewrite the supporting landing page copy underneath.
+Do not invent new brand elements.
+Do not add extra logos or icons.
+```
+
+---
+
+## My favorite short tone line to keep it aligned
+
+If you want one extra sentence to guide the style, add this:
+
+```text
+The copy should sound like a smart founder who gets to the point fast.
+```
+
+If you want, I can also give you:
+- a **super short version** of this prompt,
+- a **stronger homepage copy draft** you can paste directly,
+- or a **before/after rewrite** of your current page copy.
