@@ -1,0 +1,126 @@
+Build a premium SaaS website and product called “get”.
+
+IMPORTANT BRAND RULES:
+- I am uploading my real brand assets and reference images.
+- Use ONLY my uploaded logo/brand asset for the get branding.
+- Do NOT generate, invent, redraw, or replace the logo.
+- Do NOT add extra logos, icons, marks, or symbols in headers, corners, or footers.
+- The exact tagline is: “Let clients edit your app without breaking it.”
+- Follow the visual style of my uploaded references exactly: simple, soft, premium, minimalist, friendly, and clean.
+- The look should feel light, modern, and confident — not corporate, not flashy, not overly serious.
+
+FILES I AM PROVIDING:
+- public/get-logo-hero.png → official logo / mascot / tagline reference
+- public/get-landing-reference.png → landing page style reference
+- public/get-ui-reference.png → product UI style reference
+
+PRODUCT GOAL:
+This is a SaaS for vibe coders who build apps/sites in Replit and want clients to edit content safely after launch.
+The product is a hosted control plane plus SDK for customer apps.
+The message is:
+- install quickly
+- clients edit visually
+- developers keep control
+- simple, secure, and easy
+
+BUILD TWO DISTINCT EXPERIENCES:
+
+1) PUBLIC LANDING PAGE
+This should be branded as “get”.
+Rules:
+- no top navigation menu
+- no header links
+- no tiny logo in the upper corners
+- no secondary brand marks
+- no clutter
+- just a strong hero using my uploaded logo asset prominently
+- use the exact tagline only
+- clearly explain the product in simple language
+- have one strong CTA section
+- make the entire landing page feel minimalist and premium
+- use soft transitions and subtle motion only
+- no loud gradients, no glassmorphism overload, no startup clichés
+
+2) PRODUCT / APP UI
+This should have absolutely no visible get branding inside the app experience.
+Rules:
+- no logo inside the product UI
+- no mascot inside the product UI
+- no brand-colored marketing feel inside the app
+- the product UI should feel white-label, calm, minimalist, and practical
+- simple cards, generous spacing, soft shadows, rounded corners, clear hierarchy
+- easy for non-technical users
+- should feel secure and trustworthy
+- should look like a premium editor/control system
+
+PAGES TO BUILD:
+A) Landing page
+B) Auth page(s): sign up / log in
+C) SaaS dashboard for project owners
+D) Project setup wizard
+E) Editor mode preview / client editing screen
+F) Basic settings / domains / publish / users screens
+
+LANDING PAGE CONTENT STRUCTURE:
+- Hero using the uploaded logo asset as the main visual
+- Short explanation section: what get does
+- 3 simple benefit cards
+- How it works section with 3 steps
+- Security / control section
+- CTA section
+- Keep copy short and direct
+
+SUGGESTED BENEFITS:
+- Let clients update content visually
+- Keep layout and design protected
+- Install fast in Replit-built apps
+
+SUGGESTED HOW IT WORKS:
+- Build your app
+- Connect get
+- Let clients edit safely
+
+APP / DASHBOARD CORE AREAS:
+- Projects
+- Setup Wizard
+- Content Map
+- Client Invite
+- Domains
+- Drafts / Publish
+- Roles / Permissions
+- Activity / Audit
+
+TECH STACK:
+Use a production-friendly Replit-compatible full-stack architecture.
+Prefer a clean modern stack suitable for SaaS:
+- Next.js or React-based app
+- TypeScript
+- Tailwind CSS
+- component system with reusable UI primitives
+- auth-ready structure
+- secure server-side API routes
+- database-ready models
+- environment variable support
+- clear separation between public site and authenticated app
+
+DESIGN DIRECTION:
+- warm neutral background similar to my references
+- dark navy/ink text
+- soft yellow accent only when useful
+- large typography
+- rounded rectangles
+- lots of whitespace
+- minimal borders
+- subtle hover states
+- soft transitions, not bouncy
+- premium but playful restraint
+
+IMPORTANT:
+- The landing page must use only my uploaded logo/hero asset for branding.
+- The internal app UI must not visibly brand itself as get.
+- Do not improvise the logo.
+- Do not add menu clutter.
+- Do not add fake testimonials or fake companies.
+- Keep everything clean and believable.
+
+Now build the full initial version of this SaaS site and product shell with real pages, clean routing, reusable components, and a polished premium minimalist design.

@@ -3,20 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification for get SaaS
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: projects
+    description: Project management
+  - name: content
+    description: Content fields and regions
+  - name: invites
+    description: Client invite management
+  - name: domains
+    description: Domain configuration
+  - name: users
+    description: User and role management
+  - name: activity
+    description: Audit and activity logs
+  - name: drafts
+    description: Draft and publish management
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +40,510 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Sign up
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out
+      responses:
+        "200":
+          description: Logged out
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectBody"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /projects/stats:
+    get:
+      operationId: getProjectStats
+      tags: [projects]
+      summary: Get project summary stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectStats"
+
+  /projects/{projectId}/content:
+    get:
+      operationId: listContentFields
+      tags: [content]
+      summary: List content fields for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Content fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContentField"
+    post:
+      operationId: createContentField
+      tags: [content]
+      summary: Create a content field
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContentFieldBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentField"
+
+  /projects/{projectId}/content/{fieldId}:
+    patch:
+      operationId: updateContentField
+      tags: [content]
+      summary: Update a content field
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContentFieldBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentField"
+    delete:
+      operationId: deleteContentField
+      tags: [content]
+      summary: Delete a content field
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /projects/{projectId}/invites:
+    get:
+      operationId: listInvites
+      tags: [invites]
+      summary: List client invites
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invite"
+    post:
+      operationId: createInvite
+      tags: [invites]
+      summary: Invite a client
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInviteBody"
+      responses:
+        "201":
+          description: Invite sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invite"
+
+  /projects/{projectId}/invites/{inviteId}:
+    delete:
+      operationId: revokeInvite
+      tags: [invites]
+      summary: Revoke an invite
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Revoked
+
+  /projects/{projectId}/domains:
+    get:
+      operationId: listDomains
+      tags: [domains]
+      summary: List domains for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Domains
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Domain"
+    post:
+      operationId: addDomain
+      tags: [domains]
+      summary: Add a domain
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddDomainBody"
+      responses:
+        "201":
+          description: Domain added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Domain"
+
+  /projects/{projectId}/domains/{domainId}:
+    delete:
+      operationId: removeDomain
+      tags: [domains]
+      summary: Remove a domain
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
+  /projects/{projectId}/users:
+    get:
+      operationId: listProjectUsers
+      tags: [users]
+      summary: List users for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectUser"
+
+  /projects/{projectId}/users/{userId}/role:
+    patch:
+      operationId: updateUserRole
+      tags: [users]
+      summary: Update user role
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRoleBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectUser"
+
+  /projects/{projectId}/activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      summary: List activity / audit log for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activity entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEntry"
+
+  /projects/{projectId}/drafts:
+    get:
+      operationId: listDrafts
+      tags: [drafts]
+      summary: List drafts for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Draft"
+
+  /projects/{projectId}/drafts/{draftId}/publish:
+    post:
+      operationId: publishDraft
+      tags: [drafts]
+      summary: Publish a draft
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +551,287 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, email, name, createdAt]
+
+    SignupBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        name:
+          type: string
+      required: [email, password, name]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, archived]
+        fieldCount:
+          type: integer
+        clientCount:
+          type: integer
+        lastActivityAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, status, fieldCount, clientCount, createdAt]
+
+    CreateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required: [name]
+
+    UpdateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, archived]
+
+    ProjectStats:
+      type: object
+      properties:
+        totalProjects:
+          type: integer
+        activeProjects:
+          type: integer
+        totalClients:
+          type: integer
+        totalFields:
+          type: integer
+        recentEdits:
+          type: integer
+      required: [totalProjects, activeProjects, totalClients, totalFields, recentEdits]
+
+    ContentField:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        label:
+          type: string
+        type:
+          type: string
+          enum: [text, richtext, image, url, number, boolean]
+        selector:
+          type: string
+        value:
+          type: string
+        draftValue:
+          type: string
+        isLocked:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, projectId, label, type, isLocked]
+
+    CreateContentFieldBody:
+      type: object
+      properties:
+        label:
+          type: string
+        type:
+          type: string
+          enum: [text, richtext, image, url, number, boolean]
+        selector:
+          type: string
+        value:
+          type: string
+      required: [label, type]
+
+    UpdateContentFieldBody:
+      type: object
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+        draftValue:
+          type: string
+        isLocked:
+          type: boolean
+
+    Invite:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [editor, viewer]
+        status:
+          type: string
+          enum: [pending, accepted, expired]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, projectId, email, role, status, createdAt]
+
+    CreateInviteBody:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+          enum: [editor, viewer]
+      required: [email, role]
+
+    Domain:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        hostname:
+          type: string
+        verified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, projectId, hostname, verified, createdAt]
+
+    AddDomainBody:
+      type: object
+      properties:
+        hostname:
+          type: string
+      required: [hostname]
+
+    ProjectUser:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        joinedAt:
+          type: string
+          format: date-time
+      required: [id, userId, name, email, role, joinedAt]
+
+    UpdateUserRoleBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [editor, viewer]
+      required: [role]
+
+    ActivityEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        action:
+          type: string
+        fieldLabel:
+          type: string
+        oldValue:
+          type: string
+        newValue:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, projectId, userId, userName, action, createdAt]
+
+    Draft:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        fieldId:
+          type: string
+        fieldLabel:
+          type: string
+        value:
+          type: string
+        status:
+          type: string
+          enum: [pending, published, rejected]
+        authorName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+      required: [id, projectId, fieldId, fieldLabel, value, status, authorName, createdAt]
