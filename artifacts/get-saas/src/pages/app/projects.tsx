@@ -12,14 +12,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, FolderKanban, ArrowRight, Activity, Users, Database } from "lucide-react";
+import { Plus, FolderOpen, Users, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
 
 const createProjectSchema = z.object({
   name: z.string().min(1, "Project name is required").max(100),
   description: z.string().max(500).optional(),
 });
+
+const statusColors: Record<string, { bg: string; text: string }> = {
+  active:   { bg: "#ecfdf5", text: "#059669" },
+  draft:    { bg: "#fffbeb", text: "#b45309" },
+  archived: { bg: "#f4f4f5", text: "#71717a" },
+};
 
 export default function Projects() {
   const [, setLocation] = useLocation();
@@ -30,10 +35,7 @@ export default function Projects() {
 
   const form = useForm<z.infer<typeof createProjectSchema>>({
     resolver: zodResolver(createProjectSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-    },
+    defaultValues: { name: "", description: "" },
   });
 
   const onSubmit = (values: z.infer<typeof createProjectSchema>) => {
@@ -45,57 +47,60 @@ export default function Projects() {
         setLocation(`/app/setup/${project.id}`);
       },
       onError: (error) => {
-        toast({
-          variant: "destructive",
-          title: "Failed to create project",
-          description: error.message,
-        });
-      }
+        toast({ variant: "destructive", title: "Failed to create project", description: error.message });
+      },
     });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active": return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "draft": return "bg-amber-50 text-amber-700 border-amber-200";
-      case "archived": return "bg-gray-100 text-gray-700 border-gray-200";
-      default: return "bg-gray-100 text-gray-700 border-gray-200";
-    }
   };
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px" }}>
+
+        <div style={{ marginBottom: 40, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Projects</h1>
-            <p className="text-black/60 mt-1">Manage your applications and client access.</p>
+            <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 4 }}>Projects</h1>
+            <p style={{ fontSize: 14, color: "rgba(26,26,46,0.5)" }}>Manage your apps and client access.</p>
           </div>
-          
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-black hover:bg-black/90 text-white rounded-xl shadow-sm h-11 px-6">
-                <Plus className="w-4 h-4 mr-2" />
-                New Project
+              <Button
+                style={{
+                  background: "#1a1a2e",
+                  color: "#fff",
+                  borderRadius: 10,
+                  height: 40,
+                  padding: "0 18px",
+                  fontSize: 13.5,
+                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <Plus style={{ width: 14, height: 14 }} />
+                New project
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] rounded-2xl">
+            <DialogContent className="sm:max-w-[440px]" style={{ borderRadius: 20 }}>
               <DialogHeader>
-                <DialogTitle>Create New Project</DialogTitle>
-                <DialogDescription>
-                  Give your project a name. You'll be able to invite clients and map fields next.
+                <DialogTitle style={{ fontSize: 18, fontWeight: 600 }}>Create a new project</DialogTitle>
+                <DialogDescription style={{ fontSize: 13.5, color: "rgba(26,26,46,0.5)" }}>
+                  Give it a name. You'll map fields and invite clients next.
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
                   <FormField
                     control={form.control}
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Project Name</FormLabel>
+                        <FormLabel style={{ fontSize: 13, fontWeight: 500 }}>Project name</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Acme Corp Website" className="rounded-xl h-11" {...field} />
+                          <Input placeholder="e.g. Acme Corp Website" style={{ borderRadius: 10, height: 42 }} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -106,17 +111,31 @@ export default function Projects() {
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormLabel style={{ fontSize: 13, fontWeight: 500 }}>Description <span style={{ color: "rgba(26,26,46,0.4)", fontWeight: 400 }}>(optional)</span></FormLabel>
                         <FormControl>
-                          <Textarea placeholder="A brief description of this project" className="resize-none rounded-xl" {...field} />
+                          <Textarea placeholder="A short description" style={{ borderRadius: 10, resize: "none" }} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <DialogFooter className="pt-4">
-                    <Button type="submit" className="w-full rounded-xl h-11 bg-black text-white hover:bg-black/90" disabled={createMutation.isPending}>
-                      {createMutation.isPending ? "Creating..." : "Create Project"}
+                  <DialogFooter style={{ paddingTop: 8 }}>
+                    <Button
+                      type="submit"
+                      disabled={createMutation.isPending}
+                      style={{
+                        width: "100%",
+                        background: "#1a1a2e",
+                        color: "#fff",
+                        borderRadius: 10,
+                        height: 42,
+                        fontSize: 14,
+                        fontWeight: 500,
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {createMutation.isPending ? "Creating…" : "Create project"}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -125,64 +144,96 @@ export default function Projects() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {isLoading ? (
-            Array(6).fill(0).map((_, i) => (
-              <div key={i} className="bg-white border border-black/[0.04] shadow-sm shadow-black/[0.02] rounded-2xl p-6 space-y-4">
-                <div className="flex justify-between">
-                  <Skeleton className="h-6 w-1/2 bg-black/5" />
-                  <Skeleton className="h-6 w-16 rounded-full bg-black/5" />
+        {/* Project grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
+          {isLoading
+            ? Array(6).fill(0).map((_, i) => (
+                <div key={i} style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", borderRadius: 18, padding: 24 }}>
+                  <Skeleton style={{ height: 18, width: "55%", borderRadius: 6, background: "rgba(0,0,0,0.05)", marginBottom: 12 }} />
+                  <Skeleton style={{ height: 14, width: "80%", borderRadius: 6, background: "rgba(0,0,0,0.05)", marginBottom: 24 }} />
+                  <Skeleton style={{ height: 12, width: "40%", borderRadius: 6, background: "rgba(0,0,0,0.05)" }} />
                 </div>
-                <Skeleton className="h-4 w-full bg-black/5" />
-                <div className="flex gap-4 pt-4">
-                  <Skeleton className="h-8 w-16 bg-black/5" />
-                  <Skeleton className="h-8 w-16 bg-black/5" />
-                </div>
-              </div>
-            ))
-          ) : projects?.length === 0 ? (
-            <div className="col-span-full bg-white border border-black/[0.04] shadow-sm rounded-2xl p-12 text-center flex flex-col items-center justify-center">
-              <div className="w-16 h-16 bg-black/5 rounded-2xl flex items-center justify-center mb-4">
-                <FolderKanban className="w-8 h-8 text-black/40" />
-              </div>
-              <h3 className="text-xl font-medium mb-2">No projects yet</h3>
-              <p className="text-black/60 max-w-sm mb-6">Create your first project to start giving clients safe editing access to your apps.</p>
-              <Button onClick={() => setIsDialogOpen(true)} className="bg-black text-white hover:bg-black/90 rounded-xl h-11 px-6">
-                Create Project
-              </Button>
-            </div>
-          ) : (
-            projects?.map((project) => (
-              <Link key={project.id} href={`/app/projects/${project.id}`}>
-                <div className="group bg-white border border-black/[0.04] shadow-sm shadow-black/[0.02] rounded-2xl p-6 hover:shadow-md hover:border-black/[0.08] transition-all cursor-pointer flex flex-col h-full">
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="font-semibold text-lg line-clamp-1 group-hover:text-black/80 transition-colors" title={project.name}>{project.name}</h3>
-                    <Badge variant="outline" className={`capitalize rounded-full font-medium ${getStatusColor(project.status)}`}>
-                      {project.status}
-                    </Badge>
+              ))
+            : projects?.length === 0
+            ? (
+                <div
+                  style={{
+                    gridColumn: "1 / -1",
+                    background: "#fff",
+                    border: "1px solid rgba(0,0,0,0.05)",
+                    borderRadius: 20,
+                    padding: "72px 24px",
+                    textAlign: "center",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                    <FolderOpen style={{ width: 24, height: 24, color: "rgba(26,26,46,0.3)" }} />
                   </div>
-                  
-                  <p className="text-sm text-black/60 line-clamp-2 mb-6 flex-1">
-                    {project.description || "No description provided."}
+                  <p style={{ fontSize: 16, fontWeight: 500, marginBottom: 8 }}>No projects yet</p>
+                  <p style={{ fontSize: 13.5, color: "rgba(26,26,46,0.5)", maxWidth: 300, margin: "0 auto 28px" }}>
+                    Create your first project and give clients safe access to edit content.
                   </p>
-                  
-                  <div className="flex items-center gap-4 text-sm text-black/50 pt-4 border-t border-black/[0.04]">
-                    <div className="flex items-center gap-1.5" title="Content Fields">
-                      <Database className="w-4 h-4" />
-                      <span>{project.fieldCount}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5" title="Clients">
-                      <Users className="w-4 h-4" />
-                      <span>{project.clientCount}</span>
-                    </div>
-                    <div className="ml-auto text-xs">
-                      {format(new Date(project.createdAt), "MMM d, yyyy")}
-                    </div>
-                  </div>
+                  <Button
+                    onClick={() => setIsDialogOpen(true)}
+                    style={{ background: "#1a1a2e", color: "#fff", borderRadius: 10, height: 40, padding: "0 20px", fontSize: 13.5, fontWeight: 500, border: "none", cursor: "pointer" }}
+                  >
+                    Create project
+                  </Button>
                 </div>
-              </Link>
-            ))
-          )}
+              )
+            : projects?.map((project) => {
+                const sc = statusColors[project.status] || statusColors.archived;
+                return (
+                  <Link key={project.id} href={`/app/projects/${project.id}`}>
+                    <div
+                      style={{
+                        background: "#fff",
+                        border: "1px solid rgba(0,0,0,0.05)",
+                        borderRadius: 18,
+                        padding: "24px 24px 20px",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "100%",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+                        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.07)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,0,0,0.09)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.03)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,0,0,0.05)";
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <p style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, flex: 1, marginRight: 12 }}>{project.name}</p>
+                        <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 20, background: sc.bg, color: sc.text, textTransform: "capitalize", whiteSpace: "nowrap" }}>
+                          {project.status}
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: 13, color: "rgba(26,26,46,0.5)", lineHeight: 1.5, flex: 1, marginBottom: 20 }}>
+                        {project.description || "No description."}
+                      </p>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 16, borderTop: "1px solid rgba(0,0,0,0.04)", color: "rgba(26,26,46,0.45)", fontSize: 12.5 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <Database style={{ width: 13, height: 13 }} />
+                          {project.fieldCount} fields
+                        </span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <Users style={{ width: 13, height: 13 }} />
+                          {project.clientCount} clients
+                        </span>
+                        <span style={{ marginLeft: "auto" }}>{format(new Date(project.createdAt), "MMM d, yyyy")}</span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
         </div>
       </div>
     </AppLayout>

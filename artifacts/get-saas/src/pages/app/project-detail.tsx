@@ -24,42 +24,59 @@ import {
 } from "@workspace/api-client-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  Loader2, Globe, Users, Database, FileEdit, Settings, Trash2, 
-  Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft
+import {
+  Globe, Users, Database, FileEdit, Settings, Trash2,
+  Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+
+const S = {
+  card: {
+    background: "#fff",
+    border: "1px solid rgba(0,0,0,0.05)",
+    borderRadius: 18,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+  } as React.CSSProperties,
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    marginBottom: 16,
+    color: "#1a1a2e",
+  } as React.CSSProperties,
+  row: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "16px 20px",
+    borderTop: "1px solid rgba(0,0,0,0.04)",
+  } as React.CSSProperties,
+  emptyState: {
+    padding: "52px 24px",
+    textAlign: "center",
+    color: "rgba(26,26,46,0.45)",
+    fontSize: 13.5,
+  } as React.CSSProperties,
+};
 
 export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { data: project, isLoading } = useGetProject(projectId, { 
-    query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) } 
+  const { data: project, isLoading } = useGetProject(projectId, {
+    query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) }
   });
 
   if (isLoading) {
     return (
       <AppLayout>
-        <div className="p-6 md:p-10 max-w-6xl mx-auto">
-          <Skeleton className="h-10 w-1/3 mb-8 bg-black/5" />
-          <Skeleton className="h-96 w-full rounded-2xl bg-black/5" />
+        <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px" }}>
+          <Skeleton style={{ height: 28, width: "35%", borderRadius: 8, background: "rgba(0,0,0,0.05)", marginBottom: 32 }} />
+          <Skeleton style={{ height: 400, borderRadius: 18, background: "rgba(0,0,0,0.04)" }} />
         </div>
       </AppLayout>
     );
@@ -68,82 +85,84 @@ export default function ProjectDetail() {
   if (!project) {
     return (
       <AppLayout>
-        <div className="p-6 md:p-10 max-w-6xl mx-auto text-center py-20">
-          <h2 className="text-2xl font-semibold mb-2">Project not found</h2>
+        <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px", textAlign: "center" }}>
+          <p style={{ fontSize: 16, fontWeight: 500, marginBottom: 20 }}>Project not found</p>
           <Link href="/app/projects">
-            <Button className="bg-black text-white hover:bg-black/90 rounded-xl">Back to Projects</Button>
+            <Button style={{ background: "#1a1a2e", color: "#fff", borderRadius: 10, height: 40, padding: "0 18px", border: "none", cursor: "pointer", fontSize: 13.5 }}>
+              Back to projects
+            </Button>
           </Link>
         </div>
       </AppLayout>
     );
   }
 
+  const statusBg: Record<string, string> = { active: "#ecfdf5", draft: "#fffbeb", archived: "#f4f4f5" };
+  const statusColor: Record<string, string> = { active: "#059669", draft: "#b45309", archived: "#71717a" };
+
   return (
     <AppLayout>
-      <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
-        <div className="flex items-center gap-4">
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 40 }}>
           <Link href="/app/projects">
-            <Button variant="ghost" size="icon" className="text-black/60 hover:text-black hover:bg-black/5 rounded-xl">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
+            <button style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(26,26,46,0.5)", flexShrink: 0, marginTop: 2 }}>
+              <ArrowLeft style={{ width: 15, height: 15 }} />
+            </button>
           </Link>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight flex items-center gap-3">
-              {project.name}
-              <Badge variant="outline" className="capitalize text-xs font-medium rounded-full bg-black/5 border-transparent text-black/70">
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em" }}>{project.name}</h1>
+              <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: statusBg[project.status] || "#f4f4f5", color: statusColor[project.status] || "#71717a", textTransform: "capitalize" }}>
                 {project.status}
-              </Badge>
-            </h1>
-            <p className="text-black/60 mt-1">{project.description || "No description"}</p>
+              </span>
+            </div>
+            <p style={{ fontSize: 13.5, color: "rgba(26,26,46,0.45)" }}>{project.description || "No description"}</p>
           </div>
         </div>
 
-        <Tabs defaultValue="content" className="w-full">
-          <TabsList className="w-full sm:w-auto h-auto p-1 bg-black/5 rounded-xl flex flex-wrap sm:flex-nowrap gap-1">
-            <TabsTrigger value="content" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm px-4 py-2">
-              <Database className="w-4 h-4 mr-2" /> Content Map
-            </TabsTrigger>
-            <TabsTrigger value="clients" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm px-4 py-2">
-              <Users className="w-4 h-4 mr-2" /> Clients
-            </TabsTrigger>
-            <TabsTrigger value="domains" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm px-4 py-2">
-              <Globe className="w-4 h-4 mr-2" /> Domains
-            </TabsTrigger>
-            <TabsTrigger value="drafts" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm px-4 py-2">
-              <FileEdit className="w-4 h-4 mr-2" /> Drafts
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm px-4 py-2">
-              <ActivityIcon className="w-4 h-4 mr-2" /> Activity
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm px-4 py-2">
-              <Settings className="w-4 h-4 mr-2" /> Settings
-            </TabsTrigger>
+        {/* Tabs */}
+        <Tabs defaultValue="content">
+          <TabsList
+            style={{
+              background: "rgba(0,0,0,0.04)",
+              padding: 4,
+              borderRadius: 12,
+              height: "auto",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 2,
+              width: "fit-content",
+            }}
+          >
+            {[
+              { value: "content", icon: Database, label: "Content" },
+              { value: "clients", icon: Users, label: "Clients" },
+              { value: "domains", icon: Globe, label: "Domains" },
+              { value: "drafts", icon: FileEdit, label: "Drafts" },
+              { value: "activity", icon: ActivityIcon, label: "Activity" },
+              { value: "settings", icon: Settings, label: "Settings" },
+            ].map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                style={{ borderRadius: 9, padding: "7px 14px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
+                className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1a2e] text-[rgba(26,26,46,0.5)]"
+              >
+                <tab.icon style={{ width: 13, height: 13 }} />
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <div className="mt-8">
-            <TabsContent value="content">
-              <ContentMapTab projectId={project.id} />
-            </TabsContent>
-            
-            <TabsContent value="clients">
-              <ClientsTab projectId={project.id} />
-            </TabsContent>
-            
-            <TabsContent value="domains">
-              <DomainsTab projectId={project.id} />
-            </TabsContent>
-            
-            <TabsContent value="drafts">
-              <DraftsTab projectId={project.id} />
-            </TabsContent>
-            
-            <TabsContent value="activity">
-              <ActivityTab projectId={project.id} />
-            </TabsContent>
-            
-            <TabsContent value="settings">
-              <SettingsTab project={project} />
-            </TabsContent>
+          <div style={{ marginTop: 32 }}>
+            <TabsContent value="content"><ContentMapTab projectId={project.id} /></TabsContent>
+            <TabsContent value="clients"><ClientsTab projectId={project.id} /></TabsContent>
+            <TabsContent value="domains"><DomainsTab projectId={project.id} /></TabsContent>
+            <TabsContent value="drafts"><DraftsTab projectId={project.id} /></TabsContent>
+            <TabsContent value="activity"><ActivityTab projectId={project.id} /></TabsContent>
+            <TabsContent value="settings"><SettingsTab project={project} /></TabsContent>
           </div>
         </Tabs>
       </div>
@@ -151,7 +170,7 @@ export default function ProjectDetail() {
   );
 }
 
-// --- Tabs Components ---
+// ── Content Map ─────────────────────────────────────────────────────────────
 
 function ContentMapTab({ projectId }: { projectId: string }) {
   const { data: fields, isLoading, refetch } = useListContentFields(projectId);
@@ -164,111 +183,92 @@ function ContentMapTab({ projectId }: { projectId: string }) {
   const [newType, setNewType] = useState<any>("text");
 
   const handleAdd = () => {
-    createMutation.mutate({
-      projectId,
-      data: { label: newLabel, type: newType }
-    }, {
-      onSuccess: () => {
-        setIsAdding(false);
-        setNewLabel("");
-        setNewType("text");
-        refetch();
-      },
-      onError: (err) => toast({ variant: "destructive", title: "Error", description: err.message })
-    });
-  };
-
-  const handleToggleLock = (fieldId: string, currentLocked: boolean) => {
-    updateMutation.mutate({
-      projectId,
-      fieldId,
-      data: { isLocked: !currentLocked }
-    }, {
-      onSuccess: () => refetch(),
-    });
-  };
-
-  const handleDelete = (fieldId: string) => {
-    deleteMutation.mutate({ projectId, fieldId }, {
-      onSuccess: () => refetch(),
+    createMutation.mutate({ projectId, data: { label: newLabel, type: newType } }, {
+      onSuccess: () => { setIsAdding(false); setNewLabel(""); setNewType("text"); refetch(); },
+      onError: (err) => toast({ variant: "destructive", title: "Error", description: err.message }),
     });
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Content Fields</h2>
-          <p className="text-black/60 text-sm mt-1">Map out the fields your clients can edit.</p>
+          <p style={S.sectionTitle}>Content fields</p>
+          <p style={{ fontSize: 13, color: "rgba(26,26,46,0.45)", marginTop: -12 }}>What your clients can edit.</p>
         </div>
-        <Button onClick={() => setIsAdding(true)} className="bg-black text-white hover:bg-black/90 rounded-xl h-10 px-4">
-          <Plus className="w-4 h-4 mr-2" /> Add Field
-        </Button>
+        <button
+          onClick={() => setIsAdding(true)}
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, padding: "8px 14px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", cursor: "pointer" }}
+        >
+          <Plus style={{ width: 13, height: 13 }} /> Add field
+        </button>
       </div>
 
       {isAdding && (
-        <Card className="rounded-2xl border-black/[0.04] shadow-sm shadow-black/[0.02]">
-          <CardContent className="pt-6 flex items-end gap-4">
-            <div className="grid flex-1 gap-2">
-              <Label>Field Label</Label>
-              <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. Hero Headline" className="rounded-xl h-10" />
-            </div>
-            <div className="grid flex-1 gap-2">
-              <Label>Field Type</Label>
-              <Select value={newType} onValueChange={setNewType}>
-                <SelectTrigger className="rounded-xl h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">Text (Single Line)</SelectItem>
-                  <SelectItem value="richtext">Rich Text (Multi-line)</SelectItem>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="url">URL / Link</SelectItem>
-                  <SelectItem value="number">Number</SelectItem>
-                  <SelectItem value="boolean">Toggle (Yes/No)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsAdding(false)} className="rounded-xl h-10">Cancel</Button>
-              <Button onClick={handleAdd} className="bg-black text-white hover:bg-black/90 rounded-xl h-10" disabled={!newLabel || createMutation.isPending}>
-                {createMutation.isPending ? "Adding..." : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div style={{ ...S.card, padding: 20, display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
+            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Label</Label>
+            <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Hero Headline" style={{ height: 40, borderRadius: 9, fontSize: 13.5 }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
+            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Type</Label>
+            <Select value={newType} onValueChange={setNewType}>
+              <SelectTrigger style={{ height: 40, borderRadius: 9, fontSize: 13.5 }}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">Text</SelectItem>
+                <SelectItem value="richtext">Rich text</SelectItem>
+                <SelectItem value="image">Image</SelectItem>
+                <SelectItem value="url">URL</SelectItem>
+                <SelectItem value="number">Number</SelectItem>
+                <SelectItem value="boolean">Toggle</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setIsAdding(false)} style={{ height: 40, padding: "0 14px", borderRadius: 9, border: "1px solid rgba(0,0,0,0.12)", background: "transparent", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <button onClick={handleAdd} disabled={!newLabel || createMutation.isPending} style={{ height: 40, padding: "0 14px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+              {createMutation.isPending ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
       )}
 
-      <div className="bg-white border border-black/[0.04] shadow-sm shadow-black/[0.02] rounded-2xl overflow-hidden divide-y divide-black/[0.04]">
+      <div style={S.card}>
         {isLoading ? (
-          <div className="p-6"><Skeleton className="h-12 w-full bg-black/5" /></div>
-        ) : fields?.length === 0 ? (
-          <div className="p-12 text-center text-black/60">No content fields mapped yet.</div>
+          <div style={{ padding: 20 }}><Skeleton style={{ height: 48, borderRadius: 8, background: "rgba(0,0,0,0.04)" }} /></div>
+        ) : !fields?.length ? (
+          <div style={S.emptyState}>No content fields yet. Add one above.</div>
         ) : (
-          fields?.map((field) => (
-            <div key={field.id} className="p-4 sm:p-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center">
-                  <Database className="w-5 h-5 text-black/60" />
+          fields.map((field, idx) => (
+            <div key={field.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Database style={{ width: 15, height: 15, color: "rgba(26,26,46,0.4)" }} />
                 </div>
                 <div>
-                  <h4 className="font-medium text-black">{field.label}</h4>
-                  <p className="text-xs text-black/50 uppercase tracking-wider font-semibold mt-0.5">{field.type}</p>
+                  <p style={{ fontSize: 14, fontWeight: 500 }}>{field.label}</p>
+                  <p style={{ fontSize: 11.5, color: "rgba(26,26,46,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginTop: 2 }}>{field.type}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => handleToggleLock(field.id, field.isLocked)}
-                  className={`rounded-lg ${field.isLocked ? 'text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-black/60 hover:bg-black/5 hover:text-black'}`}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  onClick={() => updateMutation.mutate({ projectId, fieldId: field.id, data: { isLocked: !field.isLocked } }, { onSuccess: () => refetch() })}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 500, padding: "5px 12px", borderRadius: 8, cursor: "pointer", border: "none",
+                    background: field.isLocked ? "#fffbeb" : "rgba(0,0,0,0.05)",
+                    color: field.isLocked ? "#b45309" : "rgba(26,26,46,0.55)",
+                  }}
                 >
-                  {field.isLocked ? <Lock className="w-4 h-4 mr-2" /> : <Unlock className="w-4 h-4 mr-2" />}
+                  {field.isLocked ? <Lock style={{ width: 12, height: 12 }} /> : <Unlock style={{ width: 12, height: 12 }} />}
                   {field.isLocked ? "Locked" : "Unlocked"}
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(field.id)} className="text-black/40 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                </button>
+                <button onClick={() => deleteMutation.mutate({ projectId, fieldId: field.id }, { onSuccess: () => refetch() })}
+                  style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(26,26,46,0.3)" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fef2f2"; (e.currentTarget as HTMLElement).style.color = "#dc2626"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(26,26,46,0.3)"; }}
+                >
+                  <Trash2 style={{ width: 14, height: 14 }} />
+                </button>
               </div>
             </div>
           ))
@@ -277,6 +277,8 @@ function ContentMapTab({ projectId }: { projectId: string }) {
     </div>
   );
 }
+
+// ── Clients ─────────────────────────────────────────────────────────────────
 
 function ClientsTab({ projectId }: { projectId: string }) {
   const { data: users, refetch: refetchUsers } = useListProjectUsers(projectId);
@@ -289,65 +291,62 @@ function ClientsTab({ projectId }: { projectId: string }) {
   const [role, setRole] = useState<any>("editor");
 
   const handleInvite = () => {
-    inviteMutation.mutate({
-      projectId,
-      data: { email, role }
-    }, {
-      onSuccess: () => {
-        setEmail("");
-        refetchInvites();
-        toast({ title: "Invite sent" });
-      }
+    inviteMutation.mutate({ projectId, data: { email, role } }, {
+      onSuccess: () => { setEmail(""); refetchInvites(); toast({ title: "Invite sent" }); },
     });
   };
 
   return (
-    <div className="space-y-8">
-      <Card className="rounded-2xl border-black/[0.04] shadow-sm shadow-black/[0.02]">
-        <CardHeader>
-          <CardTitle>Invite Client</CardTitle>
-          <CardDescription>Send an invitation to edit this project.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-end gap-4">
-          <div className="grid flex-1 gap-2">
-            <Label>Email Address</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="client@example.com" className="rounded-xl h-10" />
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+
+      {/* Invite form */}
+      <div style={{ ...S.card, padding: 24 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Invite a client</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+          <div style={{ flex: 2, minWidth: 200, display: "flex", flexDirection: "column", gap: 6 }}>
+            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Email address</Label>
+            <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="client@example.com" style={{ height: 40, borderRadius: 9, fontSize: 13.5 }} />
           </div>
-          <div className="grid w-48 gap-2">
-            <Label>Role</Label>
+          <div style={{ flex: 1, minWidth: 140, display: "flex", flexDirection: "column", gap: 6 }}>
+            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Role</Label>
             <Select value={role} onValueChange={setRole}>
-              <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
+              <SelectTrigger style={{ height: 40, borderRadius: 9, fontSize: 13.5 }}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="editor">Editor</SelectItem>
                 <SelectItem value="viewer">Viewer</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleInvite} className="bg-black text-white hover:bg-black/90 rounded-xl h-10" disabled={!email || inviteMutation.isPending}>
-            {inviteMutation.isPending ? "Sending..." : "Send Invite"}
-          </Button>
-        </CardContent>
-      </Card>
+          <button
+            onClick={handleInvite}
+            disabled={!email || inviteMutation.isPending}
+            style={{ height: 40, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            {inviteMutation.isPending ? "Sending…" : "Send invite"}
+          </button>
+        </div>
+      </div>
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Active Clients</h3>
-        <div className="bg-white border border-black/[0.04] rounded-2xl overflow-hidden divide-y divide-black/[0.04]">
-          {users?.length === 0 ? (
-            <div className="p-8 text-center text-black/60">No clients yet.</div>
+      {/* Active clients */}
+      <div>
+        <p style={S.sectionTitle}>Active clients</p>
+        <div style={S.card}>
+          {!users?.length ? (
+            <div style={S.emptyState}>No clients yet.</div>
           ) : (
-            users?.map(u => (
-              <div key={u.id} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-black/5 rounded-full flex items-center justify-center font-medium text-black/70">
+            users.map((u, idx) => (
+              <div key={u.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 14.5, color: "#1a1a2e" }}>
                     {u.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="font-medium">{u.name}</div>
-                    <div className="text-sm text-black/60">{u.email}</div>
+                    <p style={{ fontSize: 14, fontWeight: 500 }}>{u.name}</p>
+                    <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.45)" }}>{u.email}</p>
                   </div>
                 </div>
-                <Select value={u.role} onValueChange={(r) => roleMutation.mutate({ projectId, userId: u.id, data: { role: r as any } }, { onSuccess: () => refetchUsers() })}>
-                  <SelectTrigger className="w-32 rounded-xl h-9 bg-transparent border-black/10"><SelectValue /></SelectTrigger>
+                <Select value={u.role} onValueChange={r => roleMutation.mutate({ projectId, userId: u.id, data: { role: r as any } }, { onSuccess: () => refetchUsers() })}>
+                  <SelectTrigger style={{ width: 120, height: 36, borderRadius: 9, fontSize: 13, border: "1px solid rgba(0,0,0,0.1)", background: "transparent" }}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="owner" disabled>Owner</SelectItem>
                     <SelectItem value="editor">Editor</SelectItem>
@@ -360,23 +359,23 @@ function ClientsTab({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {invites && invites.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Pending Invites</h3>
-          <div className="bg-white border border-black/[0.04] rounded-2xl overflow-hidden divide-y divide-black/[0.04]">
-            {invites.map(inv => (
-              <div key={inv.id} className="p-4 flex items-center justify-between text-sm">
+      {/* Pending invites */}
+      {!!invites?.length && (
+        <div>
+          <p style={S.sectionTitle}>Pending invites</p>
+          <div style={S.card}>
+            {invites.map((inv, idx) => (
+              <div key={inv.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
                 <div>
-                  <div className="font-medium">{inv.email}</div>
-                  <div className="text-black/60 flex items-center gap-2 mt-1">
-                    <Badge variant="secondary" className="text-[10px] uppercase bg-black/5 text-black/60">{inv.role}</Badge>
-                    <span>{inv.status}</span>
-                  </div>
+                  <p style={{ fontSize: 14, fontWeight: 500 }}>{inv.email}</p>
+                  <p style={{ fontSize: 12, color: "rgba(26,26,46,0.45)", marginTop: 2, textTransform: "capitalize" }}>{inv.role} · {inv.status}</p>
                 </div>
-                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg" 
-                  onClick={() => revokeMutation.mutate({ projectId, inviteId: inv.id }, { onSuccess: () => refetchInvites() })}>
+                <button
+                  onClick={() => revokeMutation.mutate({ projectId, inviteId: inv.id }, { onSuccess: () => refetchInvites() })}
+                  style={{ fontSize: 12.5, padding: "5px 12px", borderRadius: 8, border: "none", background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontWeight: 500 }}
+                >
                   Revoke
-                </Button>
+                </button>
               </div>
             ))}
           </div>
@@ -386,6 +385,8 @@ function ClientsTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ── Domains ──────────────────────────────────────────────────────────────────
+
 function DomainsTab({ projectId }: { projectId: string }) {
   const { data: domains, refetch } = useListDomains(projectId);
   const addMutation = useAddDomain();
@@ -394,42 +395,48 @@ function DomainsTab({ projectId }: { projectId: string }) {
 
   const handleAdd = () => {
     addMutation.mutate({ projectId, data: { hostname } }, {
-      onSuccess: () => {
-        setHostname("");
-        refetch();
-      }
+      onSuccess: () => { setHostname(""); refetch(); }
     });
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-2xl border-black/[0.04] shadow-sm">
-        <CardHeader>
-          <CardTitle>Allowed Domains</CardTitle>
-          <CardDescription>Where this editor can be embedded via iframe.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex gap-4">
-          <Input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="e.g. yoursite.com" className="rounded-xl h-10" />
-          <Button onClick={handleAdd} disabled={!hostname || addMutation.isPending} className="bg-black text-white hover:bg-black/90 rounded-xl h-10">
-            Add Domain
-          </Button>
-        </CardContent>
-      </Card>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ ...S.card, padding: 24 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Add a domain</p>
+        <p style={{ fontSize: 13, color: "rgba(26,26,46,0.5)", marginBottom: 16 }}>Restrict where this editor can be embedded via iframe.</p>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input value={hostname} onChange={e => setHostname(e.target.value)} placeholder="e.g. yoursite.com" style={{ flex: 1, height: 40, borderRadius: 9, fontSize: 13.5 }} />
+          <button
+            onClick={handleAdd}
+            disabled={!hostname || addMutation.isPending}
+            style={{ height: 40, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            Add domain
+          </button>
+        </div>
+      </div>
 
-      <div className="bg-white border border-black/[0.04] rounded-2xl overflow-hidden divide-y divide-black/[0.04]">
-        {domains?.length === 0 ? (
-          <div className="p-8 text-center text-black/60">No domains added. Default Replit domains are allowed.</div>
+      <div style={S.card}>
+        {!domains?.length ? (
+          <div style={S.emptyState}>No domains added. Default Replit domains are allowed.</div>
         ) : (
-          domains?.map(d => (
-            <div key={d.id} className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Globe className="w-4 h-4 text-black/40" />
-                <span className="font-medium">{d.hostname}</span>
-                {d.verified && <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200">Verified</Badge>}
+          domains.map((d, idx) => (
+            <div key={d.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Globe style={{ width: 14, height: 14, color: "rgba(26,26,46,0.35)" }} />
+                <span style={{ fontSize: 14, fontWeight: 500 }}>{d.hostname}</span>
+                {d.verified && (
+                  <span style={{ fontSize: 11, fontWeight: 500, background: "#ecfdf5", color: "#059669", padding: "2px 8px", borderRadius: 6 }}>Verified</span>
+                )}
               </div>
-              <Button variant="ghost" size="icon" onClick={() => removeMutation.mutate({ projectId, domainId: d.id }, { onSuccess: () => refetch() })} className="text-black/40 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              <button
+                onClick={() => removeMutation.mutate({ projectId, domainId: d.id }, { onSuccess: () => refetch() })}
+                style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(26,26,46,0.3)" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fef2f2"; (e.currentTarget as HTMLElement).style.color = "#dc2626"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(26,26,46,0.3)"; }}
+              >
+                <Trash2 style={{ width: 14, height: 14 }} />
+              </button>
             </div>
           ))
         )}
@@ -438,39 +445,41 @@ function DomainsTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ── Drafts ───────────────────────────────────────────────────────────────────
+
 function DraftsTab({ projectId }: { projectId: string }) {
   const { data: drafts, refetch } = useListDrafts(projectId);
   const publishMutation = usePublishDraft();
-
-  const handlePublish = (draftId: string) => {
-    publishMutation.mutate({ projectId, draftId }, {
-      onSuccess: () => refetch()
-    });
-  };
 
   const pendingDrafts = drafts?.filter(d => d.status === "pending") || [];
   const pastDrafts = drafts?.filter(d => d.status !== "pending") || [];
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Pending Reviews</h3>
-        <div className="bg-white border border-black/[0.04] rounded-2xl overflow-hidden divide-y divide-black/[0.04]">
-          {pendingDrafts.length === 0 ? (
-            <div className="p-8 text-center text-black/60">No pending drafts to review.</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <div>
+        <p style={S.sectionTitle}>Pending review</p>
+        <div style={S.card}>
+          {!pendingDrafts.length ? (
+            <div style={S.emptyState}>No drafts waiting for review.</div>
           ) : (
-            pendingDrafts.map(d => (
-              <div key={d.id} className="p-5">
-                <div className="flex justify-between items-start mb-3">
+            pendingDrafts.map((d, idx) => (
+              <div key={d.id} style={{ padding: "20px 22px", borderTop: idx > 0 ? "1px solid rgba(0,0,0,0.04)" : "none" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
                   <div>
-                    <div className="font-medium">{d.fieldLabel}</div>
-                    <div className="text-sm text-black/60 mt-0.5">Proposed by {d.authorName} on {format(new Date(d.createdAt), "MMM d, h:mm a")}</div>
+                    <p style={{ fontSize: 14, fontWeight: 500 }}>{d.fieldLabel}</p>
+                    <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.45)", marginTop: 3 }}>
+                      By {d.authorName} · {format(new Date(d.createdAt), "MMM d, h:mm a")}
+                    </p>
                   </div>
-                  <Button onClick={() => handlePublish(d.id)} disabled={publishMutation.isPending} className="bg-black text-white hover:bg-black/90 rounded-xl h-9 text-sm">
-                    Publish Change
-                  </Button>
+                  <button
+                    onClick={() => publishMutation.mutate({ projectId, draftId: d.id }, { onSuccess: () => refetch() })}
+                    disabled={publishMutation.isPending}
+                    style={{ height: 36, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                  >
+                    Publish
+                  </button>
                 </div>
-                <div className="bg-black/[0.02] p-4 rounded-xl text-sm font-mono border border-black/[0.04] break-all">
+                <div style={{ background: "rgba(0,0,0,0.02)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: 10, padding: "12px 14px", fontSize: 13, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
                   {d.value}
                 </div>
               </div>
@@ -479,119 +488,128 @@ function DraftsTab({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Past Drafts</h3>
-        <div className="bg-white border border-black/[0.04] rounded-2xl overflow-hidden divide-y divide-black/[0.04]">
-          {pastDrafts.length === 0 ? (
-            <div className="p-8 text-center text-black/60">No past drafts.</div>
-          ) : (
-            pastDrafts.map(d => (
-              <div key={d.id} className="p-4 flex items-center justify-between text-sm">
+      {!!pastDrafts.length && (
+        <div>
+          <p style={S.sectionTitle}>History</p>
+          <div style={S.card}>
+            {pastDrafts.map((d, idx) => (
+              <div key={d.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
                 <div>
-                  <span className="font-medium mr-2">{d.fieldLabel}</span>
-                  <span className="text-black/60">by {d.authorName}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>{d.fieldLabel}</span>
+                  <span style={{ fontSize: 13, color: "rgba(26,26,46,0.45)", marginLeft: 8 }}>by {d.authorName}</span>
                 </div>
-                <Badge variant="outline" className={d.status === "published" ? "bg-emerald-50 text-emerald-700" : ""}>
+                <span style={{
+                  fontSize: 11.5, fontWeight: 500, padding: "3px 9px", borderRadius: 6,
+                  background: d.status === "published" ? "#ecfdf5" : "rgba(0,0,0,0.05)",
+                  color: d.status === "published" ? "#059669" : "rgba(26,26,46,0.5)",
+                  textTransform: "capitalize",
+                }}>
                   {d.status}
-                </Badge>
+                </span>
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
+// ── Activity ─────────────────────────────────────────────────────────────────
 
 function ActivityTab({ projectId }: { projectId: string }) {
   const { data: activity } = useListActivity(projectId);
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white border border-black/[0.04] rounded-2xl p-6">
-        {activity?.length === 0 ? (
-          <div className="text-center text-black/60 py-8">No activity yet.</div>
-        ) : (
-          <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-black/5">
-            {activity?.map(a => (
-              <div key={a.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-black/5 text-black/40 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 shadow-sm">
-                  <ActivityIcon className="w-4 h-4" />
-                </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-2xl border border-black/[0.04] shadow-sm">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="font-medium text-sm">{a.userName}</div>
-                    <div className="text-xs text-black/50">{format(new Date(a.createdAt), "MMM d, h:mm a")}</div>
-                  </div>
-                  <div className="text-sm text-black/70">
-                    <span className="font-medium text-black">{a.action}</span>
-                    {a.fieldLabel && <span> on field <span className="font-medium text-black">"{a.fieldLabel}"</span></span>}
-                  </div>
+    <div style={S.card}>
+      {!activity?.length ? (
+        <div style={S.emptyState}>No activity yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {activity.map((a, idx) => (
+            <div key={a.id} style={{ display: "flex", gap: 14, padding: "18px 22px", borderTop: idx > 0 ? "1px solid rgba(0,0,0,0.04)" : "none" }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                <ActivityIcon style={{ width: 13, height: 13, color: "rgba(26,26,46,0.4)" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <p style={{ fontSize: 13.5, color: "#1a1a2e", lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600 }}>{a.userName}</span>
+                    {" "}
+                    <span style={{ color: "rgba(26,26,46,0.6)" }}>{a.action}</span>
+                    {a.fieldLabel && <>{" "}<span style={{ fontWeight: 500 }}>"{a.fieldLabel}"</span></>}
+                  </p>
+                  <span style={{ fontSize: 11.5, color: "rgba(26,26,46,0.4)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {format(new Date(a.createdAt), "MMM d, h:mm a")}
+                  </span>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
+// ── Settings ─────────────────────────────────────────────────────────────────
 
 function SettingsTab({ project }: { project: any }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const updateMutation = useUpdateProject();
   const deleteMutation = useDeleteProject();
-  
   const [name, setName] = useState(project.name);
   const [desc, setDesc] = useState(project.description || "");
 
   const handleSave = () => {
     updateMutation.mutate({ projectId: project.id, data: { name, description: desc } }, {
-      onSuccess: () => toast({ title: "Project updated" })
+      onSuccess: () => toast({ title: "Project updated" }),
     });
   };
 
   const handleDelete = () => {
     if (confirm("Are you sure? This cannot be undone.")) {
       deleteMutation.mutate({ projectId: project.id }, {
-        onSuccess: () => setLocation("/app/projects")
+        onSuccess: () => setLocation("/app/projects"),
       });
     }
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <Card className="rounded-2xl border-black/[0.04] shadow-sm">
-        <CardHeader>
-          <CardTitle>Project Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Project Name</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} className="rounded-xl h-10" />
-          </div>
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Textarea value={desc} onChange={e => setDesc(e.target.value)} className="rounded-xl resize-none" />
-          </div>
-          <Button onClick={handleSave} disabled={updateMutation.isPending} className="bg-black text-white hover:bg-black/90 rounded-xl h-10">
-            {updateMutation.isPending ? "Saving..." : "Save Changes"}
-          </Button>
-        </CardContent>
-      </Card>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 520 }}>
 
-      <Card className="rounded-2xl border-red-100 shadow-sm bg-red-50/50">
-        <CardHeader>
-          <CardTitle className="text-red-600">Danger Zone</CardTitle>
-          <CardDescription>Permanently delete this project and all its data.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="destructive" onClick={handleDelete} className="rounded-xl h-10">
-            Delete Project
-          </Button>
-        </CardContent>
-      </Card>
+      <div style={{ ...S.card, padding: 28 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>Project details</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Name</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} style={{ height: 42, borderRadius: 10, fontSize: 14 }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Description</Label>
+            <Textarea value={desc} onChange={e => setDesc(e.target.value)} style={{ borderRadius: 10, resize: "none", fontSize: 14, minHeight: 90 }} />
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={updateMutation.isPending}
+            style={{ alignSelf: "flex-start", height: 40, padding: "0 18px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}
+          >
+            {updateMutation.isPending ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ ...S.card, padding: 28, border: "1px solid rgba(220,38,38,0.15)", background: "#fef2f2" }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#dc2626", marginBottom: 6 }}>Danger zone</p>
+        <p style={{ fontSize: 13, color: "rgba(220,38,38,0.7)", marginBottom: 20 }}>Permanently delete this project and all its data.</p>
+        <button
+          onClick={handleDelete}
+          style={{ height: 38, padding: "0 16px", borderRadius: 9, background: "#dc2626", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}
+        >
+          Delete project
+        </button>
+      </div>
     </div>
   );
 }

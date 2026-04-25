@@ -2,10 +2,9 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { useGetProjectStats, useListProjects } from "@workspace/api-client-react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ArrowRight, FolderKanban, Users, Database, Activity } from "lucide-react";
+import { Plus, ArrowRight, FolderOpen } from "lucide-react";
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useGetProjectStats();
@@ -15,125 +14,146 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px" }}>
+
+        <div style={{ marginBottom: 52, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Overview</h1>
-            <p className="text-black/60 mt-1">Here's what's happening across your projects.</p>
+            <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 4 }}>Overview</h1>
+            <p style={{ fontSize: 14, color: "rgba(26,26,46,0.5)" }}>Your projects at a glance.</p>
           </div>
           <Link href="/app/projects">
-            <Button className="bg-black hover:bg-black/90 text-white rounded-xl shadow-sm h-11 px-6">
-              <Plus className="w-4 h-4 mr-2" />
-              New Project
+            <Button
+              style={{
+                background: "#1a1a2e",
+                color: "#fff",
+                borderRadius: 10,
+                height: 40,
+                padding: "0 18px",
+                fontSize: 13.5,
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              <Plus style={{ width: 14, height: 14 }} />
+              New project
             </Button>
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Projects"
-            value={stats?.totalProjects}
-            loading={statsLoading}
-            icon={<FolderKanban className="w-4 h-4 text-black/40" />}
-          />
-          <StatCard
-            title="Active Clients"
-            value={stats?.totalClients}
-            loading={statsLoading}
-            icon={<Users className="w-4 h-4 text-black/40" />}
-          />
-          <StatCard
-            title="Content Fields"
-            value={stats?.totalFields}
-            loading={statsLoading}
-            icon={<Database className="w-4 h-4 text-black/40" />}
-          />
-          <StatCard
-            title="Recent Edits"
-            value={stats?.recentEdits}
-            loading={statsLoading}
-            icon={<Activity className="w-4 h-4 text-black/40" />}
-          />
+        {/* Stat row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 52 }}>
+          {[
+            { label: "Projects", value: stats?.totalProjects },
+            { label: "Clients", value: stats?.totalClients },
+            { label: "Fields", value: stats?.totalFields },
+            { label: "Recent edits", value: stats?.recentEdits },
+          ].map((s) => (
+            <div
+              key={s.label}
+              style={{
+                background: "#fff",
+                border: "1px solid rgba(0,0,0,0.05)",
+                borderRadius: 16,
+                padding: "24px 24px 22px",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+              }}
+            >
+              <p style={{ fontSize: 12, color: "rgba(26,26,46,0.45)", marginBottom: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.label}</p>
+              {statsLoading ? (
+                <Skeleton style={{ height: 32, width: 64, borderRadius: 6, background: "rgba(0,0,0,0.05)" }} />
+              ) : (
+                <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em" }}>{s.value ?? 0}</span>
+              )}
+            </div>
+          ))}
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight">Recent Projects</h2>
-            <Link href="/app/projects" className="text-sm font-medium text-black/60 hover:text-black flex items-center gap-1">
-              View all <ArrowRight className="w-4 h-4" />
+        {/* Recent projects */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>Recent projects</h2>
+            <Link href="/app/projects">
+              <span style={{ fontSize: 13, color: "rgba(26,26,46,0.45)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                View all <ArrowRight style={{ width: 13, height: 13 }} />
+              </span>
             </Link>
           </div>
 
-          <div className="bg-white border border-black/[0.04] shadow-sm shadow-black/[0.02] rounded-2xl overflow-hidden">
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid rgba(0,0,0,0.05)",
+              borderRadius: 18,
+              overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+            }}
+          >
             {projectsLoading ? (
-              <div className="p-6 space-y-4">
-                <Skeleton className="h-16 w-full rounded-xl bg-black/5" />
-                <Skeleton className="h-16 w-full rounded-xl bg-black/5" />
-                <Skeleton className="h-16 w-full rounded-xl bg-black/5" />
+              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} style={{ height: 56, borderRadius: 10, background: "rgba(0,0,0,0.04)" }} />
+                ))}
               </div>
             ) : recentProjects.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-12 h-12 bg-black/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FolderKanban className="w-6 h-6 text-black/40" />
+              <div style={{ padding: "64px 24px", textAlign: "center" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                  <FolderOpen style={{ width: 22, height: 22, color: "rgba(26,26,46,0.3)" }} />
                 </div>
-                <h3 className="text-lg font-medium mb-2">No projects yet</h3>
-                <p className="text-black/60 mb-6 max-w-sm mx-auto">Create your first project to start giving clients safe editing access to your apps.</p>
+                <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>No projects yet</p>
+                <p style={{ fontSize: 13.5, color: "rgba(26,26,46,0.5)", marginBottom: 24, maxWidth: 320, margin: "0 auto 24px" }}>
+                  Create your first project to start giving clients safe editing access.
+                </p>
                 <Link href="/app/projects">
-                  <Button className="bg-black text-white hover:bg-black/90 rounded-xl h-11 px-6">
-                    Create Project
+                  <Button style={{ background: "#1a1a2e", color: "#fff", borderRadius: 10, height: 40, padding: "0 18px", fontSize: 13.5, fontWeight: 500, border: "none", cursor: "pointer" }}>
+                    Create project
                   </Button>
                 </Link>
               </div>
             ) : (
-              <div className="divide-y divide-black/[0.04]">
-                {recentProjects.map((project) => (
-                  <Link key={project.id} href={`/app/projects/${project.id}`}>
-                    <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-black/[0.01] transition-colors cursor-pointer group">
-                      <div>
-                        <h3 className="font-semibold text-lg group-hover:text-black/80 transition-colors">{project.name}</h3>
-                        <p className="text-sm text-black/50 mt-1">
-                          Created {format(new Date(project.createdAt), "MMM d, yyyy")}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-6 text-sm text-black/60">
-                        <div className="flex flex-col sm:items-end">
-                          <span className="font-medium text-black">{project.fieldCount}</span>
-                          <span className="text-xs">Fields</span>
-                        </div>
-                        <div className="flex flex-col sm:items-end">
-                          <span className="font-medium text-black">{project.clientCount}</span>
-                          <span className="text-xs">Clients</span>
-                        </div>
-                        <div className="hidden sm:block">
-                          <ArrowRight className="w-5 h-5 text-black/20 group-hover:text-black/60 transition-colors" />
-                        </div>
-                      </div>
+              recentProjects.map((project, idx) => (
+                <Link key={project.id} href={`/app/projects/${project.id}`}>
+                  <div
+                    style={{
+                      padding: "18px 24px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderTop: idx > 0 ? "1px solid rgba(0,0,0,0.04)" : "none",
+                      cursor: "pointer",
+                      transition: "background 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.01)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <div>
+                      <p style={{ fontSize: 14.5, fontWeight: 500, marginBottom: 3 }}>{project.name}</p>
+                      <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.45)" }}>
+                        {format(new Date(project.createdAt), "MMM d, yyyy")}
+                      </p>
                     </div>
-                  </Link>
-                ))}
-              </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 28, color: "rgba(26,26,46,0.45)" }}>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a2e" }}>{project.fieldCount}</p>
+                        <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>Fields</p>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a2e" }}>{project.clientCount}</p>
+                        <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>Clients</p>
+                      </div>
+                      <ArrowRight style={{ width: 14, height: 14, color: "rgba(26,26,46,0.2)" }} />
+                    </div>
+                  </div>
+                </Link>
+              ))
             )}
           </div>
         </div>
+
       </div>
     </AppLayout>
-  );
-}
-
-function StatCard({ title, value, loading, icon }: { title: string; value?: number; loading: boolean; icon: React.ReactNode }) {
-  return (
-    <Card className="bg-white border-black/[0.04] shadow-sm shadow-black/[0.02] rounded-2xl overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
-        <CardTitle className="text-sm font-medium text-black/60">{title}</CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent className="px-6 pb-6">
-        {loading ? (
-          <Skeleton className="h-8 w-24 bg-black/5" />
-        ) : (
-          <div className="text-3xl font-bold tracking-tight">{value || 0}</div>
-        )}
-      </CardContent>
-    </Card>
   );
 }

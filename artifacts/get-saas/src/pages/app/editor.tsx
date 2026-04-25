@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
-import { 
-  useListContentFields, 
+import {
+  useListContentFields,
   useUpdateContentField,
 } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, AlertCircle } from "lucide-react";
+import { Loader2, Save, AlertCircle, Lock } from "lucide-react";
 
 export default function ClientEditor() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -21,13 +19,11 @@ export default function ClientEditor() {
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
   const [savingField, setSavingField] = useState<string | null>(null);
 
-  // Initialize local values when fields load
   useEffect(() => {
     if (fields) {
       const newValues: Record<string, string> = {};
       fields.forEach(f => {
         if (localValues[f.id] === undefined) {
-          // draftValue takes precedence in the editor if it exists, otherwise value
           newValues[f.id] = f.draftValue || f.value || "";
         }
       });
@@ -45,12 +41,12 @@ export default function ClientEditor() {
       data: { draftValue: localValues[fieldId] }
     }, {
       onSuccess: () => {
-        toast({ title: "Draft saved", description: "Changes pending review." });
+        toast({ title: "Saved as draft", description: "Your change is pending review." });
         refetch();
         setSavingField(null);
       },
       onError: (err) => {
-        toast({ variant: "destructive", title: "Error saving", description: err.message });
+        toast({ variant: "destructive", title: "Save failed", description: err.message });
         setSavingField(null);
       }
     });
@@ -62,151 +58,185 @@ export default function ClientEditor() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-black/20" />
+      <div style={{ minHeight: "100dvh", background: "#faf9f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 style={{ width: 24, height: 24, color: "rgba(26,26,46,0.2)", animation: "spin 1s linear infinite" }} />
       </div>
     );
   }
 
   if (!fields || fields.length === 0) {
     return (
-      <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center p-6">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-black/5 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="w-8 h-8 text-black/40" />
+      <div style={{ minHeight: "100dvh", background: "#faf9f6", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", maxWidth: 360 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+            <AlertCircle style={{ width: 22, height: 22, color: "rgba(26,26,46,0.3)" }} />
           </div>
-          <h2 className="text-2xl font-semibold mb-2">Nothing to edit yet</h2>
-          <p className="text-black/60">Your developer hasn't mapped any editable fields for this project.</p>
+          <p style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>Nothing to edit yet</p>
+          <p style={{ fontSize: 14, color: "rgba(26,26,46,0.5)", lineHeight: 1.6 }}>Your developer hasn't mapped any editable fields for this project.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#fcfcfc] text-[#111] font-sans selection:bg-black/10 selection:text-black">
-      <header className="bg-white border-b border-black/[0.04] sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="font-semibold tracking-tight text-lg">Content Editor</div>
-          <div className="text-sm text-black/50 bg-black/5 px-3 py-1.5 rounded-full font-medium">Safe Mode</div>
-        </div>
-      </header>
+    <div style={{ minHeight: "100dvh", background: "#faf9f6", color: "#1a1a2e", fontFamily: "inherit" }}>
 
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        <div className="mb-12">
-          <h1 className="text-3xl font-semibold tracking-tight mb-2">Edit Content</h1>
-          <p className="text-black/60 text-lg">Update text and images. Changes will be saved as drafts for review.</p>
+      {/* Sticky top bar */}
+      <div style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 40,
+        background: "rgba(250,249,246,0.92)",
+        backdropFilter: "blur(12px)",
+        borderBottom: "1px solid rgba(0,0,0,0.05)",
+        height: 60,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 32px",
+      }}>
+        <span style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.01em" }}>Edit content</span>
+        <span style={{ fontSize: 12, fontWeight: 500, background: "rgba(0,0,0,0.05)", color: "rgba(26,26,46,0.55)", padding: "4px 12px", borderRadius: 20 }}>
+          Changes require approval
+        </span>
+      </div>
+
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "52px 24px 80px" }}>
+
+        <div style={{ marginBottom: 48 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 6 }}>Your content</h1>
+          <p style={{ fontSize: 14, color: "rgba(26,26,46,0.5)", lineHeight: 1.6 }}>
+            Update the fields below. Changes are saved as drafts and reviewed before going live.
+          </p>
         </div>
 
-        <div className="space-y-12">
+        <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
           {fields.map((field) => {
-            const hasUnsavedChanges = localValues[field.id] !== (field.draftValue || field.value || "");
+            const hasChanges = localValues[field.id] !== (field.draftValue || field.value || "");
             const isSaving = savingField === field.id;
+            const hasDraftPending = field.draftValue && field.draftValue !== field.value && !hasChanges;
 
             return (
-              <div key={field.id} className={`group relative transition-opacity ${field.isLocked ? "opacity-60" : ""}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <Label className="text-base font-medium flex items-center gap-2">
-                    {field.label}
-                    {field.isLocked && <span className="text-xs bg-black/5 px-2 py-0.5 rounded text-black/60 uppercase tracking-wider font-semibold">Locked</span>}
-                  </Label>
+              <div key={field.id} style={{ opacity: field.isLocked ? 0.55 : 1, transition: "opacity 0.2s ease" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 500 }}>{field.label}</span>
+                    <span style={{ fontSize: 10.5, color: "rgba(26,26,46,0.35)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{field.type}</span>
+                    {field.isLocked && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "rgba(26,26,46,0.4)", background: "rgba(0,0,0,0.05)", padding: "2px 8px", borderRadius: 6 }}>
+                        <Lock style={{ width: 10, height: 10 }} /> Locked
+                      </span>
+                    )}
+                  </div>
+
                   {!field.isLocked && (
-                    <Button 
-                      size="sm" 
+                    <button
                       onClick={() => handleSave(field.id)}
-                      disabled={!hasUnsavedChanges || isSaving}
-                      className={`h-8 px-4 rounded-lg text-sm transition-all duration-300 ${
-                        hasUnsavedChanges 
-                          ? "bg-black text-white hover:bg-black/90 shadow-sm" 
-                          : "bg-black/5 text-black/40"
-                      }`}
+                      disabled={!hasChanges || isSaving}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: 12.5,
+                        fontWeight: 500,
+                        padding: "5px 12px",
+                        borderRadius: 8,
+                        border: "none",
+                        cursor: hasChanges ? "pointer" : "default",
+                        background: hasChanges ? "#1a1a2e" : "rgba(0,0,0,0.05)",
+                        color: hasChanges ? "#fff" : "rgba(26,26,46,0.3)",
+                        transition: "all 0.2s ease",
+                      }}
                     >
-                      {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
-                      Save Draft
-                    </Button>
+                      {isSaving
+                        ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
+                        : <Save style={{ width: 12, height: 12 }} />}
+                      Save draft
+                    </button>
                   )}
                 </div>
 
-                <div className="relative">
-                  {field.type === "text" && (
-                    <Input
-                      value={localValues[field.id] || ""}
-                      onChange={(e) => handleValueChange(field.id, e.target.value)}
-                      disabled={field.isLocked}
-                      className="text-lg py-6 px-4 bg-white border-black/10 rounded-xl shadow-sm focus-visible:ring-black focus-visible:border-black disabled:bg-black/5"
-                    />
-                  )}
-                  
-                  {field.type === "richtext" && (
-                    <Textarea
-                      value={localValues[field.id] || ""}
-                      onChange={(e) => handleValueChange(field.id, e.target.value)}
-                      disabled={field.isLocked}
-                      className="text-lg py-4 px-4 bg-white border-black/10 rounded-xl shadow-sm min-h-[160px] resize-y focus-visible:ring-black focus-visible:border-black disabled:bg-black/5 leading-relaxed"
-                    />
-                  )}
+                {field.type === "text" && (
+                  <Input
+                    value={localValues[field.id] || ""}
+                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    disabled={field.isLocked}
+                    style={{ height: 48, borderRadius: 11, fontSize: 15, background: "#fff", border: "1px solid rgba(0,0,0,0.09)" }}
+                  />
+                )}
 
-                  {field.type === "url" && (
+                {field.type === "richtext" && (
+                  <Textarea
+                    value={localValues[field.id] || ""}
+                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    disabled={field.isLocked}
+                    style={{ borderRadius: 11, fontSize: 15, background: "#fff", border: "1px solid rgba(0,0,0,0.09)", minHeight: 140, resize: "vertical", lineHeight: 1.6, padding: "12px 14px" }}
+                  />
+                )}
+
+                {field.type === "url" && (
+                  <Input
+                    type="url"
+                    value={localValues[field.id] || ""}
+                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    disabled={field.isLocked}
+                    placeholder="https://"
+                    style={{ height: 48, borderRadius: 11, fontSize: 14, fontFamily: "monospace", background: "#fff", border: "1px solid rgba(0,0,0,0.09)" }}
+                  />
+                )}
+
+                {field.type === "image" && (
+                  <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                    {localValues[field.id] && (
+                      <div style={{ width: 80, height: 80, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)", flexShrink: 0 }}>
+                        <img src={localValues[field.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </div>
+                    )}
                     <Input
                       type="url"
                       value={localValues[field.id] || ""}
-                      onChange={(e) => handleValueChange(field.id, e.target.value)}
+                      onChange={e => handleValueChange(field.id, e.target.value)}
                       disabled={field.isLocked}
-                      className="text-lg py-6 px-4 bg-white border-black/10 rounded-xl shadow-sm font-mono focus-visible:ring-black focus-visible:border-black disabled:bg-black/5"
-                      placeholder="https://"
+                      placeholder="Image URL"
+                      style={{ flex: 1, height: 48, borderRadius: 11, fontSize: 14, fontFamily: "monospace", background: "#fff", border: "1px solid rgba(0,0,0,0.09)" }}
                     />
-                  )}
+                  </div>
+                )}
 
-                  {field.type === "image" && (
-                    <div className="flex gap-4 items-start">
-                      {localValues[field.id] && (
-                        <div className="w-24 h-24 rounded-xl bg-black/5 border border-black/10 overflow-hidden shrink-0">
-                          <img src={localValues[field.id]} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                      <Input
-                        type="url"
-                        value={localValues[field.id] || ""}
-                        onChange={(e) => handleValueChange(field.id, e.target.value)}
-                        disabled={field.isLocked}
-                        className="text-lg py-6 px-4 bg-white border-black/10 rounded-xl shadow-sm font-mono focus-visible:ring-black focus-visible:border-black disabled:bg-black/5"
-                        placeholder="Image URL"
-                      />
-                    </div>
-                  )}
+                {field.type === "number" && (
+                  <Input
+                    type="number"
+                    value={localValues[field.id] || ""}
+                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    disabled={field.isLocked}
+                    style={{ height: 48, borderRadius: 11, fontSize: 15, background: "#fff", border: "1px solid rgba(0,0,0,0.09)", maxWidth: 180 }}
+                  />
+                )}
 
-                  {field.type === "number" && (
-                    <Input
-                      type="number"
-                      value={localValues[field.id] || ""}
-                      onChange={(e) => handleValueChange(field.id, e.target.value)}
+                {field.type === "boolean" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, height: 48 }}>
+                    <Switch
+                      checked={localValues[field.id] === "true"}
+                      onCheckedChange={c => handleValueChange(field.id, c ? "true" : "false")}
                       disabled={field.isLocked}
-                      className="text-lg py-6 px-4 bg-white border-black/10 rounded-xl shadow-sm focus-visible:ring-black focus-visible:border-black disabled:bg-black/5 max-w-[200px]"
+                      className="data-[state=checked]:bg-[#1a1a2e]"
                     />
-                  )}
+                    <span style={{ fontSize: 15, fontWeight: 500 }}>
+                      {localValues[field.id] === "true" ? "Yes" : "No"}
+                    </span>
+                  </div>
+                )}
 
-                  {field.type === "boolean" && (
-                    <div className="flex items-center h-12">
-                      <Switch
-                        checked={localValues[field.id] === "true"}
-                        onCheckedChange={(checked) => handleValueChange(field.id, checked ? "true" : "false")}
-                        disabled={field.isLocked}
-                        className="data-[state=checked]:bg-black"
-                      />
-                      <span className="ml-3 text-lg font-medium">{localValues[field.id] === "true" ? "Yes" : "No"}</span>
-                    </div>
-                  )}
-
-                  {field.draftValue && field.draftValue !== field.value && !hasUnsavedChanges && (
-                    <div className="absolute -bottom-6 right-0 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                      Draft pending review
-                    </div>
-                  )}
-                </div>
+                {hasDraftPending && (
+                  <p style={{ marginTop: 6, fontSize: 12, color: "#b45309", display: "flex", alignItems: "center", gap: 4 }}>
+                    Draft pending approval
+                  </p>
+                )}
               </div>
             );
           })}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
