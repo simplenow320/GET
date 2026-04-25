@@ -1,5 +1,15 @@
 import React from "react";
 import brandLogoPath from "@assets/IMG_6687_1777091776547.jpeg";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const BRAND = {
   ink: "#1a1a2e",
@@ -198,16 +208,16 @@ export function GhostButton({ children, block, disabled, style, size, ...rest }:
   );
 }
 
-export function DangerButton({ children, block, disabled, style, size, ...rest }: ButtonProps) {
+export function DangerButton({ children, loading, block, disabled, style, size, ...rest }: ButtonProps) {
   return (
     <button
       {...rest}
-      disabled={disabled}
+      disabled={disabled || loading}
       style={{
         ...withSize(dangerBtnStyle, size),
         width: block ? "100%" : undefined,
-        opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled || loading ? 0.55 : 1,
+        cursor: disabled || loading ? "not-allowed" : "pointer",
         ...style,
       }}
     >
@@ -499,5 +509,103 @@ export function PageContainer({
     >
       {children}
     </div>
+  );
+}
+
+export function ConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  destructive = false,
+  loading = false,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  loading?: boolean;
+  onConfirm: () => void | Promise<void>;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent
+        className="sm:max-w-[420px]"
+        style={{
+          borderRadius: r.lg,
+          border: `1px solid ${line.base}`,
+          background: BRAND.surface,
+          padding: 24,
+        }}
+      >
+        <AlertDialogHeader style={{ textAlign: "left" as const }}>
+          <AlertDialogTitle
+            style={{
+              fontSize: type.lg,
+              fontWeight: 600,
+              color: BRAND.ink,
+              letterSpacing: "-0.015em",
+              lineHeight: 1.3,
+            }}
+          >
+            {title}
+          </AlertDialogTitle>
+          {description ? (
+            <AlertDialogDescription
+              style={{
+                fontSize: type.sm,
+                color: tone[600],
+                lineHeight: 1.55,
+                marginTop: 6,
+              }}
+            >
+              {description}
+            </AlertDialogDescription>
+          ) : null}
+        </AlertDialogHeader>
+        <AlertDialogFooter
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+            marginTop: 18,
+            flexDirection: "row" as const,
+          }}
+        >
+          <AlertDialogCancel asChild>
+            <SecondaryButton type="button" disabled={loading}>
+              {cancelLabel}
+            </SecondaryButton>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            {destructive ? (
+              <DangerButton
+                type="button"
+                onClick={onConfirm}
+                loading={loading}
+                disabled={loading}
+              >
+                {confirmLabel}
+              </DangerButton>
+            ) : (
+              <PrimaryButton
+                type="button"
+                onClick={onConfirm}
+                loading={loading}
+                disabled={loading}
+              >
+                {confirmLabel}
+              </PrimaryButton>
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

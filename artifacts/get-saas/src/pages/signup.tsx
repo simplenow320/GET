@@ -18,15 +18,28 @@ const signupSchema = z.object({
   password: z.string().min(8, "At least 8 characters"),
 });
 
+function readQueryParams(): { next: string | null; email: string | null } {
+  if (typeof window === "undefined") return { next: null, email: null };
+  const sp = new URLSearchParams(window.location.search);
+  const next = sp.get("next");
+  const email = sp.get("email");
+  return {
+    next: next && next.startsWith("/") && !next.startsWith("//") ? next : null,
+    email: email || null,
+  };
+}
+
 export default function Signup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const signupMutation = useSignup();
   const queryClient = useQueryClient();
 
+  const params = readQueryParams();
+
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: "", email: "", password: "" },
+    defaultValues: { name: "", email: params.email ?? "", password: "" },
   });
 
   function onSubmit(values: z.infer<typeof signupSchema>) {
@@ -36,7 +49,7 @@ export default function Signup() {
         onSuccess: async (data: any) => {
           if (data?.token) localStorage.setItem("auth_token", data.token);
           await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-          setLocation("/app/dashboard");
+          setLocation(params.next ?? "/app/dashboard");
         },
         onError: (error) => {
           toast({

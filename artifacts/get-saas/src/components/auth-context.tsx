@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, ReactNode } from "react";
-import { useGetMe, ApiError } from "@workspace/api-client-react";
-import { User } from "@workspace/api-client-react/src/generated/api.schemas";
+import { useGetMe, ApiError, getGetMeQueryKey } from "@workspace/api-client-react";
+import type { User } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 
@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: user, isLoading, error } = useGetMe({
-    query: { retry: false },
+    query: { retry: false, queryKey: getGetMeQueryKey() },
   });
 
   // Only clear the stored token when the server explicitly rejects it (401).

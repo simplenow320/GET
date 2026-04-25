@@ -347,7 +347,7 @@ paths:
     delete:
       operationId: revokeInvite
       tags: [invites]
-      summary: Revoke an invite
+      summary: Revoke an invite (soft — marks the invite as revoked)
       parameters:
         - name: projectId
           in: path
@@ -362,6 +362,51 @@ paths:
       responses:
         "204":
           description: Revoked
+
+  /invites/{token}:
+    get:
+      operationId: getInviteByToken
+      tags: [invites]
+      summary: Look up an invite by its share token (public)
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invite info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteByToken"
+        "404":
+          description: Not found
+
+  /invites/{token}/accept:
+    post:
+      operationId: acceptInviteByToken
+      tags: [invites]
+      summary: Accept an invite via its share token (auth required)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invite accepted (or user is already a member)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedInvite"
+        "403":
+          description: Logged-in user's email does not match the invite
+        "409":
+          description: Invite is no longer valid (revoked / accepted / expired)
 
   /projects/{projectId}/domains:
     get:
@@ -720,10 +765,18 @@ components:
           enum: [editor, viewer]
         status:
           type: string
-          enum: [pending, accepted, expired]
+          enum: [pending, accepted, expired, revoked]
         createdAt:
           type: string
           format: date-time
+        token:
+          type: string
+          nullable: true
+          description: Single-use invite token used to build the acceptance link
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, projectId, email, role, status, createdAt]
 
     CreateInviteBody:
@@ -735,6 +788,36 @@ components:
           type: string
           enum: [editor, viewer]
       required: [email, role]
+
+    InviteByToken:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+          enum: [editor, viewer]
+        status:
+          type: string
+          enum: [pending, accepted, expired, revoked]
+        projectName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [email, role, status, projectName]
+
+    AcceptedInvite:
+      type: object
+      properties:
+        projectId:
+          type: string
+        role:
+          type: string
+        alreadyMember:
+          type: boolean
+      required: [projectId, role]
 
     Domain:
       type: object

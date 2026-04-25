@@ -217,8 +217,13 @@ export const ListInvitesResponseItem = zod.object({
   projectId: zod.string(),
   email: zod.string(),
   role: zod.enum(["editor", "viewer"]),
-  status: zod.enum(["pending", "accepted", "expired"]),
+  status: zod.enum(["pending", "accepted", "expired", "revoked"]),
   createdAt: zod.coerce.date(),
+  token: zod
+    .string()
+    .nullish()
+    .describe("Single-use invite token used to build the acceptance link"),
+  expiresAt: zod.coerce.date().nullish(),
 });
 export const ListInvitesResponse = zod.array(ListInvitesResponseItem);
 
@@ -235,11 +240,39 @@ export const CreateInviteBody = zod.object({
 });
 
 /**
- * @summary Revoke an invite
+ * @summary Revoke an invite (soft — marks the invite as revoked)
  */
 export const RevokeInviteParams = zod.object({
   projectId: zod.coerce.string(),
   inviteId: zod.coerce.string(),
+});
+
+/**
+ * @summary Look up an invite by its share token (public)
+ */
+export const GetInviteByTokenParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const GetInviteByTokenResponse = zod.object({
+  email: zod.string(),
+  role: zod.enum(["editor", "viewer"]),
+  status: zod.enum(["pending", "accepted", "expired", "revoked"]),
+  projectName: zod.string(),
+  expiresAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Accept an invite via its share token (auth required)
+ */
+export const AcceptInviteByTokenParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const AcceptInviteByTokenResponse = zod.object({
+  projectId: zod.string(),
+  role: zod.string(),
+  alreadyMember: zod.boolean().optional(),
 });
 
 /**

@@ -7,6 +7,7 @@ import { AuthProvider, RequireAuth } from "@/components/auth-context";
 import LandingPage from "@/pages/landing";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import AcceptInvite from "@/pages/accept-invite";
 import Dashboard from "@/pages/app/dashboard";
 import Projects from "@/pages/app/projects";
 import ProjectDetail from "@/pages/app/project-detail";
@@ -22,6 +23,7 @@ function AppRoutes() {
       <Route path="/" component={LandingPage} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/accept-invite/:token" component={AcceptInvite} />
 
       {/* Authenticated Routes */}
       <Route path="/app/dashboard">

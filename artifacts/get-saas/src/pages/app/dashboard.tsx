@@ -46,18 +46,18 @@ export default function Dashboard() {
             { label: "Fields", value: stats?.totalFields },
             { label: "Recent edits", value: stats?.recentEdits },
           ].map((s) => (
-            <Card key={s.label} padded style={{ padding: "20px 22px" }}>
-              <p style={{ fontSize: type.xs, color: tone[500], marginBottom: 8, fontWeight: 500 }}>
+            <Card key={s.label} padded style={{ padding: "18px 20px" }}>
+              <p style={{ fontSize: type.xs, color: tone[500], marginBottom: 6, fontWeight: 500 }}>
                 {s.label}
               </p>
               {statsLoading ? (
-                <Skeleton style={{ height: 28, width: 56, borderRadius: 6, background: tone[100] }} />
+                <Skeleton style={{ height: 26, width: 56, borderRadius: 6, background: tone[100] }} />
               ) : (
                 <span
                   style={{
-                    fontSize: 26,
-                    fontWeight: 700,
-                    letterSpacing: "-0.025em",
+                    fontSize: 24,
+                    fontWeight: 600,
+                    letterSpacing: "-0.02em",
                     color: BRAND.ink,
                   }}
                 >

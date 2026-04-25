@@ -28,22 +28,25 @@ Full-stack SaaS called "get" — a hosted control plane that lets developers giv
 ### Authenticated App Pages (/app/*)
 - `/app/dashboard` — Project stats overview
 - `/app/projects` — All projects grid with create/manage
-- `/app/projects/:projectId` — Project detail with tabs: Content Map, Clients, Domains, Drafts, Activity, Settings
+- `/app/projects/:projectId` — Project detail with tabs: Content, Clients, Domains, Drafts, API keys, Activity, Settings (tabs scroll horizontally on mobile via `no-scrollbar`)
+- `/accept-invite/:token` — Client invite acceptance landing
 - `/app/setup/:projectId` — Multi-step setup wizard
 - `/app/editor/:projectId` — Client-facing content editor (white-label, no branding)
 
-## Brand
-- **Logo/mascot**: attached_assets/IMG_6687_1777091776547.jpeg (hero) + B56BFD2D...png (mascot)
-- **Wordmark**: "get" with a yellow dot — exposed as `<Wordmark />` from `src/lib/ui.tsx`
-- **Tagline**: "Let clients edit your app without breaking it."
+## Brand rules (strict)
+- **The ONLY "get" mark** is the uploaded asset `attached_assets/IMG_6687_1777091776547.jpeg`. Render it via `<BrandLogo />` from `src/lib/ui.tsx`. NEVER recreate the wordmark or mascot programmatically (no fake `<Wordmark>` text component, no SVG copies).
+- **Landing page**: hero uses BrandLogo, no top nav, no header links, no tiny corner logo, no secondary brand marks, no footer brand mark. Tagline lives baked into the asset and is mirrored as an sr-only H1: "Let clients edit your app without breaking it." (no em-dash).
+- **Auth pages (/login, /signup) and /not-found**: small BrandLogo (≤140px) is OK — these are landing-adjacent.
+- **Authenticated product UI (/app/\*)**: WHITE-LABEL. No BrandLogo, no get-branded copy, no mascot anywhere. Sidebar header shows uppercase "Workspace". Setup top bar shows "Set up project". Editor top bar shows "Editor". Each affected file has a comment marker enforcing this.
+- `GET_PROJECT_KEY` env var name is allowed in code snippets — it's the developer-facing API contract identifier (like `STRIPE_SECRET_KEY`), not branding.
 - **Landing palette**: Warm cream (#faf9f6), dark navy (#1a1a2e), yellow accent (#FFD747)
 - **App palette**: White-label, clean grayscale, navy primary buttons
 
 ## Shared UI primitives (`src/lib/ui.tsx`)
-All pages import design tokens (`BRAND`, `tone`, `line`, `type`, `r`, `ease`, `status`) and components (`PrimaryButton`, `SecondaryButton`, `GhostButton`, `DangerButton`, `Card`, `PageHeader`, `SectionTitle`, `EmptyState`, `Pill`, `Field`, `Wordmark`, `PageContainer`) from this module. When adding new pages, reuse these instead of inventing one-off styles. `Field` auto-generates an `id` for its child input and wires `htmlFor` on the label.
+All pages import design tokens (`BRAND`, `tone`, `line`, `type`, `r`, `ease`, `status`) and components (`PrimaryButton`, `SecondaryButton`, `GhostButton`, `DangerButton`, `Card`, `PageHeader`, `SectionTitle`, `EmptyState`, `Pill`, `Field`, `BrandLogo`, `PageContainer`, `ConfirmDialog`) from this module. When adding new pages, reuse these instead of inventing one-off styles. `Field` auto-generates an `id` for its child input and wires `htmlFor` on the label. `ConfirmDialog` wraps Radix AlertDialog with brand styling — use it for ALL destructive confirmations (delete, revoke, etc.). Never use native `confirm()` / `alert()`.
 
 ## Auth
-Session-based auth using SHA-256 password hashing + random bearer tokens stored in `sessions` table. Pass `Authorization: Bearer <token>` header on all authenticated API calls. Token is stored in localStorage.
+Session-based auth using scrypt password hashing + random bearer tokens (SHA-256 hashed at rest in the `sessions` table). The frontend stores the raw token in localStorage and sends it as `Authorization: Bearer <token>`. This is CSRF-immune by design (no automatic cookie attachment). Trade-off: vulnerable to XSS token theft, so the frontend deliberately renders no user-generated HTML and uses no `dangerouslySetInnerHTML`. RBAC is enforced backend-side via `requireProjectAccess(minRole)` middleware.
 
 ## Key Commands
 

@@ -17,6 +17,14 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+function readNextParam(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("next");
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -35,7 +43,8 @@ export default function Login() {
         onSuccess: async (data: any) => {
           if (data?.token) localStorage.setItem("auth_token", data.token);
           await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-          setLocation("/app/dashboard");
+          const next = readNextParam();
+          setLocation(next ?? "/app/dashboard");
         },
         onError: (error) => {
           toast({

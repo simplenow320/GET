@@ -142,6 +142,7 @@ export const InviteStatus = {
   pending: "pending",
   accepted: "accepted",
   expired: "expired",
+  revoked: "revoked",
 } as const;
 
 export interface Invite {
@@ -151,6 +152,9 @@ export interface Invite {
   role: InviteRole;
   status: InviteStatus;
   createdAt: string;
+  /** Single-use invite token used to build the acceptance link */
+  token?: string | null;
+  expiresAt?: string | null;
 }
 
 export type CreateInviteBodyRole =
@@ -164,6 +168,38 @@ export const CreateInviteBodyRole = {
 export interface CreateInviteBody {
   email: string;
   role: CreateInviteBodyRole;
+}
+
+export type InviteByTokenRole =
+  (typeof InviteByTokenRole)[keyof typeof InviteByTokenRole];
+
+export const InviteByTokenRole = {
+  editor: "editor",
+  viewer: "viewer",
+} as const;
+
+export type InviteByTokenStatus =
+  (typeof InviteByTokenStatus)[keyof typeof InviteByTokenStatus];
+
+export const InviteByTokenStatus = {
+  pending: "pending",
+  accepted: "accepted",
+  expired: "expired",
+  revoked: "revoked",
+} as const;
+
+export interface InviteByToken {
+  email: string;
+  role: InviteByTokenRole;
+  status: InviteByTokenStatus;
+  projectName: string;
+  expiresAt?: string | null;
+}
+
+export interface AcceptedInvite {
+  projectId: string;
+  role: string;
+  alreadyMember?: boolean;
 }
 
 export interface Domain {

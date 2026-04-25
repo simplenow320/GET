@@ -166,7 +166,7 @@ function StepDots({ step }: { step: number }) {
       aria-valuenow={step}
       aria-valuemin={1}
       aria-valuemax={TOTAL_STEPS}
-      style={{ display: "flex", alignItems: "center", gap: 5 }}
+      style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5 }}
     >
       {Array.from({ length: TOTAL_STEPS }, (_, i) => {
         const idx = i + 1;
@@ -320,6 +320,14 @@ export default function SetupWizard() {
   const [hostname, setHostname] = useState("");
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  function buildInviteUrl(token: string): string {
+    if (typeof window === "undefined") return "";
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    return `${window.location.origin}${base}/accept-invite/${token}`;
+  }
 
   const goBack = () => { if (step > 1) setStep((s) => s - 1); };
   const goNext = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS));
@@ -396,14 +404,35 @@ export default function SetupWizard() {
     createInviteMutation.mutate(
       { projectId, data: { email: email.trim(), role: "editor" } },
       {
-        onSuccess: () => {
+        onSuccess: (created: any) => {
           setState((s) => ({ ...s, clientInvited: true }));
-          goNext();
+          const token = created?.token as string | undefined;
+          if (token) {
+            const url = buildInviteUrl(token);
+            setInviteUrl(url);
+            navigator.clipboard?.writeText(url).catch(() => {});
+            toast({ title: "Invite ready", description: "Link copied — share it with your client." });
+          } else {
+            toast({ title: "Invite sent" });
+            goNext();
+          }
         },
         onError: (err) =>
           toast({ variant: "destructive", title: "Couldn't invite", description: err.message }),
       }
     );
+  };
+
+  const handleCopyInviteUrl = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1800);
+      toast({ title: "Link copied" });
+    } catch {
+      toast({ variant: "destructive", title: "Couldn't copy", description: inviteUrl });
+    }
   };
 
   if (isLoading || !project) {
@@ -896,7 +925,7 @@ export default function SetupWizard() {
                     value={fieldLabel}
                     onChange={(e) => setFieldLabel(e.target.value)}
                     placeholder="e.g. Hero Headline, About Text, Logo"
-                    style={inputStyle}
+                    style={{ ...inputStyle, height: 48 }}
                     onKeyDown={(e) => e.key === "Enter" && handleAddField()}
                   />
                 </Field>
@@ -985,26 +1014,89 @@ export default function SetupWizard() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="client@example.com"
                     type="email"
+                    disabled={!!inviteUrl}
                     style={{ ...inputStyle, height: 48 }}
-                    onKeyDown={(e) => e.key === "Enter" && email && handleInvite()}
+                    onKeyDown={(e) => e.key === "Enter" && email && !inviteUrl && handleInvite()}
                   />
                 </Field>
+
+                {inviteUrl && (
+                  <div
+                    style={{
+                      marginTop: 18,
+                      padding: 14,
+                      border: `1px solid ${line.base}`,
+                      borderRadius: r.md,
+                      background: tone[50],
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: type.xs,
+                        color: tone[500],
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                        marginBottom: 6,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Share this private link with {email}
+                    </p>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <code
+                        style={{
+                          flex: "1 1 220px",
+                          minWidth: 0,
+                          fontSize: type.xs,
+                          color: BRAND.ink,
+                          background: "white",
+                          padding: "8px 10px",
+                          borderRadius: 6,
+                          border: `1px solid ${line.base}`,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {inviteUrl}
+                      </code>
+                      <SecondaryButton size="sm" onClick={handleCopyInviteUrl}>
+                        {linkCopied ? (
+                          <><Check style={{ width: 13, height: 13 }} /> Copied</>
+                        ) : (
+                          <><Copy style={{ width: 13, height: 13 }} /> Copy</>
+                        )}
+                      </SecondaryButton>
+                    </div>
+                    <p style={{ fontSize: type.xs, color: tone[500], marginTop: 10, lineHeight: 1.5 }}>
+                      The link expires in 7 days. Send it to your client however you like — email, Slack, Messages.
+                    </p>
+                  </div>
+                )}
               </Card>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <SecondaryButton onClick={goBack} size="lg">Back</SecondaryButton>
-                <SecondaryButton onClick={goNext} size="lg">Skip for now</SecondaryButton>
-                <PrimaryButton
-                  onClick={handleInvite}
-                  disabled={!email.trim() || createInviteMutation.isPending}
-                  loading={createInviteMutation.isPending}
-                  size="lg"
-                  block
-                >
-                  {createInviteMutation.isPending ? "Sending…" : (
-                    <>Send invite <ArrowRight style={{ width: 16, height: 16 }} /></>
-                  )}
-                </PrimaryButton>
+                {inviteUrl ? (
+                  <PrimaryButton onClick={goNext} size="lg" block>
+                    Continue <ArrowRight style={{ width: 16, height: 16 }} />
+                  </PrimaryButton>
+                ) : (
+                  <>
+                    <SecondaryButton onClick={goNext} size="lg">Skip for now</SecondaryButton>
+                    <PrimaryButton
+                      onClick={handleInvite}
+                      disabled={!email.trim() || createInviteMutation.isPending}
+                      loading={createInviteMutation.isPending}
+                      size="lg"
+                      block
+                    >
+                      {createInviteMutation.isPending ? "Creating…" : (
+                        <>Create invite link <ArrowRight style={{ width: 16, height: 16 }} /></>
+                      )}
+                    </PrimaryButton>
+                  </>
+                )}
               </div>
             </div>
           )}

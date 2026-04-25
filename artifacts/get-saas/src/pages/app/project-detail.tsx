@@ -39,7 +39,7 @@ import {
   BRAND, tone, line, type, ease, r,
   cardStyle, inputStyle, labelStyle,
   PrimaryButton, SecondaryButton, GhostButton, DangerButton,
-  Card, SectionTitle, EmptyState, Pill, Field,
+  Card, SectionTitle, EmptyState, Pill, Field, ConfirmDialog,
 } from "@/lib/ui";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -405,6 +405,33 @@ function prettyType(t: string) {
 
 // ── Clients ─────────────────────────────────────────────────────────────────
 
+function buildInviteUrl(token: string): string {
+  if (typeof window === "undefined") return "";
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  return `${window.location.origin}${base}/accept-invite/${token}`;
+}
+
+function CopyInviteLinkButton({ token, label = "Copy link" }: { token: string; label?: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    const url = buildInviteUrl(token);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast({ title: "Invite link copied", description: "Send it to your client to give them access." });
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({ variant: "destructive", title: "Couldn't copy", description: "Copy this link manually: " + url });
+    }
+  };
+  return (
+    <SecondaryButton size="sm" onClick={onCopy}>
+      {copied ? "Copied" : label}
+    </SecondaryButton>
+  );
+}
+
 function ClientsTab({ projectId }: { projectId: string }) {
   const { data: users, refetch: refetchUsers } = useListProjectUsers(projectId);
   const { data: invites, refetch: refetchInvites } = useListInvites(projectId);
@@ -414,15 +441,24 @@ function ClientsTab({ projectId }: { projectId: string }) {
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<any>("editor");
+  const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
 
   const handleInvite = () => {
     inviteMutation.mutate(
       { projectId, data: { email, role } },
       {
-        onSuccess: () => {
+        onSuccess: (created: any) => {
           setEmail("");
           refetchInvites();
-          toast({ title: "Invite sent" });
+          const token = created?.token as string | undefined;
+          if (token) {
+            const url = buildInviteUrl(token);
+            setLatestInviteUrl(url);
+            navigator.clipboard?.writeText(url).catch(() => {});
+            toast({ title: "Invite ready", description: "Link copied — share it with your client." });
+          } else {
+            toast({ title: "Invite created" });
+          }
         },
         onError: (err) =>
           toast({ variant: "destructive", title: "Invite failed", description: err.message }),
@@ -465,9 +501,68 @@ function ClientsTab({ projectId }: { projectId: string }) {
             disabled={!email || inviteMutation.isPending}
             loading={inviteMutation.isPending}
           >
-            {inviteMutation.isPending ? "Sending…" : "Send invite"}
+            {inviteMutation.isPending ? "Sending…" : "Create invite link"}
           </PrimaryButton>
         </div>
+
+        {latestInviteUrl && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              border: `1px solid ${line.base}`,
+              borderRadius: r.md,
+              background: tone[50],
+            }}
+          >
+            <p
+              style={{
+                fontSize: type.xs,
+                color: tone[500],
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                marginBottom: 6,
+              }}
+            >
+              Share this private link
+            </p>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <code
+                style={{
+                  flex: "1 1 220px",
+                  minWidth: 0,
+                  fontSize: type.xs,
+                  color: BRAND.ink,
+                  background: "white",
+                  padding: "8px 10px",
+                  borderRadius: r.sm,
+                  border: `1px solid ${line.base}`,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {latestInviteUrl}
+              </code>
+              <SecondaryButton
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(latestInviteUrl);
+                    toast({ title: "Link copied" });
+                  } catch {
+                    toast({ variant: "destructive", title: "Couldn't copy" });
+                  }
+                }}
+              >
+                Copy
+              </SecondaryButton>
+            </div>
+            <p style={{ fontSize: type.xs, color: tone[500], marginTop: 8, lineHeight: 1.5 }}>
+              They'll create an account (or sign in) with this email to accept. Link expires in 7 days.
+            </p>
+          </div>
+        )}
       </Card>
 
       <div>
@@ -553,37 +648,47 @@ function ClientsTab({ projectId }: { projectId: string }) {
         </Card>
       </div>
 
-      {!!invites?.length && (
-        <div>
-          <SectionTitle>Pending invites</SectionTitle>
-          <Card>
-            {invites.map((inv, idx) => (
-              <div
-                key={inv.id}
-                style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: type.base, fontWeight: 600 }}>{inv.email}</p>
-                  <p style={{ fontSize: type.xs, color: tone[500], marginTop: 2 }}>
-                    {inv.role} · {inv.status}
-                  </p>
-                </div>
-                <DangerButton
-                  size="sm"
-                  onClick={() =>
-                    revokeMutation.mutate(
-                      { projectId, inviteId: inv.id },
-                      { onSuccess: () => refetchInvites() }
-                    )
-                  }
-                >
-                  Revoke
-                </DangerButton>
-              </div>
-            ))}
-          </Card>
-        </div>
-      )}
+      {(() => {
+        const pendingInvites = invites?.filter((inv) => inv.status === "pending") ?? [];
+        if (!pendingInvites.length) return null;
+        return (
+          <div>
+            <SectionTitle>Pending invites</SectionTitle>
+            <Card>
+              {pendingInvites.map((inv, idx) => {
+                const token = (inv as any).token as string | undefined;
+                return (
+                  <div
+                    key={inv.id}
+                    style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: type.base, fontWeight: 600 }}>{inv.email}</p>
+                      <p style={{ fontSize: type.xs, color: tone[500], marginTop: 2 }}>
+                        {inv.role}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      {token && <CopyInviteLinkButton token={token} />}
+                      <DangerButton
+                        size="sm"
+                        onClick={() =>
+                          revokeMutation.mutate(
+                            { projectId, inviteId: inv.id },
+                            { onSuccess: () => refetchInvites() }
+                          )
+                        }
+                      >
+                        Revoke
+                      </DangerButton>
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -896,6 +1001,7 @@ function SettingsTab({ project }: { project: any }) {
   const deleteMutation = useDeleteProject();
   const [name, setName] = useState(project.name);
   const [desc, setDesc] = useState(project.description || "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
     updateMutation.mutate(
@@ -909,17 +1015,22 @@ function SettingsTab({ project }: { project: any }) {
   };
 
   const handleDelete = () => {
-    if (confirm("Delete this project? This cannot be undone.")) {
-      deleteMutation.mutate(
-        { projectId: project.id },
-        { onSuccess: () => setLocation("/app/projects") }
-      );
-    }
+    deleteMutation.mutate(
+      { projectId: project.id },
+      {
+        onSuccess: () => {
+          setConfirmDelete(false);
+          setLocation("/app/projects");
+        },
+        onError: (err) =>
+          toast({ variant: "destructive", title: "Couldn't delete", description: err.message }),
+      }
+    );
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 540 }}>
-      <Card padded style={{ padding: 28 }}>
+      <Card padded>
         <SectionTitle description="Update the basics for this project.">
           Project details
         </SectionTitle>
@@ -956,24 +1067,30 @@ function SettingsTab({ project }: { project: any }) {
         </div>
       </Card>
 
-      <Card
-        padded
-        style={{
-          padding: 24,
-          border: `1px solid ${line.base}`,
-        }}
-      >
+      <Card padded>
         <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink, marginBottom: 4 }}>
           Delete this project
         </p>
         <p style={{ fontSize: type.sm, color: tone[500], marginBottom: 18, lineHeight: 1.55 }}>
           This permanently removes the project, fields, drafts, and revokes all keys.
         </p>
-        <DangerButton onClick={handleDelete} disabled={deleteMutation.isPending}>
+        <DangerButton onClick={() => setConfirmDelete(true)} disabled={deleteMutation.isPending}>
           <Trash2 style={{ width: 13, height: 13 }} />
           Delete project
         </DangerButton>
       </Card>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this project?"
+        description="This permanently removes the project, content fields, drafts, and revokes all API keys. This action cannot be undone."
+        confirmLabel="Delete project"
+        cancelLabel="Keep it"
+        destructive
+        loading={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
@@ -999,6 +1116,7 @@ function KeysTab({ projectId }: { projectId: string }) {
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
 
   const { data: keys = [], isLoading } = useQuery<ProjectKey[]>({
     queryKey: ["project-keys", projectId],
@@ -1024,12 +1142,12 @@ function KeysTab({ projectId }: { projectId: string }) {
   };
 
   const handleRevoke = async (keyId: string) => {
-    if (!confirm("Revoke this key? Apps using it will stop working immediately.")) return;
     setRevokingId(keyId);
     try {
       await apiFetch(`/api/projects/${projectId}/keys/${keyId}`, { method: "DELETE" });
       qc.invalidateQueries({ queryKey: ["project-keys", projectId] });
       toast({ title: "Key revoked" });
+      setPendingRevokeId(null);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Couldn't revoke", description: e.message });
     } finally {
@@ -1194,7 +1312,7 @@ function KeysTab({ projectId }: { projectId: string }) {
                 </div>
                 <DangerButton
                   size="sm"
-                  onClick={() => handleRevoke(k.id)}
+                  onClick={() => setPendingRevokeId(k.id)}
                   disabled={revokingId === k.id}
                 >
                   {revokingId === k.id ? "Revoking…" : "Revoke"}
@@ -1204,6 +1322,18 @@ function KeysTab({ projectId }: { projectId: string }) {
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingRevokeId}
+        onOpenChange={(open) => { if (!open) setPendingRevokeId(null); }}
+        title="Revoke this key?"
+        description="Apps using it will stop receiving published content immediately. This can't be undone."
+        confirmLabel="Revoke key"
+        cancelLabel="Keep it"
+        destructive
+        loading={revokingId !== null}
+        onConfirm={() => { if (pendingRevokeId) handleRevoke(pendingRevokeId); }}
+      />
 
       <Card style={{ padding: 18, background: tone[50], border: `1px solid ${line.faint}` }}>
         <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 8, color: BRAND.ink }}>

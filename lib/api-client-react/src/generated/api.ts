@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AcceptedInvite,
   ActivityEntry,
   AddDomainBody,
   AuthResponse,
@@ -28,6 +29,7 @@ import type {
   Draft,
   HealthStatus,
   Invite,
+  InviteByToken,
   LoginBody,
   Project,
   ProjectStats,
@@ -1484,7 +1486,7 @@ export const useCreateInvite = <
 };
 
 /**
- * @summary Revoke an invite
+ * @summary Revoke an invite (soft — marks the invite as revoked)
  */
 export const getRevokeInviteUrl = (projectId: string, inviteId: string) => {
   return `/api/projects/${projectId}/invites/${inviteId}`;
@@ -1546,7 +1548,7 @@ export type RevokeInviteMutationResult = NonNullable<
 export type RevokeInviteMutationError = ErrorType<unknown>;
 
 /**
- * @summary Revoke an invite
+ * @summary Revoke an invite (soft — marks the invite as revoked)
  */
 export const useRevokeInvite = <
   TError = ErrorType<unknown>,
@@ -1566,6 +1568,177 @@ export const useRevokeInvite = <
   TContext
 > => {
   return useMutation(getRevokeInviteMutationOptions(options));
+};
+
+/**
+ * @summary Look up an invite by its share token (public)
+ */
+export const getGetInviteByTokenUrl = (token: string) => {
+  return `/api/invites/${token}`;
+};
+
+export const getInviteByToken = async (
+  token: string,
+  options?: RequestInit,
+): Promise<InviteByToken> => {
+  return customFetch<InviteByToken>(getGetInviteByTokenUrl(token), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetInviteByTokenQueryKey = (token: string) => {
+  return [`/api/invites/${token}`] as const;
+};
+
+export const getGetInviteByTokenQueryOptions = <
+  TData = Awaited<ReturnType<typeof getInviteByToken>>,
+  TError = ErrorType<void>,
+>(
+  token: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getInviteByToken>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetInviteByTokenQueryKey(token);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getInviteByToken>>
+  > = ({ signal }) => getInviteByToken(token, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!token,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getInviteByToken>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetInviteByTokenQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getInviteByToken>>
+>;
+export type GetInviteByTokenQueryError = ErrorType<void>;
+
+/**
+ * @summary Look up an invite by its share token (public)
+ */
+
+export function useGetInviteByToken<
+  TData = Awaited<ReturnType<typeof getInviteByToken>>,
+  TError = ErrorType<void>,
+>(
+  token: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getInviteByToken>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetInviteByTokenQueryOptions(token, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept an invite via its share token (auth required)
+ */
+export const getAcceptInviteByTokenUrl = (token: string) => {
+  return `/api/invites/${token}/accept`;
+};
+
+export const acceptInviteByToken = async (
+  token: string,
+  options?: RequestInit,
+): Promise<AcceptedInvite> => {
+  return customFetch<AcceptedInvite>(getAcceptInviteByTokenUrl(token), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAcceptInviteByTokenMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInviteByToken>>,
+    TError,
+    { token: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptInviteByToken>>,
+  TError,
+  { token: string },
+  TContext
+> => {
+  const mutationKey = ["acceptInviteByToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptInviteByToken>>,
+    { token: string }
+  > = (props) => {
+    const { token } = props ?? {};
+
+    return acceptInviteByToken(token, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptInviteByTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptInviteByToken>>
+>;
+
+export type AcceptInviteByTokenMutationError = ErrorType<void>;
+
+/**
+ * @summary Accept an invite via its share token (auth required)
+ */
+export const useAcceptInviteByToken = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInviteByToken>>,
+    TError,
+    { token: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptInviteByToken>>,
+  TError,
+  { token: string },
+  TContext
+> => {
+  return useMutation(getAcceptInviteByTokenMutationOptions(options));
 };
 
 /**

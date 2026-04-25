@@ -313,7 +313,7 @@ export default function ClientEditor() {
                 )}
 
                 {field.type === "image" && (
-                  <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
                     {localValues[field.id] && (
                       <div
                         style={{
@@ -341,7 +341,8 @@ export default function ClientEditor() {
                       placeholder="Image URL"
                       style={{
                         ...fieldInputStyle,
-                        flex: 1,
+                        flex: "1 1 200px",
+                        minWidth: 0,
                         fontFamily: "monospace",
                         fontSize: type.sm,
                       }}
