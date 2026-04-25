@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, contentFieldsTable, draftsTable, domainsTable } from "@workspace/db";
+import { db, contentFieldsTable, draftsTable, contentSnapshotsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateContentFieldBody, UpdateContentFieldBody } from "@workspace/api-zod";
@@ -7,7 +7,6 @@ import { sanitizeContent } from "../lib/sanitize";
 import { logAudit } from "../lib/audit";
 import { FieldLabel, ContentValue, SelectorString, parseIdParam } from "../lib/validation";
 import { z } from "zod";
-import { load as cheerioLoad } from "cheerio";
 
 const router = Router({ mergeParams: true });
 
@@ -83,7 +82,7 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
   res.status(201).json(fieldToResponse(field));
 });
 
-// PATCH /:fieldId — role-split (see comments below)
+// PATCH /:fieldId — role-split (editors submit drafts; admins go live immediately)
 router.patch(
   "/:fieldId",
   requireAuth,
@@ -125,7 +124,8 @@ router.patch(
     const updatePayload: Partial<typeof contentFieldsTable.$inferInsert> = {};
     if (data.isLocked !== undefined) updatePayload.isLocked = data.isLocked;
     if (data.label !== undefined) updatePayload.label = data.label;
-    if (data.value !== undefined) updatePayload.value = data.value === null ? null : sanitizeContent(data.value);
+    if (data.value !== undefined)
+      updatePayload.value = data.value === null ? null : sanitizeContent(data.value);
 
     let sanitizedDraft: string | null = null;
     if (data.draftValue !== undefined) {
@@ -135,9 +135,6 @@ router.patch(
 
       if (sanitizedDraft !== null) {
         if (isOwnerOrAdmin) {
-          // Owners and admins see their changes go live immediately — no
-          // approval queue needed. We still insert a draft record for the
-          // history log, but mark it published straight away.
           updatePayload.value = sanitizedDraft;
           updatePayload.draftValue = null;
           await db.insert(draftsTable).values({
@@ -150,8 +147,6 @@ router.patch(
             publishedAt: new Date(),
           });
         } else {
-          // Client editors (editor / viewer role) go through the review
-          // queue — the project owner approves before it goes live.
           updatePayload.draftValue = sanitizedDraft;
           await db.insert(draftsTable).values({
             projectId,
@@ -163,7 +158,6 @@ router.patch(
           });
         }
       } else {
-        // Explicit null clears the pending draft without changing the live value.
         updatePayload.draftValue = null;
       }
     }
@@ -232,9 +226,8 @@ router.delete(
 );
 
 // POST /pull-from-site — admin+
-// Fetch the project's connected domain, scan the page into named sections,
-// and return proposed fields (label + type + value) for the owner to import.
-// Creates NEW fields — does not require any existing content map.
+// Reads the latest snapshot captured by the browser scanner script.
+// No external URL fetch — the scanner pushes data to us from inside the app.
 router.post(
   "/pull-from-site",
   requireAuth,
@@ -242,237 +235,23 @@ router.post(
   async (req: AuthRequest, res) => {
     const projectId = parseInt(req.params.projectId);
 
-    const domains = await db
+    const rows = await db
       .select()
-      .from(domainsTable)
-      .where(eq(domainsTable.projectId, projectId));
+      .from(contentSnapshotsTable)
+      .where(eq(contentSnapshotsTable.projectId, projectId));
 
-    if (domains.length === 0) {
-      return res.status(400).json({
-        error: "No domain connected. Add one in the Domains tab first.",
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: "No scan found yet. Add the scanner script to your app, visit the page, then try again.",
       });
     }
 
-    const hostname = domains[0].hostname;
-    const url = `https://${hostname}`;
-
-    let html: string;
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12_000);
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { "User-Agent": "get-cms/1.0 (+https://get-builder.replit.app)" },
-      });
-      clearTimeout(timer);
-      if (!response.ok) {
-        return res.status(400).json({
-          error: `Site returned HTTP ${response.status}. Check that it's publicly accessible.`,
-        });
-      }
-      html = await response.text();
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        return res.status(400).json({ error: "Site took too long to respond (12 s)." });
-      }
-      return res.status(400).json({
-        error: `Couldn't reach ${url}. Make sure the site is running and public.`,
-      });
-    }
-
-    const $ = cheerioLoad(html);
-
-    // Strip non-content noise
-    $("script, style, noscript, iframe, [aria-hidden='true'], [hidden], template").remove();
-
-    // ── Helpers ─────────────────────────────────────────────────────────────
-
-    function cleanText(raw: string) {
-      return raw.replace(/\s+/g, " ").trim();
-    }
-
-    function absoluteUrl(src: string) {
-      if (!src || src.startsWith("data:") || src.startsWith("blob:")) return null;
-      if (src.startsWith("http://") || src.startsWith("https://")) return src;
-      if (src.startsWith("//")) return `https:${src}`;
-      if (src.startsWith("/")) return `${url}${src}`;
-      return `${url}/${src}`;
-    }
-
-    // Known section-name keywords pulled from common class/id patterns
-    const SECTION_KEYWORDS: Record<string, string> = {
-      hero: "Hero", banner: "Hero", jumbotron: "Hero",
-      about: "About", story: "About", mission: "About",
-      services: "Services", features: "Features", offerings: "Services",
-      how: "How It Works", process: "How It Works", steps: "How It Works",
-      team: "Team", staff: "Team", people: "Team",
-      testimonial: "Testimonials", reviews: "Testimonials", clients: "Testimonials",
-      pricing: "Pricing", plans: "Pricing",
-      faq: "FAQ", questions: "FAQ",
-      contact: "Contact", "get-in-touch": "Contact",
-      cta: "Call to Action", "call-to-action": "Call to Action",
-      footer: "Footer",
-    };
-
-    function inferNameFromEl(el: ReturnType<typeof $>[0]): string | null {
-      const id = ($(el).attr("id") ?? "").toLowerCase();
-      const cls = ($(el).attr("class") ?? "").toLowerCase();
-      const ariaLabel = $(el).attr("aria-label") ?? "";
-      if (ariaLabel) return ariaLabel;
-      for (const [kw, name] of Object.entries(SECTION_KEYWORDS)) {
-        if (id.includes(kw) || cls.includes(kw)) return name;
-      }
-      return null;
-    }
-
-    // ── Section extraction ───────────────────────────────────────────────────
-
-    type ScrapedField = { label: string; type: string; value: string };
-    type ScrapedSection = { name: string; fields: ScrapedField[] };
-
-    const seenText = new Set<string>();
-    const seenImages = new Set<string>();
-    const sections: ScrapedSection[] = [];
-
-    function extractSection(el: ReturnType<typeof $>[0], fallbackName: string) {
-      const $el = $(el);
-      const fields: ScrapedField[] = [];
-
-      // Heading
-      const headingEl = $el.find("h1, h2, h3, h4").first();
-      const headingText = cleanText(headingEl.text());
-      if (headingText && headingText.length <= 200 && !seenText.has(headingText)) {
-        seenText.add(headingText);
-        fields.push({ label: `${fallbackName} Heading`, type: "text", value: headingText });
-      }
-
-      // Sub-heading (h3/h4 after the primary heading)
-      const subHeadingEl = $el.find("h3, h4").not(headingEl[0]).first();
-      const subText = cleanText(subHeadingEl.text());
-      if (subText && subText !== headingText && subText.length <= 200 && !seenText.has(subText)) {
-        seenText.add(subText);
-        fields.push({ label: `${fallbackName} Sub-heading`, type: "text", value: subText });
-      }
-
-      // Body paragraphs — collect all, join into richtext
-      const bodyParts: string[] = [];
-      $el.find("p").each((_, p) => {
-        const t = cleanText($(p).text());
-        if (t.length >= 20 && !seenText.has(t)) {
-          seenText.add(t);
-          bodyParts.push(t);
-        }
-      });
-      if (bodyParts.length > 0) {
-        const joined = bodyParts.join("\n\n");
-        fields.push({ label: `${fallbackName} Body`, type: "richtext", value: joined });
-      }
-
-      // CTA — button or prominent link
-      const ctaEl = $el.find("a[href], button").filter((_, a) => {
-        const t = cleanText($(a).text());
-        return t.length >= 2 && t.length <= 60;
-      }).first();
-      if (ctaEl.length) {
-        const href = ctaEl.attr("href") ?? "";
-        const abs = absoluteUrl(href);
-        if (abs && !abs.includes("#") && !seenText.has(abs)) {
-          seenText.add(abs);
-          const ctaLabel = `${fallbackName} CTA`;
-          fields.push({ label: ctaLabel, type: "url", value: abs });
-        }
-      }
-
-      // Image
-      $el.find("img[src]").each((_, img) => {
-        const src = absoluteUrl($(img).attr("src") ?? "");
-        if (src && !seenImages.has(src)) {
-          seenImages.add(src);
-          fields.push({ label: `${fallbackName} Image`, type: "image", value: src });
-          return false; // only first image per section
-        }
-      });
-
-      return fields;
-    }
-
-    // Primary pass: semantic / named sections
-    const sectionEls = $("section, article, [class*='section'], [class*='block'], [id]")
-      .toArray()
-      // skip deeply nested ones — only top-level-ish containers
-      .filter((el) => {
-        const depth = $(el).parents("section, article").length;
-        return depth <= 1;
-      });
-
-    const usedNames = new Map<string, number>();
-
-    for (const el of sectionEls) {
-      let name = inferNameFromEl(el);
-      if (!name) {
-        // Try to derive from first heading inside
-        const h = $(el).find("h1, h2, h3").first().text().trim();
-        if (h && h.length <= 60) name = h;
-      }
-      if (!name) continue; // skip unidentifiable containers
-
-      // Deduplicate section names with a counter
-      const count = usedNames.get(name) ?? 0;
-      usedNames.set(name, count + 1);
-      const displayName = count === 0 ? name : `${name} ${count + 1}`;
-
-      const fields = extractSection(el, displayName);
-      if (fields.length > 0) {
-        sections.push({ name: displayName, fields });
-      }
-      if (sections.length >= 10) break; // cap at 10 sections
-    }
-
-    // Fallback pass: if we found nothing, scrape page body in flat sections
-    if (sections.length === 0) {
-      $("nav, footer, header").remove();
-      const allHeadings = $("h1, h2, h3").toArray();
-      for (const hEl of allHeadings) {
-        const headingText = cleanText($(hEl).text());
-        if (!headingText || headingText.length > 200 || seenText.has(headingText)) continue;
-        seenText.add(headingText);
-
-        const name = headingText.length <= 40 ? headingText : headingText.slice(0, 40) + "…";
-        const fields: ScrapedField[] = [
-          { label: `${name} Heading`, type: "text", value: headingText },
-        ];
-
-        // Collect following sibling paragraphs until next heading
-        const bodyParts: string[] = [];
-        let sib = $(hEl).next();
-        let limit = 5;
-        while (sib.length && limit-- > 0) {
-          if (sib.is("h1, h2, h3, h4")) break;
-          const t = cleanText(sib.text());
-          if (t.length >= 20 && !seenText.has(t)) {
-            seenText.add(t);
-            bodyParts.push(t);
-          }
-          sib = sib.next();
-        }
-        if (bodyParts.length) fields.push({ label: `${name} Body`, type: "richtext", value: bodyParts.join("\n\n") });
-
-        sections.push({ name, fields });
-        if (sections.length >= 8) break;
-      }
-    }
-
-    // Last resort: at least pull the page title + meta description
-    if (sections.length === 0) {
-      const title = cleanText($("title").text());
-      const meta = $("meta[name='description']").attr("content") ?? "";
-      const fields: ScrapedField[] = [];
-      if (title) fields.push({ label: "Page Title", type: "text", value: title });
-      if (meta) fields.push({ label: "Page Description", type: "richtext", value: cleanText(meta) });
-      if (fields.length) sections.push({ name: "Page", fields });
-    }
-
-    res.json({ url, sections });
+    const snapshot = rows[0];
+    return res.json({
+      url: snapshot.pageUrl ?? "",
+      capturedAt: snapshot.capturedAt,
+      sections: snapshot.sections,
+    });
   },
 );
 

@@ -252,6 +252,138 @@ export default function ProjectDetail() {
 type SiteField = { label: string; type: string; value: string };
 type SiteSection = { name: string; fields: SiteField[] };
 
+interface ProjectKeyBasic { id: string; name: string; keyPrefix: string; }
+
+function ScannerSetupCard({
+  projectId,
+  onDismiss,
+}: {
+  projectId: string;
+  onDismiss: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const { data: keys = [], isLoading: keysLoading } = useQuery<ProjectKeyBasic[]>({
+    queryKey: ["project-keys-scanner", projectId],
+    queryFn: async () => apiFetch(`/api/projects/${projectId}/keys`),
+  });
+
+  const firstKey = keys[0];
+  const scannerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}${BASE}/api/public/scanner.js`;
+
+  const agentPrompt = firstKey
+    ? `Add this script tag to my app's main HTML file, just before the closing </body> tag. Use the value of my GET_PROJECT_KEY secret as the data-key:\n\n<script src="${scannerUrl}" data-key="YOUR_GET_PROJECT_KEY"></script>\n\nMy project key starts with "${firstKey.keyPrefix}". Find the full key in my Replit secrets (it's called GET_PROJECT_KEY). Don't change anything else in my app.`
+    : null;
+
+  const handleCopy = async () => {
+    if (!agentPrompt) return;
+    await navigator.clipboard.writeText(agentPrompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  return (
+    <Card padded>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* Header */}
+        <div>
+          <p style={{ fontSize: type.base, fontWeight: 700, marginBottom: 6 }}>
+            One step: ask your AI to connect the scanner
+          </p>
+          <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
+            Copy the prompt below and paste it into Replit Agent (or any AI assistant) in your other tab. The AI adds one line to your app — that's it. Once your app loads, come back and click <strong>Scan my site</strong>.
+          </p>
+        </div>
+
+        {/* Steps */}
+        {[
+          { n: "1", text: "Copy the prompt below" },
+          { n: "2", text: "Open Replit Agent in your app's tab and paste it" },
+          { n: "3", text: "Come back here and click Scan my site" },
+        ].map((step) => (
+          <div key={step.n} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{
+              width: 24, height: 24, borderRadius: "50%",
+              background: BRAND.ink, color: BRAND.paper,
+              fontSize: 11, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {step.n}
+            </span>
+            <p style={{ fontSize: type.sm, color: tone[600] }}>{step.text}</p>
+          </div>
+        ))}
+
+        {/* Prompt box */}
+        {keysLoading ? (
+          <div style={{ height: 80, background: tone[50], borderRadius: r.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Loader2 style={{ width: 16, height: 16, color: tone[400] }} className="animate-spin" />
+          </div>
+        ) : !firstKey ? (
+          <div style={{ padding: "14px 16px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
+            <p style={{ fontSize: type.sm, color: tone[600] }}>
+              You need a project key first. Go to the <strong>Keys tab</strong> and create one, then come back here.
+            </p>
+          </div>
+        ) : (
+          <div style={{ position: "relative" }}>
+            <div style={{
+              padding: "16px 52px 16px 18px",
+              borderRadius: r.lg,
+              background: tone[50],
+              border: `1.5px solid ${copied ? BRAND.ink : line.base}`,
+              transition: `border-color 0.2s ${ease}`,
+            }}>
+              <p style={{
+                fontSize: type.sm,
+                color: BRAND.ink,
+                lineHeight: 1.65,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily: "inherit",
+                margin: 0,
+              }}>
+                {agentPrompt}
+              </p>
+            </div>
+            <button
+              onClick={handleCopy}
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: copied ? BRAND.ink : tone[100],
+                border: "none",
+                cursor: "pointer",
+                fontSize: type.xs,
+                fontWeight: 600,
+                color: copied ? BRAND.paper : tone[600],
+                transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
+              }}
+            >
+              {copied
+                ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
+                : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <SecondaryButton size="sm" onClick={onDismiss}>
+            Dismiss
+          </SecondaryButton>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function ContentMapTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: fields, isLoading, refetch } = useListContentFields(projectId);
   const createMutation = useCreateContentField();
@@ -265,8 +397,9 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   // Scan-from-site state
-  const [syncState, setSyncState] = useState<"idle" | "loading" | "results">("idle");
+  const [syncState, setSyncState] = useState<"idle" | "loading" | "results" | "setup">("idle");
   const [syncUrl, setSyncUrl] = useState<string>("");
+  const [syncCapturedAt, setSyncCapturedAt] = useState<string>("");
   const [sections, setSections] = useState<SiteSection[]>([]);
   // selectedKeys: "sectionIdx:fieldIdx"
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -295,21 +428,27 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
         method: "POST",
       });
       const data = r as any;
-      setSyncUrl(data.url);
+      setSyncUrl(data.url ?? "");
+      setSyncCapturedAt(data.capturedAt ?? "");
       const scanned = (data.sections ?? []) as SiteSection[];
       setSections(scanned);
-      // Select all fields by default
       const allKeys = new Set<string>();
       scanned.forEach((sec, si) => sec.fields.forEach((_, fi) => allKeys.add(`${si}:${fi}`)));
       setSelectedKeys(allKeys);
-      setSyncState("results");
       if (scanned.length === 0) {
-        toast({ title: "Nothing found", description: "We couldn't find any text sections on the site. Make sure the site is public and try again." });
+        toast({ title: "Nothing found", description: "The scanner ran but found no text sections. Make sure the page has visible content." });
         setSyncState("idle");
+      } else {
+        setSyncState("results");
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Scan failed", description: err.message });
-      setSyncState("idle");
+      // 404 means no snapshot exists yet → show setup instructions
+      if (err.message?.includes("No scan found")) {
+        setSyncState("setup");
+      } else {
+        toast({ variant: "destructive", title: "Scan failed", description: err.message });
+        setSyncState("idle");
+      }
     }
   };
 
@@ -378,10 +517,10 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                 onClick={handleSyncFromSite}
                 loading={syncState === "loading"}
                 disabled={syncState === "loading"}
-                title="Pull content from your connected site"
+                title="Import content detected by the scanner script"
               >
                 <RefreshCw style={{ width: 13, height: 13 }} />
-                Sync from site
+                Scan my site
               </SecondaryButton>
               <PrimaryButton onClick={() => setIsAdding(true)}>
                 <Plus style={{ width: 14, height: 14 }} />
@@ -650,7 +789,15 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
           })
         )}
       </Card>
-      {/* Scan-from-site results panel */}
+      {/* Setup instructions — shown when no snapshot exists yet */}
+      {syncState === "setup" && (
+        <ScannerSetupCard
+          projectId={projectId}
+          onDismiss={() => setSyncState("idle")}
+        />
+      )}
+
+      {/* Scan results panel */}
       {syncState === "results" && sections.length > 0 && (
         <Card padded>
           <div style={{ marginBottom: 16 }}>
@@ -658,7 +805,13 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
               Content found on your site
             </p>
             <p style={{ fontSize: type.xs, color: tone[500] }}>
-              Scanned from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span> — uncheck anything you don't want to import. Each checked item will be added as a new content field.
+              {syncCapturedAt && (
+                <>Captured {format(new Date(syncCapturedAt), "MMM d 'at' h:mm a")}
+                  {syncUrl ? <> from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span></> : null}
+                  {" — "}
+                </>
+              )}
+              Uncheck anything you don't want to import. Each checked item will be added as a new content field.
             </p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 20, marginBottom: 16 }}>
