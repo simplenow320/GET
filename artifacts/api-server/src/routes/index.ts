@@ -9,11 +9,13 @@ import projectUsersRouter from "./project-users";
 import activityRouter from "./activity";
 import draftsRouter from "./drafts";
 import projectKeysRouter from "./project-keys";
+import publicContentRouter from "./public-content";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+router.use("/public", publicContentRouter);
 router.use("/projects", projectsRouter);
 router.use("/projects/:projectId/content", contentRouter);
 router.use("/projects/:projectId/invites", invitesRouter);

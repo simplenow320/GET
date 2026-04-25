@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   CheckCircle2, ChevronLeft, ChevronRight, Copy, Check,
-  Zap, KeyRound, Loader2, ArrowRight,
-  Terminal, MonitorSmartphone, Box,
+  Zap, Loader2, ArrowRight, Edit3,
+  MonitorSmartphone, Box,
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
@@ -48,7 +48,7 @@ interface WizardState {
   clientInvited: boolean;
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
@@ -190,10 +190,12 @@ function StepHeader({
   step,
   title,
   intro,
+  optional = false,
 }: {
   step: number;
   title: React.ReactNode;
   intro: React.ReactNode;
+  optional?: boolean;
 }) {
   return (
     <div>
@@ -205,9 +207,27 @@ function StepHeader({
           letterSpacing: "0.07em",
           textTransform: "uppercase",
           marginBottom: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
         }}
       >
-        Step {step} of {TOTAL_STEPS}
+        <span>Step {step} of {TOTAL_STEPS}</span>
+        {optional && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: tone[500],
+              background: tone[100],
+              padding: "2px 8px",
+              borderRadius: 999,
+              letterSpacing: "0.04em",
+            }}
+          >
+            Optional
+          </span>
+        )}
       </p>
       <h1
         style={{
@@ -244,33 +264,25 @@ const APP_TYPES: { id: AppType; icon: React.ElementType; label: string; desc: st
   { id: "other",  icon: Box,                label: "Something else",  desc: "Any other framework or host" },
 ];
 
-function getInstallCode(_appType: AppType | null) {
-  return `npm install @getapp/sdk`;
+function getEnvHint(appType: AppType | null) {
+  if (appType === "replit") return "In Replit, open the Secrets pane (lock icon in the sidebar) and add it there.";
+  if (appType === "nextjs") return "Add it to your .env.local file, or to your hosting provider's environment variables.";
+  return "Add it to your .env file, or wherever your app reads environment variables.";
 }
 
 function getEnvCode(key: string) {
   return `GET_PROJECT_KEY=${key}`;
 }
 
-function getInitCode(appType: AppType | null) {
-  if (appType === "nextjs") {
-    return `// app/layout.tsx
-import { GetProvider } from "@getapp/sdk/react";
+function getReadCode(apiOrigin: string) {
+  return `// Run this on your server (Node 18+, Cloudflare Workers, Deno, etc.)
+const res = await fetch("${apiOrigin}/api/public/content", {
+  headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` }
+});
+const { content } = await res.json();
 
-export default function RootLayout({ children }) {
-  return (
-    <GetProvider projectKey={process.env.GET_PROJECT_KEY}>
-      {children}
-    </GetProvider>
-  );
-}`;
-  }
-  return `// index.js
-import { init } from "@getapp/sdk";
-
-init({
-  projectKey: process.env.GET_PROJECT_KEY,
-});`;
+// content is keyed by the field labels you set in get
+// Example: content["Hero Headline"]?.value`;
 }
 
 // ── Main wizard ───────────────────────────────────────────────────────────────
@@ -330,13 +342,16 @@ export default function SetupWizard() {
       .finally(() => setIsGeneratingKey(false));
   };
 
-  // Auto-generate key when arriving at step 4
+  // Auto-generate key when arriving at the connect step (step 3)
   useEffect(() => {
-    if (step === 4 && !state.keyGenerated && !isGeneratingKey && !keyError) {
+    if (step === 3 && !state.keyGenerated && !isGeneratingKey && !keyError) {
       generateKey();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  const apiOrigin =
+    typeof window !== "undefined" ? window.location.origin : "https://your-get-host";
 
   const handleAddField = () => {
     if (!fieldLabel.trim()) return;
@@ -682,55 +697,22 @@ export default function SetupWizard() {
             </div>
           )}
 
-          {/* Step 3 */}
+          {/* Step 3 — Connect your app (combined: key + env + real fetch snippet) */}
           {step === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
               <StepHeader
                 step={3}
-                title="Install the SDK"
-                intro={
-                  state.appType === "replit"
-                    ? "Open the Shell tab in Replit and paste this command."
-                    : "Run this in your project's terminal."
-                }
-              />
-
-              <CodeBlock code={getInstallCode(state.appType)} />
-
-              {state.appType === "replit" && (
-                <Card padded style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 18 }}>
-                  <Terminal style={{ width: 16, height: 16, color: tone[400], marginTop: 2, flexShrink: 0 }} />
-                  <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.55 }}>
-                    Open the <strong>Shell</strong> tab at the bottom of your workspace, paste the command, and hit Enter.
-                  </p>
-                </Card>
-              )}
-
-              <div style={{ display: "flex", gap: 10 }}>
-                <SecondaryButton onClick={goBack} size="lg">Back</SecondaryButton>
-                <PrimaryButton onClick={goNext} size="lg" block>
-                  Installed — continue <ChevronRight style={{ width: 16, height: 16 }} />
-                </PrimaryButton>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4 */}
-          {step === 4 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
-              <StepHeader
-                step={4}
                 title="Connect your app"
-                intro="Add this key to your environment variables, then initialize the SDK."
+                intro="We just made a project key for you. Add it to your environment, then read your live content with one fetch call."
               />
 
               {isGeneratingKey ? (
                 <Card padded style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "28px 24px" }}>
                   <Loader2 style={{ width: 18, height: 18, color: tone[300], animation: "spin 1s linear infinite" }} />
-                  <span style={{ fontSize: type.base, color: tone[500] }}>Generating your key…</span>
+                  <span style={{ fontSize: type.base, color: tone[500] }}>Making your key…</span>
                 </Card>
               ) : state.generatedKey ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
                   <KeyReveal keyValue={state.generatedKey} />
 
                   <div>
@@ -744,9 +726,12 @@ export default function SetupWizard() {
                         marginBottom: 10,
                       }}
                     >
-                      Add to .env
+                      1. Save it as an environment variable
                     </p>
                     <CodeBlock code={getEnvCode(state.generatedKey)} />
+                    <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+                      {getEnvHint(state.appType)}
+                    </p>
                   </div>
 
                   <div>
@@ -760,15 +745,18 @@ export default function SetupWizard() {
                         marginBottom: 10,
                       }}
                     >
-                      Initialize in your code
+                      2. Read your content from your code
                     </p>
-                    <CodeBlock code={getInitCode(state.appType)} />
+                    <CodeBlock code={getReadCode(apiOrigin)} />
+                    <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+                      Drop this anywhere your app needs editable content. Works from any framework, any host — no library to install.
+                    </p>
                   </div>
                 </div>
               ) : (
                 <Card padded style={{ padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
                   <p style={{ fontSize: type.base, color: BRAND.ink, fontWeight: 600 }}>
-                    Couldn't generate your key
+                    Couldn't make your key
                   </p>
                   <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.55 }}>
                     {keyError ?? "Something went wrong. Try again."}
@@ -793,26 +781,27 @@ export default function SetupWizard() {
                 }}
               >
                 <p style={{ fontSize: type.sm, color: "#92700a", lineHeight: 1.55 }}>
-                  Keep this key on your server only — never put it in frontend code.
+                  Keep this key on your server only — never paste it into frontend code that ships to browsers.
                 </p>
               </div>
 
               <div style={{ display: "flex", gap: 10 }}>
                 <SecondaryButton onClick={goBack} size="lg">Back</SecondaryButton>
                 <PrimaryButton onClick={goNext} disabled={!state.keyGenerated} size="lg" block>
-                  Added it — continue <ChevronRight style={{ width: 16, height: 16 }} />
+                  Done — continue <ChevronRight style={{ width: 16, height: 16 }} />
                 </PrimaryButton>
               </div>
             </div>
           )}
 
-          {/* Step 5 */}
-          {step === 5 && (
+          {/* Step 4 — Domain (Optional) */}
+          {step === 4 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
               <StepHeader
-                step={5}
+                step={4}
                 title="Where does your app live?"
-                intro="Add your app's domain so the editor only works there."
+                intro="Add your app's domain so the editor only loads there. Skip this if you're not sure yet — you can add it later."
+                optional
               />
 
               <Card padded style={{ padding: 24 }}>
@@ -820,8 +809,8 @@ export default function SetupWizard() {
                   label="Your app's domain"
                   hint={
                     state.appType === "replit"
-                      ? "Find this in Replit by clicking Open — looks like my-app.replit.app"
-                      : "Use your production domain, e.g. mysite.com or app.mysite.com"
+                      ? "Find it in Replit — looks like my-app.replit.app"
+                      : "Your production domain, e.g. mysite.com or app.mysite.com"
                   }
                 >
                   <Input
@@ -851,13 +840,14 @@ export default function SetupWizard() {
             </div>
           )}
 
-          {/* Step 6 */}
-          {step === 6 && (
+          {/* Step 5 — Editable areas (Optional but recommended) */}
+          {step === 5 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
               <StepHeader
-                step={6}
-                title="What should clients change?"
-                intro="Each item becomes an editable area in your client's editor."
+                step={5}
+                title="What should clients edit?"
+                intro="Each item becomes an editable area in your client's editor. You can add or change these any time."
+                optional
               />
 
               {state.fields.length > 0 && (
@@ -951,30 +941,28 @@ export default function SetupWizard() {
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <SecondaryButton onClick={goBack} size="lg">Back</SecondaryButton>
-                {state.fields.length === 0 && (
-                  <SecondaryButton onClick={goNext} size="lg">Skip for now</SecondaryButton>
+                {state.fields.length === 0 ? (
+                  <PrimaryButton onClick={goNext} size="lg" block>
+                    Skip for now <ChevronRight style={{ width: 16, height: 16 }} />
+                  </PrimaryButton>
+                ) : (
+                  <PrimaryButton onClick={goNext} size="lg" block>
+                    Continue with {state.fields.length} area{state.fields.length > 1 ? "s" : ""}
+                    <ChevronRight style={{ width: 16, height: 16 }} />
+                  </PrimaryButton>
                 )}
-                <PrimaryButton
-                  onClick={goNext}
-                  disabled={state.fields.length === 0}
-                  size="lg"
-                  block
-                >
-                  {state.fields.length === 0
-                    ? "Skip →"
-                    : `Continue with ${state.fields.length} area${state.fields.length > 1 ? "s" : ""}`}
-                </PrimaryButton>
               </div>
             </div>
           )}
 
-          {/* Step 7 */}
-          {step === 7 && (
+          {/* Step 6 — Invite client (Optional) */}
+          {step === 6 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
               <StepHeader
-                step={7}
+                step={6}
                 title="Who's editing this site?"
-                intro="They'll get an email with a link to their private editor — no code in sight."
+                intro="They'll get an email with a link to their private editor — no code in sight. You can invite people any time from the project page."
+                optional
               />
 
               <Card padded style={{ padding: 24 }}>
@@ -1008,8 +996,8 @@ export default function SetupWizard() {
             </div>
           )}
 
-          {/* Step 8 */}
-          {step === 8 && (
+          {/* Step 7 — Done */}
+          {step === 7 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 28, textAlign: "center", alignItems: "center" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
                 <div
@@ -1102,6 +1090,13 @@ export default function SetupWizard() {
                 >
                   Go to my project <ArrowRight style={{ width: 16, height: 16 }} />
                 </PrimaryButton>
+                <SecondaryButton
+                  onClick={() => setLocation(`/app/editor/${projectId}`)}
+                  size="lg"
+                  block
+                >
+                  <Edit3 style={{ width: 16, height: 16 }} /> Try the editor yourself
+                </SecondaryButton>
                 <button
                   onClick={() => setLocation("/app/projects")}
                   style={{

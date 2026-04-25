@@ -37,19 +37,33 @@ app.use(
   }),
 );
 
-// Restrict CORS — Replit/repl domains and localhost only.
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      const allowed =
-        /^https?:\/\/.*\.(replit\.dev|repl\.co|replit\.app)(:\d+)?$/.test(origin) ||
-        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-      cb(null, allowed ? true : new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  }),
-);
+// Permissive CORS for public read endpoints — these are designed to be called
+// from any customer's frontend or backend, so any origin is allowed.
+const publicCors = cors({
+  origin: true,
+  methods: ["GET", "HEAD", "OPTIONS"],
+  credentials: false,
+});
+app.use("/api/public", publicCors);
+
+// Restrictive CORS for the admin dashboard — Replit/repl domains and
+// localhost only. We explicitly skip /api/public/* so the permissive CORS
+// above is not overwritten by this restrictive one for cross-origin
+// customer requests.
+const restrictiveCors = cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    const allowed =
+      /^https?:\/\/.*\.(replit\.dev|repl\.co|replit\.app)(:\d+)?$/.test(origin) ||
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    cb(null, allowed ? true : new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/public/")) return next();
+  return restrictiveCors(req, res, next);
+});
 
 // Request size limits — protect against large payload attacks
 app.use(express.json({ limit: "256kb" }));

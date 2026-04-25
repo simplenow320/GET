@@ -614,7 +614,7 @@ function DomainsTab({ projectId }: { projectId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <Card padded>
-        <SectionTitle description="Restrict where the editor can be embedded.">
+        <SectionTitle description="Add the domains where your app lives. Your client's editor will only load content for those domains.">
           Allowed domains
         </SectionTitle>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -705,7 +705,7 @@ function DraftsTab({ projectId }: { projectId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       <div>
-        <SectionTitle description="Approve client edits before they go live.">
+        <SectionTitle description="Your client's edits land here. Publish to push them live — they appear in your app within seconds via the public content endpoint.">
           Pending review
         </SectionTitle>
         <Card>
@@ -1109,7 +1109,7 @@ function KeysTab({ projectId }: { projectId: string }) {
       )}
 
       <Card padded>
-        <SectionTitle description="Project keys authenticate your app's SDK calls.">
+        <SectionTitle description="A project key lets your app read live content from this project. Treat it like a password.">
           Generate a new key
         </SectionTitle>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1147,7 +1147,7 @@ function KeysTab({ projectId }: { projectId: string }) {
               icon={KeyRound}
               compact
               title="No keys yet"
-              description="Generate one above to connect your SDK."
+              description="Generate one above to connect your app."
             />
           ) : (
             keys.map((k, idx) => (
@@ -1206,22 +1206,34 @@ function KeysTab({ projectId }: { projectId: string }) {
       </div>
 
       <Card style={{ padding: 18, background: tone[50], border: `1px solid ${line.faint}` }}>
-        <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 6, color: BRAND.ink }}>
-          How to use
+        <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 8, color: BRAND.ink }}>
+          How to use it in your app
         </p>
-        <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65 }}>
-          Store your key as a server environment variable (
-          <code
-            style={{
-              fontFamily: "monospace",
-              background: tone[100],
-              padding: "1px 6px",
-              borderRadius: 4,
-            }}
-          >
-            GET_PROJECT_KEY
-          </code>
-          ). Never commit it or include it in frontend code.
+        <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65, marginBottom: 12 }}>
+          Save the key as a server-side environment variable, then fetch your published content from anywhere:
+        </p>
+        <pre
+          style={{
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 12.5,
+            lineHeight: 1.6,
+            background: BRAND.ink,
+            color: "#f5f5f7",
+            padding: "14px 16px",
+            borderRadius: 10,
+            overflowX: "auto",
+            margin: 0,
+          }}
+        >
+{`const res = await fetch(
+  "${typeof window !== "undefined" ? window.location.origin : "https://your-get-host"}/api/public/content",
+  { headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` } }
+);
+const { content } = await res.json();
+// content["Hero Headline"]?.value`}
+        </pre>
+        <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.65, marginTop: 10 }}>
+          Server-side only — never paste this key into code that ships to browsers.
         </p>
       </Card>
     </div>
