@@ -1,0 +1,41 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly run every Monday at 09:00 UTC, so newly disclosed
+    # vulnerabilities get caught even when no one is pushing.
+    - cron: "0 9 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: pnpm audit (production deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          # Match the version pinned by the workspace.
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies (no scripts, lockfile-frozen)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # Fail the build only on HIGH or CRITICAL vulns in production
+      # dependencies. We deliberately ignore dev-only findings here so
+      # noisy dev tooling doesn't block PRs; rerun without --prod
+      # locally if you want the full picture.
+      - name: pnpm audit (prod, high+)
+        run: pnpm audit --prod --audit-level high

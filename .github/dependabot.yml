@@ -1,0 +1,32 @@
+version: 2
+
+# Dependabot opens PRs when dependencies have security or version
+# updates. Combined with .github/workflows/security.yml (which runs
+# pnpm audit on every PR), this gives us a closed loop: alert → PR
+# → CI → review → merge.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+    open-pull-requests-limit: 10
+    # Group non-security minor/patch bumps so we don't drown in PRs.
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # Security updates are NOT grouped — each one gets its own PR
+    # so it can be reviewed and merged independently.
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - github-actions
