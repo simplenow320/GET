@@ -27,6 +27,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -257,6 +258,9 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   const [isAdding, setIsAdding] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState<any>("text");
+  // Track which field row is expanded for inline content editing
+  const [expandedField, setExpandedField] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
 
   const handleAdd = () => {
     createMutation.mutate(
@@ -270,6 +274,26 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
         },
         onError: (err) =>
           toast({ variant: "destructive", title: "Couldn't add field", description: err.message }),
+      }
+    );
+  };
+
+  const openEdit = (field: any) => {
+    setEditValues((prev) => ({ ...prev, [field.id]: field.value ?? "" }));
+    setExpandedField(field.id);
+  };
+
+  const saveValue = (field: any) => {
+    updateMutation.mutate(
+      { projectId, fieldId: field.id, data: { value: editValues[field.id] } },
+      {
+        onSuccess: () => {
+          toast({ title: "Content updated", description: "The live value has been saved." });
+          setExpandedField(null);
+          refetch();
+        },
+        onError: (err) =>
+          toast({ variant: "destructive", title: "Couldn't save", description: err.message }),
       }
     );
   };
@@ -345,101 +369,205 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
             description="Add a field to give your clients something to edit."
           />
         ) : (
-          fields.map((field, idx) => (
-            <div
-              key={field.id}
-              style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: tone[50],
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Database style={{ width: 15, height: 15, color: tone[400] }} />
+          fields.map((field, idx) => {
+            const isExpanded = expandedField === field.id;
+            const isSaving = updateMutation.isPending && expandedField === field.id;
+            const hasValue = field.value != null && field.value !== "";
+            return (
+              <div
+                key={field.id}
+                style={{ borderTop: idx === 0 ? "none" : `1px solid ${line.base}` }}
+              >
+                {/* Main row */}
+                <div style={{ ...rowStyle, borderTop: "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        background: tone[50],
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Database style={{ width: 15, height: 15, color: tone[400] }} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: type.base, fontWeight: 600 }}>{field.label}</p>
+                      <p
+                        style={{
+                          fontSize: type.xs,
+                          color: hasValue ? tone[500] : tone[400],
+                          marginTop: 2,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: 260,
+                        }}
+                      >
+                        {hasValue ? field.value : `${prettyType(field.type)} — no content yet`}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {/* Inline edit toggle — owners/admins only */}
+                    {canManage && (
+                      <button
+                        onClick={() => isExpanded ? setExpandedField(null) : openEdit(field)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          fontSize: type.xs,
+                          fontWeight: 600,
+                          padding: "6px 11px",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          border: "none",
+                          background: isExpanded ? BRAND.ink : tone[100],
+                          color: isExpanded ? BRAND.paper : tone[600],
+                          transition: `background 0.18s ${ease}`,
+                        }}
+                      >
+                        <FileEdit style={{ width: 12, height: 12 }} />
+                        {isExpanded ? "Cancel" : "Edit"}
+                      </button>
+                    )}
+                    {canManage ? (
+                      <button
+                      onClick={() =>
+                        updateMutation.mutate(
+                          { projectId, fieldId: field.id, data: { isLocked: !field.isLocked } },
+                          { onSuccess: () => refetch() }
+                        )
+                      }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: type.xs,
+                        fontWeight: 600,
+                        padding: "6px 11px",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        border: "none",
+                        background: field.isLocked ? BRAND.ink : tone[100],
+                        color: field.isLocked ? BRAND.paper : tone[600],
+                        transition: `background 0.18s ${ease}`,
+                      }}
+                    >
+                      {field.isLocked ? (
+                        <Lock style={{ width: 12, height: 12 }} />
+                      ) : (
+                        <Unlock style={{ width: 12, height: 12 }} />
+                      )}
+                      {field.isLocked ? "Locked" : "Open"}
+                    </button>
+                    ) : (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          fontSize: type.xs,
+                          fontWeight: 600,
+                          padding: "6px 11px",
+                          borderRadius: 8,
+                          background: field.isLocked ? BRAND.ink : tone[100],
+                          color: field.isLocked ? BRAND.paper : tone[600],
+                        }}
+                      >
+                        {field.isLocked ? (
+                          <Lock style={{ width: 12, height: 12 }} />
+                        ) : (
+                          <Unlock style={{ width: 12, height: 12 }} />
+                        )}
+                        {field.isLocked ? "Locked" : "Open"}
+                      </span>
+                    )}
+                    {canManage && (
+                      <IconDeleteButton
+                        onClick={() =>
+                          deleteMutation.mutate(
+                            { projectId, fieldId: field.id },
+                            { onSuccess: () => refetch() }
+                          )
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: type.base, fontWeight: 600 }}>{field.label}</p>
-                  <p style={{ fontSize: type.xs, color: tone[500], marginTop: 2 }}>
-                    {prettyType(field.type)}
-                  </p>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                {canManage ? (
-                  <button
-                  onClick={() =>
-                    updateMutation.mutate(
-                      { projectId, fieldId: field.id, data: { isLocked: !field.isLocked } },
-                      { onSuccess: () => refetch() }
-                    )
-                  }
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: type.xs,
-                    fontWeight: 600,
-                    padding: "6px 11px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    border: "none",
-                    background: field.isLocked ? BRAND.ink : tone[100],
-                    color: field.isLocked ? BRAND.paper : tone[600],
-                    transition: `background 0.18s ${ease}`,
-                  }}
-                >
-                  {field.isLocked ? (
-                    <Lock style={{ width: 12, height: 12 }} />
-                  ) : (
-                    <Unlock style={{ width: 12, height: 12 }} />
-                  )}
-                  {field.isLocked ? "Locked" : "Open"}
-                </button>
-                ) : (
-                  // Read-only badge for viewers/editors so they can still see
-                  // whether a field is locked, but can't toggle it.
-                  <span
+
+                {/* Inline content editor — expands below the row */}
+                {isExpanded && canManage && (
+                  <div
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      fontSize: type.xs,
-                      fontWeight: 600,
-                      padding: "6px 11px",
-                      borderRadius: 8,
-                      background: field.isLocked ? BRAND.ink : tone[100],
-                      color: field.isLocked ? BRAND.paper : tone[600],
+                      padding: "0 20px 18px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
                     }}
                   >
-                    {field.isLocked ? (
-                      <Lock style={{ width: 12, height: 12 }} />
+                    {field.type === "richtext" ? (
+                      <Textarea
+                        value={editValues[field.id] ?? ""}
+                        onChange={(e) =>
+                          setEditValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                        }
+                        placeholder={`Enter ${field.label} content…`}
+                        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
+                      />
+                    ) : field.type === "boolean" ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, height: 44 }}>
+                        <Switch
+                          checked={editValues[field.id] === "true"}
+                          onCheckedChange={(c) =>
+                            setEditValues((prev) => ({ ...prev, [field.id]: c ? "true" : "false" }))
+                          }
+                          className="data-[state=checked]:bg-[#1a1a2e]"
+                        />
+                        <span style={{ fontSize: type.base, fontWeight: 500 }}>
+                          {editValues[field.id] === "true" ? "Yes" : "No"}
+                        </span>
+                      </div>
                     ) : (
-                      <Unlock style={{ width: 12, height: 12 }} />
+                      <Input
+                        type={field.type === "url" || field.type === "image" ? "url" : field.type === "number" ? "number" : "text"}
+                        value={editValues[field.id] ?? ""}
+                        onChange={(e) =>
+                          setEditValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                        }
+                        placeholder={
+                          field.type === "url" || field.type === "image" ? "https://" : `Enter ${field.label}…`
+                        }
+                        style={{
+                          ...inputStyle,
+                          fontFamily: field.type === "url" || field.type === "image" ? "monospace" : undefined,
+                          fontSize: field.type === "url" || field.type === "image" ? type.sm : undefined,
+                        }}
+                      />
                     )}
-                    {field.isLocked ? "Locked" : "Open"}
-                  </span>
-                )}
-                {canManage && (
-                  <IconDeleteButton
-                    onClick={() =>
-                      deleteMutation.mutate(
-                        { projectId, fieldId: field.id },
-                        { onSuccess: () => refetch() }
-                      )
-                    }
-                  />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <PrimaryButton
+                        size="sm"
+                        onClick={() => saveValue(field)}
+                        loading={isSaving}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? "Saving…" : "Save content"}
+                      </PrimaryButton>
+                      <SecondaryButton size="sm" onClick={() => setExpandedField(null)}>
+                        Cancel
+                      </SecondaryButton>
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </Card>
     </div>
