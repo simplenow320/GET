@@ -140,15 +140,24 @@ export default function ClientEditor() {
         <Wordmark size={18} />
         <span
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
             fontSize: type.xs,
             fontWeight: 500,
-            background: tone[100],
-            color: tone[600],
-            padding: "5px 12px",
-            borderRadius: 20,
+            color: tone[500],
           }}
         >
-          Drafts go live after review
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: tone[300],
+              display: "inline-block",
+            }}
+          />
+          Saved as draft until reviewed
         </span>
       </div>
 

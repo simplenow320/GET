@@ -633,55 +633,43 @@ export default function SetupWizard() {
                       key={t.id}
                       onClick={() => setState((s) => ({ ...s, appType: t.id }))}
                       style={{
-                        padding: "18px 20px",
+                        padding: "16px 18px",
                         borderRadius: 14,
-                        border: selected ? `2px solid ${BRAND.ink}` : `1px solid ${line.base}`,
-                        background: selected ? BRAND.ink : BRAND.surface,
+                        border: `1px solid ${selected ? BRAND.ink : line.base}`,
+                        background: selected ? tone[50] : BRAND.surface,
                         cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
-                        gap: 16,
+                        gap: 14,
                         textAlign: "left",
-                        transition: `all 0.15s ${ease}`,
-                        boxShadow: selected ? "none" : "0 1px 2px rgba(0,0,0,0.02)",
+                        transition: `border-color 0.15s ${ease}, background 0.15s ${ease}`,
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                       }}
                     >
                       <div
                         style={{
-                          width: 40,
-                          height: 40,
+                          width: 38,
+                          height: 38,
                           borderRadius: 11,
-                          background: selected ? "rgba(255,255,255,0.1)" : tone[50],
+                          background: tone[50],
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
                         }}
                       >
-                        <Icon style={{ width: 18, height: 18, color: selected ? "#fff" : BRAND.ink }} />
+                        <Icon style={{ width: 17, height: 17, color: BRAND.ink }} />
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <p
-                          style={{
-                            fontSize: type.md,
-                            fontWeight: 600,
-                            color: selected ? "#fff" : BRAND.ink,
-                          }}
-                        >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: type.md, fontWeight: 600, color: BRAND.ink }}>
                           {t.label}
                         </p>
-                        <p
-                          style={{
-                            fontSize: type.sm,
-                            color: selected ? "rgba(255,255,255,0.65)" : tone[500],
-                            marginTop: 2,
-                          }}
-                        >
+                        <p style={{ fontSize: type.sm, color: tone[500], marginTop: 2 }}>
                           {t.desc}
                         </p>
                       </div>
                       {selected && (
-                        <CheckCircle2 style={{ width: 18, height: 18, color: "#fff", flexShrink: 0 }} />
+                        <CheckCircle2 style={{ width: 18, height: 18, color: BRAND.ink, flexShrink: 0 }} />
                       )}
                     </button>
                   );
@@ -930,28 +918,16 @@ export default function SetupWizard() {
                             padding: "11px 13px",
                             borderRadius: 11,
                             textAlign: "left",
-                            border: selected ? `2px solid ${BRAND.ink}` : `1px solid ${line.base}`,
-                            background: selected ? BRAND.ink : "transparent",
+                            border: `1px solid ${selected ? BRAND.ink : line.base}`,
+                            background: selected ? tone[50] : "transparent",
                             cursor: "pointer",
-                            transition: `all 0.15s ${ease}`,
+                            transition: `border-color 0.15s ${ease}, background 0.15s ${ease}`,
                           }}
                         >
-                          <p
-                            style={{
-                              fontSize: type.sm,
-                              fontWeight: 600,
-                              color: selected ? "#fff" : BRAND.ink,
-                            }}
-                          >
+                          <p style={{ fontSize: type.sm, fontWeight: 600, color: BRAND.ink }}>
                             {ft.label}
                           </p>
-                          <p
-                            style={{
-                              fontSize: type.xs,
-                              color: selected ? "rgba(255,255,255,0.6)" : tone[500],
-                              marginTop: 2,
-                            }}
-                          >
+                          <p style={{ fontSize: type.xs, color: tone[500], marginTop: 2 }}>
                             {ft.desc}
                           </p>
                         </button>
