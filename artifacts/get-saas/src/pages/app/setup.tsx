@@ -476,12 +476,23 @@ function getEnvCode(key: string) {
 function getReadCode(apiOrigin: string) {
   return `// Run this on your server (Node 18+, Cloudflare Workers, Deno, etc.)
 const res = await fetch("${apiOrigin}/api/public/content", {
-  headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` }
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  // seed: your current content for each field.
+  // get stores it once (only if the field is empty) so
+  // clients see real text in the editor — not blank boxes.
+  body: JSON.stringify({ seed: {
+    // "Hero Headline": "Welcome to My App",
+    // "Body Text": "We build great things.",
+  }}),
 });
 const { content } = await res.json();
 
-// content is keyed by the field labels you defined.
-// Example: content["Hero Headline"]?.value`;
+// Use a field value (falls back to your seed if get isn't set yet):
+// content["Hero Headline"]?.value ?? "Welcome to My App"`;
 }
 
 // ── Main wizard ───────────────────────────────────────────────────────────────

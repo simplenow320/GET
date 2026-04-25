@@ -1562,12 +1562,20 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
             margin: 0,
           }}
         >
-{`const res = await fetch(
-  "${typeof window !== "undefined" ? window.location.origin : "https://your-host"}/api/public/content",
-  { headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` } }
-);
+{`const res = await fetch("${typeof window !== "undefined" ? window.location.origin : "https://your-host"}/api/public/content", {
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  // seed: your current content. Stored once if the field is empty,
+  // so clients see real text in the editor — not blank boxes.
+  body: JSON.stringify({ seed: {
+    // "Hero Headline": "Welcome to My App",
+  }}),
+});
 const { content } = await res.json();
-// content["Hero Headline"]?.value`}
+// content["Hero Headline"]?.value ?? "Welcome to My App"`}
         </pre>
         <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.65, marginTop: 10 }}>
           Server-side only — never paste this key into code that ships to browsers.
