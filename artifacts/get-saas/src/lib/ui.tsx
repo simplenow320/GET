@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "wouter";
 import brandLogoPath from "@assets/IMG_6687_1777091776547.jpeg";
 import {
   AlertDialog,
@@ -568,17 +569,23 @@ export function Field({
  * Per brand rules: this is the ONLY way to render the get brand. Never recreate
  * the wordmark or mascot programmatically. Use only on landing / auth / 404
  * surfaces — NEVER inside the authenticated product UI.
+ *
+ * The logo is rendered as a link to the home page by default. Pass
+ * `linkToHome={false}` to disable (e.g. when it is already on the home page
+ * and a navigation would be redundant).
  */
 export function BrandLogo({
   width = 220,
   alt = "get — Let clients edit your app without breaking it.",
   style,
+  linkToHome = true,
 }: {
   width?: number | string;
   alt?: string;
   style?: React.CSSProperties;
+  linkToHome?: boolean;
 }) {
-  return (
+  const img = (
     <img
       src={brandLogoPath}
       alt={alt}
@@ -592,6 +599,27 @@ export function BrandLogo({
       }}
       draggable={false}
     />
+  );
+  if (!linkToHome) return img;
+  return (
+    <Link
+      href="/"
+      aria-label="get — go to home"
+      style={{
+        display: "inline-block",
+        cursor: "pointer",
+        transition: "opacity 0.15s ease",
+        textDecoration: "none",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.opacity = "0.78";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.opacity = "1";
+      }}
+    >
+      {img}
+    </Link>
   );
 }
 

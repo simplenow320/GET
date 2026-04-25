@@ -72,11 +72,7 @@ export default function Login() {
     >
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ marginBottom: 28, display: "flex", justifyContent: "center" }}>
-          <Link href="/">
-            <span style={{ cursor: "pointer", display: "inline-block" }}>
-              <BrandLogo width={140} />
-            </span>
-          </Link>
+          <BrandLogo width={140} />
         </div>
 
         <div style={{ marginBottom: 32 }}>
@@ -169,6 +165,21 @@ export default function Login() {
             style={{ color: BRAND.ink, fontWeight: 600, textDecoration: "none" }}
           >
             Create an account
+          </Link>
+        </p>
+
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 14,
+            fontSize: type.sm,
+          }}
+        >
+          <Link
+            href="/"
+            style={{ color: tone[500], textDecoration: "none" }}
+          >
+            ← Back to home
           </Link>
         </p>
       </div>

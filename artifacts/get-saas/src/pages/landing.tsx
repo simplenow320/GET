@@ -21,6 +21,7 @@ export default function LandingPage() {
       >
         <BrandLogo
           width="100%"
+          linkToHome={false}
           style={{ maxWidth: 520, marginBottom: 24 }}
         />
 

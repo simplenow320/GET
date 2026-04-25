@@ -137,11 +137,7 @@ export default function AcceptInvitePage() {
     >
       <div style={{ width: "100%", maxWidth: 440 }}>
         <div style={{ marginBottom: 28, display: "flex", justifyContent: "center" }}>
-          <Link href="/">
-            <span style={{ cursor: "pointer", display: "inline-block" }}>
-              <BrandLogo width={140} />
-            </span>
-          </Link>
+          <BrandLogo width={140} />
         </div>
 
         <div style={{ ...cardStyle, padding: 28 }}>
