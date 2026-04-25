@@ -33,7 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Globe, Users, Database, FileEdit, Settings, Trash2,
   Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2,
-  KeyRound, Copy, Check, ShieldCheck,
+  KeyRound, Copy, Check, ShieldCheck, RefreshCw, ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -249,6 +249,14 @@ export default function ProjectDetail() {
 
 // ── Content Map ─────────────────────────────────────────────────────────────
 
+type SiteProposal = {
+  fieldId: string;
+  fieldLabel: string;
+  fieldType: string;
+  current: string | null;
+  proposed: string | null;
+};
+
 function ContentMapTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: fields, isLoading, refetch } = useListContentFields(projectId);
   const createMutation = useCreateContentField();
@@ -261,6 +269,12 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   // Track which field row is expanded for inline content editing
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
+  // Sync-from-site state
+  const [syncState, setSyncState] = useState<"idle" | "loading" | "results">("idle");
+  const [syncUrl, setSyncUrl] = useState<string>("");
+  const [proposals, setProposals] = useState<SiteProposal[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [applyingSync, setApplyingSync] = useState(false);
 
   const handleAdd = () => {
     createMutation.mutate(
@@ -276,6 +290,52 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
           toast({ variant: "destructive", title: "Couldn't add field", description: err.message }),
       }
     );
+  };
+
+  const handleSyncFromSite = async () => {
+    setSyncState("loading");
+    try {
+      const r = await apiFetch(`/api/projects/${projectId}/content/pull-from-site`, {
+        method: "POST",
+      });
+      const data = r as any;
+      setSyncUrl(data.url);
+      const withContent = (data.proposals as SiteProposal[]).filter((p) => p.proposed != null);
+      setProposals(withContent);
+      setSelectedIds(new Set(withContent.map((p) => p.fieldId)));
+      setSyncState("results");
+      if (withContent.length === 0) {
+        toast({ title: "Nothing found", description: "No text, links, or images could be extracted from the site." });
+        setSyncState("idle");
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Sync failed", description: err.message });
+      setSyncState("idle");
+    }
+  };
+
+  const handleApplySync = async () => {
+    setApplyingSync(true);
+    const selected = proposals.filter((p) => selectedIds.has(p.fieldId));
+    try {
+      await Promise.all(
+        selected.map((p) =>
+          apiFetch(`/api/projects/${projectId}/content/${p.fieldId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: p.proposed }),
+          })
+        )
+      );
+      toast({ title: "Content updated", description: `${selected.length} field${selected.length !== 1 ? "s" : ""} updated from site.` });
+      setSyncState("idle");
+      setProposals([]);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Apply failed", description: err.message });
+    } finally {
+      setApplyingSync(false);
+    }
   };
 
   const openEdit = (field: any) => {
@@ -304,10 +364,22 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
         description={canManage ? "What your clients can edit." : "What clients can edit on this project."}
         action={
           canManage && !isAdding ? (
-            <PrimaryButton onClick={() => setIsAdding(true)}>
-              <Plus style={{ width: 14, height: 14 }} />
-              Add field
-            </PrimaryButton>
+            <div style={{ display: "flex", gap: 8 }}>
+              <SecondaryButton
+                size="sm"
+                onClick={handleSyncFromSite}
+                loading={syncState === "loading"}
+                disabled={syncState === "loading"}
+                title="Pull content from your connected site"
+              >
+                <RefreshCw style={{ width: 13, height: 13 }} />
+                Sync from site
+              </SecondaryButton>
+              <PrimaryButton onClick={() => setIsAdding(true)}>
+                <Plus style={{ width: 14, height: 14 }} />
+                Add field
+              </PrimaryButton>
+            </div>
           ) : null
         }
       >
@@ -570,6 +642,96 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
           })
         )}
       </Card>
+      {/* Sync-from-site results panel */}
+      {syncState === "results" && proposals.length > 0 && (
+        <Card padded>
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: type.base, fontWeight: 600, marginBottom: 4 }}>
+              Content pulled from site
+            </p>
+            <p style={{ fontSize: type.xs, color: tone[500] }}>
+              Scraped from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span> — check each value and uncheck any you want to keep as-is. Applying will overwrite the current value.
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+            {proposals.map((p) => {
+              const checked = selectedIds.has(p.fieldId);
+              return (
+                <label
+                  key={p.fieldId}
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "flex-start",
+                    cursor: "pointer",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    background: checked ? tone[50] : "transparent",
+                    border: `1px solid ${checked ? line.base : "transparent"}`,
+                    transition: `background 0.15s ${ease}`,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = new Set(selectedIds);
+                      e.target.checked ? next.add(p.fieldId) : next.delete(p.fieldId);
+                      setSelectedIds(next);
+                    }}
+                    style={{ marginTop: 3, flexShrink: 0, accentColor: BRAND.ink }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 4 }}>{p.fieldLabel}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span
+                        style={{
+                          fontSize: type.xs,
+                          color: p.current ? tone[500] : tone[400],
+                          fontStyle: p.current ? "normal" : "italic",
+                          maxWidth: 180,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {p.current ?? "empty"}
+                      </span>
+                      <ArrowRight style={{ width: 12, height: 12, color: tone[400], flexShrink: 0 }} />
+                      <span
+                        style={{
+                          fontSize: type.xs,
+                          color: BRAND.ink,
+                          fontWeight: 500,
+                          maxWidth: 240,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {p.proposed}
+                      </span>
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton
+              size="sm"
+              onClick={handleApplySync}
+              loading={applyingSync}
+              disabled={applyingSync || selectedIds.size === 0}
+            >
+              {applyingSync ? "Applying…" : `Apply ${selectedIds.size} selected`}
+            </PrimaryButton>
+            <SecondaryButton size="sm" onClick={() => { setSyncState("idle"); setProposals([]); }}>
+              Discard
+            </SecondaryButton>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

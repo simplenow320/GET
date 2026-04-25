@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, FileEdit, Lock, Check } from "lucide-react";
+import { Loader2, Save, FileEdit, Lock, Check, RefreshCw } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
   EmptyState,
@@ -25,6 +25,19 @@ export default function ClientEditor() {
 
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
   const [savingField, setSavingField] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [justRefreshed, setJustRefreshed] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+      setJustRefreshed(true);
+      setTimeout(() => setJustRefreshed(false), 1800);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (fields) {
@@ -155,32 +168,62 @@ export default function ClientEditor() {
         >
           Editor
         </span>
-        {(() => {
-          const anyPending = fields?.some((f) => f.draftValue != null);
-          return (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: type.xs,
-                fontWeight: 500,
-                color: tone[500],
-              }}
-            >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Refresh button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh content"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              borderRadius: 8,
+              border: `1px solid ${line.base}`,
+              background: "transparent",
+              cursor: isRefreshing ? "not-allowed" : "pointer",
+              fontSize: type.xs,
+              fontWeight: 500,
+              color: justRefreshed ? "#16a34a" : tone[500],
+              transition: `color 0.3s ${ease}`,
+            }}
+          >
+            {isRefreshing ? (
+              <Loader2 style={{ width: 12, height: 12 }} className="animate-spin" />
+            ) : (
+              <RefreshCw style={{ width: 12, height: 12 }} />
+            )}
+            {justRefreshed ? "Refreshed" : "Refresh"}
+          </button>
+          {/* Status badge */}
+          {(() => {
+            const anyPending = fields?.some((f) => f.draftValue != null);
+            return (
               <span
                 style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: anyPending ? BRAND.yellow : "#4ade80",
-                  display: "inline-block",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: type.xs,
+                  fontWeight: 500,
+                  color: tone[500],
                 }}
-              />
-              {anyPending ? "Changes pending review" : "All changes live"}
-            </span>
-          );
-        })()}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: anyPending ? BRAND.yellow : "#4ade80",
+                    display: "inline-block",
+                  }}
+                />
+                {anyPending ? "Changes pending review" : "All changes live"}
+              </span>
+            );
+          })()}
+        </div>
       </div>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "44px clamp(20px, 4vw, 32px) 80px" }}>

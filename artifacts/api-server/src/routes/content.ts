@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, contentFieldsTable, draftsTable } from "@workspace/db";
+import { db, contentFieldsTable, draftsTable, domainsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateContentFieldBody, UpdateContentFieldBody } from "@workspace/api-zod";
@@ -7,6 +7,7 @@ import { sanitizeContent } from "../lib/sanitize";
 import { logAudit } from "../lib/audit";
 import { FieldLabel, ContentValue, SelectorString, parseIdParam } from "../lib/validation";
 import { z } from "zod";
+import { load as cheerioLoad } from "cheerio";
 
 const router = Router({ mergeParams: true });
 
@@ -227,6 +228,132 @@ router.delete(
     });
 
     res.status(204).send();
+  },
+);
+
+// POST /pull-from-site — admin+
+// Fetch the project's connected domain, scrape visible content, and return
+// per-field proposals so the owner can seed or refresh values without manually
+// copy-pasting from the live site.
+router.post(
+  "/pull-from-site",
+  requireAuth,
+  requireProjectAccess("admin"),
+  async (req: AuthRequest, res) => {
+    const projectId = parseInt(req.params.projectId);
+
+    const domains = await db
+      .select()
+      .from(domainsTable)
+      .where(eq(domainsTable.projectId, projectId));
+
+    if (domains.length === 0) {
+      return res.status(400).json({
+        error: "No domain connected. Add one in the Domains tab first.",
+      });
+    }
+
+    const hostname = domains[0].hostname;
+    const url = `https://${hostname}`;
+
+    let html: string;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { "User-Agent": "get-cms/1.0 (+https://get-builder.replit.app)" },
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        return res.status(400).json({
+          error: `Site returned HTTP ${response.status}. Check that it's publicly accessible.`,
+        });
+      }
+      html = await response.text();
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return res.status(400).json({ error: "Site took too long to respond (10 s)." });
+      }
+      return res.status(400).json({
+        error: `Couldn't reach ${url}. Make sure the site is running and public.`,
+      });
+    }
+
+    const $ = cheerioLoad(html);
+    $("script, style, noscript, nav, footer, [aria-hidden='true'], [hidden]").remove();
+
+    const headings: string[] = [];
+    const paragraphs: string[] = [];
+    const links: string[] = [];
+    const images: string[] = [];
+
+    $("h1, h2, h3, h4").each((_, el) => {
+      const t = $(el).text().trim().replace(/\s+/g, " ");
+      if (t && !headings.includes(t)) headings.push(t);
+    });
+
+    $("p, li, td, th").each((_, el) => {
+      const t = $(el).text().trim().replace(/\s+/g, " ");
+      if (t.length > 30 && !paragraphs.includes(t)) paragraphs.push(t);
+    });
+
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") ?? "";
+      const absolute = href.startsWith("http")
+        ? href
+        : href.startsWith("/")
+        ? `${url}${href}`
+        : null;
+      if (absolute && !links.includes(absolute)) links.push(absolute);
+    });
+
+    $("img[src]").each((_, el) => {
+      const src = $(el).attr("src") ?? "";
+      if (!src || src.startsWith("data:")) return;
+      const absolute = src.startsWith("http") ? src : `${url}${src}`;
+      if (!images.includes(absolute)) images.push(absolute);
+    });
+
+    const fields = await db
+      .select()
+      .from(contentFieldsTable)
+      .where(eq(contentFieldsTable.projectId, projectId));
+
+    // Assign scraped values to fields using independent cursors per type so
+    // each field of the same type gets a different piece of content.
+    let hi = 0, pi = 0, li2 = 0, ii = 0;
+
+    const proposals = fields.map((f) => {
+      let proposed: string | null = null;
+      switch (f.type) {
+        case "text":
+          proposed = headings[hi++] ?? paragraphs[pi++] ?? null;
+          break;
+        case "richtext":
+          proposed = [paragraphs[pi], paragraphs[pi + 1], paragraphs[pi + 2]]
+            .filter(Boolean).join("\n\n") || null;
+          pi += 3;
+          break;
+        case "url":
+          proposed = links[li2++] ?? null;
+          break;
+        case "image":
+          proposed = images[ii++] ?? null;
+          break;
+        default:
+          proposed = null;
+      }
+      return {
+        fieldId: String(f.id),
+        fieldLabel: f.label,
+        fieldType: f.type,
+        current: f.value ?? null,
+        proposed,
+      };
+    });
+
+    res.json({ url, proposals });
   },
 );
 
