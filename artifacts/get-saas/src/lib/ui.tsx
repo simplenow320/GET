@@ -1,5 +1,5 @@
 import React from "react";
-import mascotPath from "@assets/B56BFD2D-C1F8-4FD4-92D3-52BF5E977238_1777117580694.png";
+import brandLogoPath from "@assets/IMG_6687_1777091776547.jpeg";
 
 export const BRAND = {
   ink: "#1a1a2e",
@@ -447,44 +447,31 @@ export function Field({
   );
 }
 
-export function Wordmark({ size = 18, style }: { size?: number; style?: React.CSSProperties }) {
-  return (
-    <span
-      style={{
-        fontSize: size,
-        fontWeight: 700,
-        letterSpacing: "-0.04em",
-        color: BRAND.ink,
-        lineHeight: 1,
-        ...style,
-      }}
-    >
-      get<span style={{ color: BRAND.yellow }}>.</span>
-    </span>
-  );
-}
-
-export function Mascot({
-  size = 56,
+/**
+ * The official brand asset (uploaded image with wordmark + mascot + tagline).
+ * Per brand rules: this is the ONLY way to render the get brand. Never recreate
+ * the wordmark or mascot programmatically. Use only on landing / auth / 404
+ * surfaces — NEVER inside the authenticated product UI.
+ */
+export function BrandLogo({
+  width = 220,
+  alt = "get — Let clients edit your app without breaking it.",
   style,
-  alt = "get mascot",
 }: {
-  size?: number;
-  style?: React.CSSProperties;
+  width?: number | string;
   alt?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <img
-      src={mascotPath}
+      src={brandLogoPath}
       alt={alt}
-      width={size}
-      height={size}
       style={{
-        width: size,
-        height: size,
-        objectFit: "contain",
+        width,
+        height: "auto",
         display: "block",
         userSelect: "none",
+        mixBlendMode: "multiply",
         ...style,
       }}
       draggable={false}

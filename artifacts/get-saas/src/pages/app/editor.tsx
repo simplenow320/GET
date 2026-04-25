@@ -11,8 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save, FileEdit, Lock, Check } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
-  EmptyState, Wordmark, GhostButton, PrimaryButton,
+  EmptyState,
 } from "@/lib/ui";
+
+// Brand rule: this is inside the authenticated product UI — do NOT render
+// any get branding (logo, mascot, wordmark) on this surface.
 
 export default function ClientEditor() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -137,7 +140,16 @@ export default function ClientEditor() {
           padding: "0 clamp(20px, 4vw, 32px)",
         }}
       >
-        <Wordmark size={18} />
+        <span
+          style={{
+            fontSize: type.base,
+            fontWeight: 600,
+            color: BRAND.ink,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          Editor
+        </span>
         <span
           style={{
             display: "inline-flex",

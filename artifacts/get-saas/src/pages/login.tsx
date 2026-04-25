@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, Wordmark, Mascot } from "@/lib/ui";
+import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo } from "@/lib/ui";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -62,11 +62,10 @@ export default function Login() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 360 }}>
-        <div style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ marginBottom: 28, display: "flex", justifyContent: "center" }}>
           <Link href="/">
-            <span style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <Mascot size={40} />
-              <Wordmark size={22} />
+            <span style={{ cursor: "pointer", display: "inline-block" }}>
+              <BrandLogo width={140} />
             </span>
           </Link>
         </div>

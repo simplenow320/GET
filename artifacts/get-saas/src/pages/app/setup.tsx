@@ -16,9 +16,12 @@ import {
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
-  PrimaryButton, SecondaryButton, GhostButton, Card, Field, Wordmark, Mascot,
+  PrimaryButton, SecondaryButton, GhostButton, Card, Field,
   inputStyle, labelStyle,
 } from "@/lib/ui";
+
+// Brand rule: this is inside the authenticated product UI — do NOT render
+// any get branding (logo, mascot, wordmark) on this surface.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -281,7 +284,7 @@ const res = await fetch("${apiOrigin}/api/public/content", {
 });
 const { content } = await res.json();
 
-// content is keyed by the field labels you set in get
+// content is keyed by the field labels you defined.
 // Example: content["Hero Headline"]?.value`;
 }
 
@@ -351,7 +354,7 @@ export default function SetupWizard() {
   }, [step]);
 
   const apiOrigin =
-    typeof window !== "undefined" ? window.location.origin : "https://your-get-host";
+    typeof window !== "undefined" ? window.location.origin : "https://your-host";
 
   const handleAddField = () => {
     if (!fieldLabel.trim()) return;
@@ -474,9 +477,19 @@ export default function SetupWizard() {
           >
             <ChevronLeft style={{ width: 16, height: 16 }} />
           </button>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <Mascot size={28} />
-            <Wordmark size={18} />
+          <span
+            style={{
+              fontSize: type.base,
+              fontWeight: 600,
+              color: BRAND.ink,
+              letterSpacing: "-0.01em",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+            }}
+          >
+            Set up project
           </span>
         </div>
 

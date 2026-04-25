@@ -1,68 +1,46 @@
 import { Link } from "wouter";
-import logoHeroPath from "@assets/6BEE8433-78A4-49DD-9122-EDC5A3E40858_1777094465701.png";
-import { BRAND, tone, type, ease, Wordmark } from "@/lib/ui";
+import { BRAND, tone, type, ease, BrandLogo } from "@/lib/ui";
 
 export default function LandingPage() {
   return (
     <div style={{ backgroundColor: BRAND.paper, color: BRAND.ink, minHeight: "100dvh" }}>
 
-      {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <header
-        style={{
-          padding: "20px 24px",
-          maxWidth: 1080,
-          margin: "0 auto",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Wordmark size={22} />
-        <Link
-          href="/login"
-          style={{
-            fontSize: type.base,
-            color: tone[600],
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          Sign in
-        </Link>
-      </header>
-
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      {/* Per brand rules: no top nav, no header links, no tiny logo in corners.
+          Just the uploaded brand asset as the hero. */}
       <section
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           textAlign: "center",
-          padding: "32px 24px 80px",
+          padding: "80px 24px 64px",
+          maxWidth: 720,
+          margin: "0 auto",
         }}
       >
-        <img
-          src={logoHeroPath}
-          alt=""
-          style={{
-            width: "100%",
-            maxWidth: 280,
-            marginBottom: -28,
-            mixBlendMode: "multiply",
-          }}
+        <BrandLogo
+          width="100%"
+          style={{ maxWidth: 520, marginBottom: 24 }}
         />
 
+        {/* Visually-hidden H1 with the exact tagline so it's available to
+            screen readers and search engines without re-rendering the
+            tagline that's already baked into the brand asset above. */}
         <h1
           style={{
-            fontSize: "clamp(30px, 5vw, 46px)",
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-            lineHeight: 1.1,
-            maxWidth: 560,
-            margin: "0 auto 18px",
+            position: "absolute",
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: "hidden",
+            clip: "rect(0,0,0,0)",
+            whiteSpace: "nowrap",
+            border: 0,
           }}
         >
-          Let clients edit your app — without breaking it.
+          Let clients edit your app without breaking it.
         </h1>
 
         <p
@@ -70,45 +48,36 @@ export default function LandingPage() {
             fontSize: "clamp(16px, 2vw, 18px)",
             lineHeight: 1.6,
             color: tone[600],
-            maxWidth: 460,
+            maxWidth: 480,
             margin: "0 auto 36px",
           }}
         >
-          The simplest way to give clients safe, visual editing in apps you build.
+          The simplest way to give clients safe, visual editing in the apps you build.
         </p>
 
-        <div
+        <Link
+          href="/signup"
           style={{
-            display: "flex",
-            gap: 12,
-            flexWrap: "wrap",
+            display: "inline-flex",
+            alignItems: "center",
             justifyContent: "center",
+            height: 52,
+            padding: "0 30px",
+            borderRadius: 999,
+            background: BRAND.ink,
+            color: BRAND.paper,
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+            letterSpacing: "-0.01em",
+            textDecoration: "none",
+            transition: `opacity 0.25s ${ease}`,
           }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
         >
-          <Link
-            href="/signup"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: 52,
-              padding: "0 30px",
-              borderRadius: 999,
-              background: BRAND.ink,
-              color: BRAND.paper,
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: "pointer",
-              letterSpacing: "-0.01em",
-              textDecoration: "none",
-              transition: `opacity 0.25s ${ease}`,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-          >
-            Start free
-          </Link>
-        </div>
+          Start free
+        </Link>
       </section>
 
       {/* ── Benefits ─────────────────────────────────────────────────────── */}
@@ -186,7 +155,7 @@ export default function LandingPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {[
               { n: "1", title: "Build your app", body: "Finish building in Replit or any framework." },
-              { n: "2", title: "Connect it", body: "Install the SDK, add your project key. Three minutes." },
+              { n: "2", title: "Connect it", body: "Add your project key and one fetch call. Three minutes." },
               { n: "3", title: "Invite clients", body: "Clients get a private editor. They change content. Nothing else." },
             ].map((step, i, arr) => (
               <div key={step.n} style={{ display: "flex", gap: 18 }}>
@@ -262,7 +231,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Final CTA ────────────────────────────────────────────────────── */}
-      <section style={{ padding: "0 24px 96px", textAlign: "center" }}>
+      <section style={{ padding: "0 24px 64px", textAlign: "center" }}>
         <p
           style={{
             fontSize: "clamp(22px, 4vw, 32px)",
@@ -273,40 +242,66 @@ export default function LandingPage() {
         >
           Set up client editing in minutes.
         </p>
-        <Link
-          href="/signup"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: 52,
-            padding: "0 32px",
-            borderRadius: 999,
-            background: BRAND.ink,
-            color: BRAND.paper,
-            fontSize: 15,
-            fontWeight: 600,
-            cursor: "pointer",
-            letterSpacing: "-0.01em",
-            textDecoration: "none",
-            transition: `opacity 0.25s ${ease}`,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-        >
-          Start free
-        </Link>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link
+            href="/signup"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 52,
+              padding: "0 32px",
+              borderRadius: 999,
+              background: BRAND.ink,
+              color: BRAND.paper,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+              letterSpacing: "-0.01em",
+              textDecoration: "none",
+              transition: `opacity 0.25s ${ease}`,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+          >
+            Start free
+          </Link>
+          <Link
+            href="/login"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 52,
+              padding: "0 28px",
+              borderRadius: 999,
+              background: "transparent",
+              color: BRAND.ink,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+              letterSpacing: "-0.01em",
+              textDecoration: "none",
+              border: `1px solid ${tone[200]}`,
+              transition: `background 0.25s ${ease}`,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = tone[50]; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            Sign in
+          </Link>
+        </div>
       </section>
 
       <footer
         style={{
-          padding: "20px 24px 40px",
+          padding: "24px 24px 40px",
           textAlign: "center",
           fontSize: type.xs,
           color: tone[400],
         }}
       >
-        © {new Date().getFullYear()} get
+        © {new Date().getFullYear()}
       </footer>
     </div>
   );

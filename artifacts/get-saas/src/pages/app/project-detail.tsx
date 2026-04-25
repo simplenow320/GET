@@ -1226,7 +1226,7 @@ function KeysTab({ projectId }: { projectId: string }) {
           }}
         >
 {`const res = await fetch(
-  "${typeof window !== "undefined" ? window.location.origin : "https://your-get-host"}/api/public/content",
+  "${typeof window !== "undefined" ? window.location.origin : "https://your-host"}/api/public/content",
   { headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` } }
 );
 const { content } = await res.json();

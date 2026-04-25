@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { BRAND, tone, type, PrimaryButton, Wordmark } from "@/lib/ui";
+import { BRAND, tone, type, PrimaryButton, BrandLogo } from "@/lib/ui";
 
 export default function NotFound() {
   return (
@@ -15,8 +15,8 @@ export default function NotFound() {
       }}
     >
       <div style={{ textAlign: "center", maxWidth: 360 }}>
-        <div style={{ marginBottom: 28 }}>
-          <Wordmark size={20} />
+        <div style={{ marginBottom: 28, display: "flex", justifyContent: "center" }}>
+          <BrandLogo width={120} />
         </div>
         <p
           style={{

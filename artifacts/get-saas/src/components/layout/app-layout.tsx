@@ -4,7 +4,10 @@ import { LayoutGrid, FolderOpen, LogOut, Menu } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { BRAND, tone, line, type, ease, Wordmark } from "@/lib/ui";
+import { BRAND, tone, line, type, ease } from "@/lib/ui";
+
+// Brand rule: the authenticated product UI is white-label.
+// Do NOT import or render any get branding (logo, mascot, wordmark) here.
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -50,8 +53,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         }}
       >
         <Link href="/app/dashboard">
-          <span style={{ cursor: "pointer", display: "inline-flex" }} onClick={onNavigate}>
-            <Wordmark size={20} />
+          <span
+            onClick={onNavigate}
+            style={{
+              cursor: "pointer",
+              fontSize: type.xs,
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: tone[500],
+            }}
+          >
+            Workspace
           </span>
         </Link>
       </div>
@@ -158,16 +171,20 @@ export function AppLayout({ children }: AppLayoutProps) {
           borderBottom: `1px solid ${line.faint}`,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Wordmark size={18} />
-          {sectionLabel ? (
-            <span style={{ color: tone[300] }}>·</span>
-          ) : null}
-          {sectionLabel ? (
-            <span style={{ fontSize: type.sm, fontWeight: 500, color: tone[600] }}>
-              {sectionLabel}
-            </span>
-          ) : null}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span
+            style={{
+              fontSize: type.base,
+              fontWeight: 600,
+              color: BRAND.ink,
+              letterSpacing: "-0.01em",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {sectionLabel || "Workspace"}
+          </span>
         </div>
         <Sheet>
           <SheetTrigger asChild>
