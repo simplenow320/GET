@@ -249,13 +249,8 @@ export default function ProjectDetail() {
 
 // ── Content Map ─────────────────────────────────────────────────────────────
 
-type SiteProposal = {
-  fieldId: string;
-  fieldLabel: string;
-  fieldType: string;
-  current: string | null;
-  proposed: string | null;
-};
+type SiteField = { label: string; type: string; value: string };
+type SiteSection = { name: string; fields: SiteField[] };
 
 function ContentMapTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: fields, isLoading, refetch } = useListContentFields(projectId);
@@ -269,11 +264,12 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   // Track which field row is expanded for inline content editing
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
-  // Sync-from-site state
+  // Scan-from-site state
   const [syncState, setSyncState] = useState<"idle" | "loading" | "results">("idle");
   const [syncUrl, setSyncUrl] = useState<string>("");
-  const [proposals, setProposals] = useState<SiteProposal[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sections, setSections] = useState<SiteSection[]>([]);
+  // selectedKeys: "sectionIdx:fieldIdx"
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [applyingSync, setApplyingSync] = useState(false);
 
   const handleAdd = () => {
@@ -300,39 +296,51 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
       });
       const data = r as any;
       setSyncUrl(data.url);
-      const withContent = (data.proposals as SiteProposal[]).filter((p) => p.proposed != null);
-      setProposals(withContent);
-      setSelectedIds(new Set(withContent.map((p) => p.fieldId)));
+      const scanned = (data.sections ?? []) as SiteSection[];
+      setSections(scanned);
+      // Select all fields by default
+      const allKeys = new Set<string>();
+      scanned.forEach((sec, si) => sec.fields.forEach((_, fi) => allKeys.add(`${si}:${fi}`)));
+      setSelectedKeys(allKeys);
       setSyncState("results");
-      if (withContent.length === 0) {
-        toast({ title: "Nothing found", description: "No text, links, or images could be extracted from the site." });
+      if (scanned.length === 0) {
+        toast({ title: "Nothing found", description: "We couldn't find any text sections on the site. Make sure the site is public and try again." });
         setSyncState("idle");
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Sync failed", description: err.message });
+      toast({ variant: "destructive", title: "Scan failed", description: err.message });
       setSyncState("idle");
     }
   };
 
   const handleApplySync = async () => {
     setApplyingSync(true);
-    const selected = proposals.filter((p) => selectedIds.has(p.fieldId));
+    // Collect selected fields from sections
+    const toCreate: SiteField[] = [];
+    sections.forEach((sec, si) =>
+      sec.fields.forEach((field, fi) => {
+        if (selectedKeys.has(`${si}:${fi}`)) toCreate.push(field);
+      })
+    );
     try {
       await Promise.all(
-        selected.map((p) =>
-          apiFetch(`/api/projects/${projectId}/content/${p.fieldId}`, {
-            method: "PATCH",
+        toCreate.map((f) =>
+          apiFetch(`/api/projects/${projectId}/content`, {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: p.proposed }),
+            body: JSON.stringify({ label: f.label, type: f.type, value: f.value }),
           })
         )
       );
-      toast({ title: "Content updated", description: `${selected.length} field${selected.length !== 1 ? "s" : ""} updated from site.` });
+      toast({
+        title: "Fields imported",
+        description: `${toCreate.length} field${toCreate.length !== 1 ? "s" : ""} added to your content map.`,
+      });
       setSyncState("idle");
-      setProposals([]);
+      setSections([]);
       refetch();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Apply failed", description: err.message });
+      toast({ variant: "destructive", title: "Import failed", description: err.message });
     } finally {
       setApplyingSync(false);
     }
@@ -642,91 +650,126 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
           })
         )}
       </Card>
-      {/* Sync-from-site results panel */}
-      {syncState === "results" && proposals.length > 0 && (
+      {/* Scan-from-site results panel */}
+      {syncState === "results" && sections.length > 0 && (
         <Card padded>
           <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: type.base, fontWeight: 600, marginBottom: 4 }}>
-              Content pulled from site
+              Content found on your site
             </p>
             <p style={{ fontSize: type.xs, color: tone[500] }}>
-              Scraped from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span> — check each value and uncheck any you want to keep as-is. Applying will overwrite the current value.
+              Scanned from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span> — uncheck anything you don't want to import. Each checked item will be added as a new content field.
             </p>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-            {proposals.map((p) => {
-              const checked = selectedIds.has(p.fieldId);
-              return (
-                <label
-                  key={p.fieldId}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, marginBottom: 16 }}>
+            {sections.map((sec, si) => (
+              <div key={si}>
+                {/* Section header with select-all toggle */}
+                <div
                   style={{
                     display: "flex",
-                    gap: 12,
-                    alignItems: "flex-start",
-                    cursor: "pointer",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    background: checked ? tone[50] : "transparent",
-                    border: `1px solid ${checked ? line.base : "transparent"}`,
-                    transition: `background 0.15s ${ease}`,
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 8,
+                    paddingBottom: 6,
+                    borderBottom: `1px solid ${line.base}`,
                   }}
                 >
                   <input
                     type="checkbox"
-                    checked={checked}
+                    checked={sec.fields.every((_, fi) => selectedKeys.has(`${si}:${fi}`))}
                     onChange={(e) => {
-                      const next = new Set(selectedIds);
-                      e.target.checked ? next.add(p.fieldId) : next.delete(p.fieldId);
-                      setSelectedIds(next);
+                      const next = new Set(selectedKeys);
+                      sec.fields.forEach((_, fi) => {
+                        e.target.checked ? next.add(`${si}:${fi}`) : next.delete(`${si}:${fi}`);
+                      });
+                      setSelectedKeys(next);
                     }}
-                    style={{ marginTop: 3, flexShrink: 0, accentColor: BRAND.ink }}
+                    style={{ accentColor: BRAND.ink, flexShrink: 0 }}
                   />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 4 }}>{p.fieldLabel}</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span
+                  <p style={{ fontSize: type.sm, fontWeight: 700, color: tone[700] }}>{sec.name}</p>
+                  <span style={{ fontSize: type.xs, color: tone[400], marginLeft: "auto" }}>
+                    {sec.fields.filter((_, fi) => selectedKeys.has(`${si}:${fi}`)).length}/{sec.fields.length} selected
+                  </span>
+                </div>
+                {/* Fields inside the section */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {sec.fields.map((field, fi) => {
+                    const key = `${si}:${fi}`;
+                    const checked = selectedKeys.has(key);
+                    return (
+                      <label
+                        key={key}
                         style={{
-                          fontSize: type.xs,
-                          color: p.current ? tone[500] : tone[400],
-                          fontStyle: p.current ? "normal" : "italic",
-                          maxWidth: 180,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          display: "flex",
+                          gap: 12,
+                          alignItems: "flex-start",
+                          cursor: "pointer",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          background: checked ? tone[50] : "transparent",
+                          border: `1px solid ${checked ? line.base : "transparent"}`,
+                          transition: `background 0.15s ${ease}`,
                         }}
                       >
-                        {p.current ?? "empty"}
-                      </span>
-                      <ArrowRight style={{ width: 12, height: 12, color: tone[400], flexShrink: 0 }} />
-                      <span
-                        style={{
-                          fontSize: type.xs,
-                          color: BRAND.ink,
-                          fontWeight: 500,
-                          maxWidth: 240,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {p.proposed}
-                      </span>
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = new Set(selectedKeys);
+                            e.target.checked ? next.add(key) : next.delete(key);
+                            setSelectedKeys(next);
+                          }}
+                          style={{ marginTop: 3, flexShrink: 0, accentColor: BRAND.ink }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <p style={{ fontSize: type.sm, fontWeight: 600 }}>{field.label}</p>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: tone[400],
+                                background: tone[100],
+                                borderRadius: 4,
+                                padding: "1px 5px",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.04em",
+                              }}
+                            >
+                              {field.type}
+                            </span>
+                          </div>
+                          <p
+                            style={{
+                              fontSize: type.xs,
+                              color: tone[600],
+                              overflow: "hidden",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              lineHeight: "1.4",
+                            }}
+                          >
+                            {field.value || <span style={{ color: tone[400], fontStyle: "italic" }}>empty</span>}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <PrimaryButton
               size="sm"
               onClick={handleApplySync}
               loading={applyingSync}
-              disabled={applyingSync || selectedIds.size === 0}
+              disabled={applyingSync || selectedKeys.size === 0}
             >
-              {applyingSync ? "Applying…" : `Apply ${selectedIds.size} selected`}
+              {applyingSync ? "Importing…" : `Import ${selectedKeys.size} field${selectedKeys.size !== 1 ? "s" : ""}`}
             </PrimaryButton>
-            <SecondaryButton size="sm" onClick={() => { setSyncState("idle"); setProposals([]); }}>
+            <SecondaryButton size="sm" onClick={() => { setSyncState("idle"); setSections([]); setSelectedKeys(new Set()); }}>
               Discard
             </SecondaryButton>
           </div>
