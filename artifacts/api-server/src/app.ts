@@ -42,7 +42,7 @@ app.use(
 // from any customer's frontend or backend, so any origin is allowed.
 const publicCors = cors({
   origin: true,
-  methods: ["GET", "HEAD", "OPTIONS"],
+  methods: ["GET", "HEAD", "POST", "OPTIONS"],
   credentials: false,
 });
 app.use("/api/public", publicCors);

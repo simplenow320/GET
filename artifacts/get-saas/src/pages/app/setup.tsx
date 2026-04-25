@@ -262,14 +262,24 @@ function KeyValuePair({ secretName, secretValue }: { secretName: string; secretV
 function ReplitConnectGuide({ keyValue, apiOrigin }: { keyValue: string; apiOrigin: string }) {
   const fetchSnippet =
     `// In your main server file (e.g. index.js, server.js, app.js)
-const res = await fetch(
-  "${apiOrigin}/api/public/content",
-  { headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` } }
-);
+const res = await fetch("${apiOrigin}/api/public/content", {
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  // seed: your current content for each field you created.
+  // get stores it once (only if the field is still empty) so
+  // clients see real text in the editor — not blank boxes.
+  body: JSON.stringify({ seed: {
+    // "Hero Headline": "Welcome to My App",
+    // "Body Text": "We build great things.",
+  }}),
+});
 const { content } = await res.json();
 
-// Use a field by the label you gave it:
-// content["Hero Headline"]?.value`;
+// Use a field value (falls back to your seed if get isn't set yet):
+// content["Hero Headline"]?.value ?? "Welcome to My App"`;
 
   const stepNumStyle: React.CSSProperties = {
     width: 24,
@@ -324,7 +334,9 @@ const { content } = await res.json();
           Open the file your app uses to handle requests — usually{" "}
           <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>index.js</code>,{" "}
           <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>server.js</code>, or{" "}
-          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>app.js</code>. Paste this where you want to load editable content:
+          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>app.js</code>.
+          Paste this snippet, then <strong>fill in the <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>seed</code> values with whatever text is currently in your app</strong>.
+          get will store them the first time your app runs, so clients see real content — not blank fields.
         </p>
         <CodeBlock code={fetchSnippet} />
       </div>
