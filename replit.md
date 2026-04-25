@@ -46,7 +46,13 @@ Full-stack SaaS called "get" — a hosted control plane that lets developers giv
 All pages import design tokens (`BRAND`, `tone`, `line`, `type`, `r`, `ease`, `status`) and components (`PrimaryButton`, `SecondaryButton`, `GhostButton`, `DangerButton`, `Card`, `PageHeader`, `SectionTitle`, `EmptyState`, `Pill`, `Field`, `BrandLogo`, `PageContainer`, `ConfirmDialog`) from this module. When adding new pages, reuse these instead of inventing one-off styles. `Field` auto-generates an `id` for its child input and wires `htmlFor` on the label. `ConfirmDialog` wraps Radix AlertDialog with brand styling — use it for ALL destructive confirmations (delete, revoke, etc.). Never use native `confirm()` / `alert()`.
 
 ## Auth
-Session-based auth using scrypt password hashing + random bearer tokens (SHA-256 hashed at rest in the `sessions` table). The frontend stores the raw token in localStorage and sends it as `Authorization: Bearer <token>`. This is CSRF-immune by design (no automatic cookie attachment). Trade-off: vulnerable to XSS token theft, so the frontend deliberately renders no user-generated HTML and uses no `dangerouslySetInnerHTML`. RBAC is enforced backend-side via `requireProjectAccess(minRole)` middleware.
+Session-based auth using scrypt password hashing + random session tokens (SHA-256 hashed at rest in the `sessions` table). The session token is set as an **httpOnly, Secure, SameSite=Lax cookie** named `gs` (30-day TTL). The frontend never reads or stores the raw token — `lib/api-client-react/src/custom-fetch.ts` sets `credentials: "include"` so the browser attaches it automatically. Bearer-token auth is still accepted for non-browser/CLI clients. RBAC is enforced backend-side via `requireProjectAccess(minRole)` middleware.
+
+### CSRF defense (defense in depth)
+1. **SameSite=Lax** on the session cookie blocks most cross-site form/fetch CSRF.
+2. **Origin-header gate** in `app.ts` runs on every mutating request (POST/PUT/PATCH/DELETE outside `/api/public/*`). It hardens against the case where Replit's edge proxy rewrites `SameSite=Lax` to `None` for iframe contexts. Rules: allowlisted Origin → pass; missing Origin + no session cookie → pass (curl/Bearer client); everything else → 403 "Bad origin".
+3. **CORS allowlist** is explicit (REPLIT_DEV_DOMAIN, APP_BASE_URL, localhost) — never wildcards on shared hosting domains. Disallowed origins receive no `Access-Control-Allow-Origin` (soft reject via `cb(null, false)`), so browsers cannot read responses.
+4. **XSS hardening**: every user-supplied string is run through `xss({ whiteList: {} })` in `lib/sanitize.ts` before persistence; the frontend renders no user-generated HTML and uses no `dangerouslySetInnerHTML`.
 
 ## Key Commands
 
