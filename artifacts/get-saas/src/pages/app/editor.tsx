@@ -713,6 +713,48 @@ export default function ClientEditor() {
             );
           })}
         </div>
+
+        {/* Preferences row */}
+        <div
+          style={{
+            marginTop: 56,
+            paddingTop: 24,
+            borderTop: `1px solid ${line.faint}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+          }}
+        >
+          <div>
+            <p style={{ fontSize: type.sm, fontWeight: 600, color: BRAND.ink, marginBottom: 2 }}>
+              Save confirmation
+            </p>
+            <p style={{ fontSize: type.xs, color: tone[400], lineHeight: 1.45 }}>
+              {skipWarning
+                ? "Saves go through immediately without asking."
+                : "A confirmation dialog appears before every save."}
+            </p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: type.xs, color: tone[400] }}>
+              {skipWarning ? "Off" : "On"}
+            </span>
+            <Switch
+              checked={!skipWarning}
+              onCheckedChange={(on) => {
+                const next = !on;
+                setSkipWarning(next);
+                if (next) {
+                  localStorage.setItem(SKIP_WARN_KEY, "true");
+                } else {
+                  localStorage.removeItem(SKIP_WARN_KEY);
+                }
+              }}
+              className="data-[state=checked]:bg-[#1a1a2e]"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
