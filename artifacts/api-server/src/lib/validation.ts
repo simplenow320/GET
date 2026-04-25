@@ -58,18 +58,31 @@ export const ManageableRole = z.enum(["admin", "editor", "viewer"]);
 
 const RESERVED_HOSTNAMES = new Set([
   "localhost",
-  "0.0.0.0",
-  "127.0.0.1",
-  "::1",
+  "localhost.localdomain",
+  "broadcasthost",
+  "ip6-localhost",
+  "ip6-loopback",
 ]);
+
+// Anything that looks like a numeric IPv4 literal — even in non-loopback ranges
+// (e.g. 10.0.0.1, 169.254.169.254, 8.8.8.8) — must be rejected. Hostnames may
+// later be used to verify ownership or fetch metadata, so allowing IP literals
+// would create an SSRF foothold.
+const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
 
 export const Hostname = z
   .string()
   .max(253, "Hostname is too long")
   .transform((s) => s.toLowerCase().trim().replace(/^https?:\/\//, "").split("/")[0])
   .refine(
-    (v) => HOSTNAME_RE.test(v) && !RESERVED_HOSTNAMES.has(v),
-    "Enter a valid public hostname (e.g. app.example.com)",
+    (v) =>
+      HOSTNAME_RE.test(v) &&
+      !IPV4_RE.test(v) &&
+      // Defense-in-depth: reject anything containing colons (IPv6 / port) or
+      // brackets, even though HOSTNAME_RE already excludes those characters.
+      !/[:\[\]]/.test(v) &&
+      !RESERVED_HOSTNAMES.has(v),
+    "Enter a valid public hostname (e.g. app.example.com) — IP addresses are not allowed",
   );
 
 export const KeyName = z

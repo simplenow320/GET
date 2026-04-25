@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, ReactNode } from "react";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, ApiError } from "@workspace/api-client-react";
 import { User } from "@workspace/api-client-react/src/generated/api.schemas";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
@@ -21,10 +21,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     query: { retry: false },
   });
 
-  // If the stored token is rejected, clear it so we don't get stuck retrying
-  // a permanently-invalid session on every page load.
+  // Only clear the stored token when the server explicitly rejects it (401).
+  // Network errors, 5xx, or CORS hiccups must NOT log the user out — those are
+  // transient and the existing session may still be valid on retry.
   useEffect(() => {
-    if (error && typeof window !== "undefined") {
+    if (
+      error &&
+      error instanceof ApiError &&
+      error.status === 401 &&
+      typeof window !== "undefined"
+    ) {
       localStorage.removeItem("auth_token");
     }
   }, [error]);
