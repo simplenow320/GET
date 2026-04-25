@@ -2,7 +2,8 @@ import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useSignup } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSignup, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -27,6 +28,7 @@ export default function Signup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const signupMutation = useSignup();
+  const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
@@ -41,7 +43,9 @@ export default function Signup() {
     signupMutation.mutate(
       { data: values },
       {
-        onSuccess: () => {
+        onSuccess: async (data: any) => {
+          if (data?.token) localStorage.setItem("auth_token", data.token);
+          await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setLocation("/app/dashboard");
         },
         onError: (error) => {

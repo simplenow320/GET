@@ -20,7 +20,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
-      onSuccess: () => setLocation("/login"),
+      onSuccess: () => {
+        localStorage.removeItem("auth_token");
+        setLocation("/login");
+      },
     });
   };
 

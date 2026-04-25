@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLocation, useParams, Link } from "wouter";
 import { format } from "date-fns";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useGetProject,
   useUpdateProject,
@@ -33,9 +34,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Globe, Users, Database, FileEdit, Settings, Trash2,
-  Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2
+  Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2,
+  KeyRound, Eye, EyeOff, Copy, Check, RefreshCw, ShieldCheck, X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function getToken() {
+  return localStorage.getItem("auth_token") ?? "";
+}
+
+async function apiFetch(path: string, opts: RequestInit = {}) {
+  const r = await fetch(`${BASE}${path}`, {
+    ...opts,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}`, ...(opts.headers ?? {}) },
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.error ?? `HTTP ${r.status}`);
+  }
+  if (r.status === 204) return null;
+  return r.json();
+}
 
 const S = {
   card: {
@@ -141,6 +162,7 @@ export default function ProjectDetail() {
               { value: "clients", icon: Users, label: "Clients" },
               { value: "domains", icon: Globe, label: "Domains" },
               { value: "drafts", icon: FileEdit, label: "Drafts" },
+              { value: "keys", icon: KeyRound, label: "API Keys" },
               { value: "activity", icon: ActivityIcon, label: "Activity" },
               { value: "settings", icon: Settings, label: "Settings" },
             ].map((tab) => (
@@ -161,6 +183,7 @@ export default function ProjectDetail() {
             <TabsContent value="clients"><ClientsTab projectId={project.id} /></TabsContent>
             <TabsContent value="domains"><DomainsTab projectId={project.id} /></TabsContent>
             <TabsContent value="drafts"><DraftsTab projectId={project.id} /></TabsContent>
+            <TabsContent value="keys"><KeysTab projectId={project.id} /></TabsContent>
             <TabsContent value="activity"><ActivityTab projectId={project.id} /></TabsContent>
             <TabsContent value="settings"><SettingsTab project={project} /></TabsContent>
           </div>
@@ -450,6 +473,22 @@ function DomainsTab({ projectId }: { projectId: string }) {
 function DraftsTab({ projectId }: { projectId: string }) {
   const { data: drafts, refetch } = useListDrafts(projectId);
   const publishMutation = usePublishDraft();
+  const { toast } = useToast();
+
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+  const handleReject = async (draftId: string) => {
+    setRejectingId(draftId);
+    try {
+      await apiFetch(`/api/projects/${projectId}/drafts/${draftId}/reject`, { method: "POST" });
+      refetch();
+      toast({ title: "Draft rejected" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    } finally {
+      setRejectingId(null);
+    }
+  };
 
   const pendingDrafts = drafts?.filter(d => d.status === "pending") || [];
   const pastDrafts = drafts?.filter(d => d.status !== "pending") || [];
@@ -471,13 +510,22 @@ function DraftsTab({ projectId }: { projectId: string }) {
                       By {d.authorName} · {format(new Date(d.createdAt), "MMM d, h:mm a")}
                     </p>
                   </div>
-                  <button
-                    onClick={() => publishMutation.mutate({ projectId, draftId: d.id }, { onSuccess: () => refetch() })}
-                    disabled={publishMutation.isPending}
-                    style={{ height: 36, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-                  >
-                    Publish
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <button
+                      onClick={() => handleReject(d.id)}
+                      disabled={rejectingId === d.id}
+                      style={{ height: 36, padding: "0 14px", borderRadius: 9, background: "#fef2f2", color: "#dc2626", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+                    >
+                      {rejectingId === d.id ? "…" : "Reject"}
+                    </button>
+                    <button
+                      onClick={() => publishMutation.mutate({ projectId, draftId: d.id }, { onSuccess: () => refetch() })}
+                      disabled={publishMutation.isPending}
+                      style={{ height: 36, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+                    >
+                      Publish
+                    </button>
+                  </div>
                 </div>
                 <div style={{ background: "rgba(0,0,0,0.02)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: 10, padding: "12px 14px", fontSize: 13, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
                   {d.value}
@@ -610,6 +658,191 @@ function SettingsTab({ project }: { project: any }) {
           Delete project
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── API Keys ──────────────────────────────────────────────────────────────────
+
+interface ProjectKey {
+  id: string;
+  projectId: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revoked: boolean;
+  rawKey?: string;
+}
+
+function KeysTab({ projectId }: { projectId: string }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [newKeyName, setNewKeyName] = useState("");
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const { data: keys = [], isLoading } = useQuery<ProjectKey[]>({
+    queryKey: ["project-keys", projectId],
+    queryFn: () => apiFetch(`/api/projects/${projectId}/keys`),
+  });
+
+  const handleGenerate = async () => {
+    if (!newKeyName.trim()) return;
+    setIsGenerating(true);
+    try {
+      const result: ProjectKey = await apiFetch(`/api/projects/${projectId}/keys`, {
+        method: "POST",
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      });
+      setGeneratedKey(result.rawKey ?? null);
+      setNewKeyName("");
+      qc.invalidateQueries({ queryKey: ["project-keys", projectId] });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRevoke = async (keyId: string) => {
+    if (!confirm("Revoke this key? Apps using it will stop working immediately.")) return;
+    setRevokingId(keyId);
+    try {
+      await apiFetch(`/api/projects/${projectId}/keys/${keyId}`, { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["project-keys", projectId] });
+      toast({ title: "Key revoked" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!generatedKey) return;
+    await navigator.clipboard.writeText(generatedKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 620 }}>
+
+      {/* One-time key reveal */}
+      {generatedKey && (
+        <div style={{ ...S.card, padding: 24, border: "1px solid rgba(16,185,129,0.2)", background: "#f0fdf4" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <ShieldCheck style={{ width: 16, height: 16, color: "#059669" }} />
+            <p style={{ fontSize: 14, fontWeight: 600, color: "#059669" }}>Key generated — copy it now</p>
+          </div>
+          <p style={{ fontSize: 13, color: "rgba(26,46,26,0.6)", marginBottom: 14, lineHeight: 1.6 }}>
+            This key will only be shown once. Store it in your environment variables — never expose it in client-side code.
+          </p>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{
+              flex: 1, background: "#fff", border: "1px solid rgba(0,0,0,0.1)", borderRadius: 10,
+              padding: "10px 14px", fontSize: 13, fontFamily: "monospace", wordBreak: "break-all",
+              color: "#1a1a2e", userSelect: "all",
+            }}>
+              {generatedKey}
+            </div>
+            <button
+              onClick={handleCopy}
+              style={{ height: 40, padding: "0 14px", borderRadius: 9, background: copied ? "#059669" : "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexShrink: 0, transition: "background 0.2s" }}
+            >
+              {copied ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <button
+            onClick={() => setGeneratedKey(null)}
+            style={{ marginTop: 12, fontSize: 12.5, color: "rgba(26,26,46,0.45)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            I've saved it — dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Generate new key */}
+      <div style={{ ...S.card, padding: 24 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Generate a new key</p>
+        <p style={{ fontSize: 13, color: "rgba(26,26,46,0.5)", marginBottom: 18, lineHeight: 1.6 }}>
+          Project keys authenticate your app's SDK calls to this project. Each key is shown only once.
+        </p>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Input
+            value={newKeyName}
+            onChange={e => setNewKeyName(e.target.value)}
+            placeholder="Key name, e.g. Production"
+            style={{ flex: 1, height: 40, borderRadius: 9, fontSize: 13.5 }}
+            onKeyDown={e => e.key === "Enter" && handleGenerate()}
+          />
+          <button
+            onClick={handleGenerate}
+            disabled={!newKeyName.trim() || isGenerating}
+            style={{ height: 40, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            {isGenerating ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <KeyRound style={{ width: 13, height: 13 }} />}
+            Generate
+          </button>
+        </div>
+      </div>
+
+      {/* Existing keys */}
+      <div>
+        <p style={S.sectionTitle}>Active keys</p>
+        <div style={S.card}>
+          {isLoading ? (
+            <div style={{ padding: 20 }}>
+              <Skeleton style={{ height: 48, borderRadius: 8, background: "rgba(0,0,0,0.04)" }} />
+            </div>
+          ) : !keys.length ? (
+            <div style={S.emptyState}>No keys yet. Generate one above to connect your SDK.</div>
+          ) : (
+            keys.map((k, idx) => (
+              <div key={k.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <KeyRound style={{ width: 15, height: 15, color: "rgba(26,26,46,0.4)" }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 500 }}>{k.name}</p>
+                    <p style={{ fontSize: 12, fontFamily: "monospace", color: "rgba(26,26,46,0.4)", marginTop: 2 }}>
+                      {k.keyPrefix}••••••••••••••••
+                      <span style={{ fontFamily: "inherit", marginLeft: 10 }}>
+                        Created {format(new Date(k.createdAt), "MMM d, yyyy")}
+                      </span>
+                      {k.lastUsedAt && (
+                        <span style={{ marginLeft: 10 }}>· Last used {format(new Date(k.lastUsedAt), "MMM d")}</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRevoke(k.id)}
+                  disabled={revokingId === k.id}
+                  style={{ fontSize: 12.5, padding: "5px 12px", borderRadius: 8, border: "none", background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap" }}
+                >
+                  {revokingId === k.id ? "Revoking…" : "Revoke"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...S.card, padding: 20, background: "#fafaf9", border: "1px solid rgba(0,0,0,0.05)" }}>
+        <p style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6, color: "#1a1a2e" }}>How to use</p>
+        <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.55)", lineHeight: 1.7 }}>
+          Store your key as an environment variable (<code style={{ fontFamily: "monospace", background: "rgba(0,0,0,0.06)", padding: "1px 5px", borderRadius: 4 }}>GET_PROJECT_KEY</code>) on your server.
+          Never include it in frontend JavaScript or commit it to source control.
+          Use it to sign SDK requests to authenticate as this project.
+        </p>
+      </div>
+
     </div>
   );
 }

@@ -4,6 +4,7 @@ export * from "./content_fields";
 export * from "./invites";
 export * from "./domains";
 export * from "./project_users";
+export * from "./project_keys";
 export * from "./activity";
 export * from "./drafts";
 export * from "./sessions";

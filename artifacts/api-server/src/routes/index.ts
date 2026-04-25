@@ -8,6 +8,7 @@ import domainsRouter from "./domains";
 import projectUsersRouter from "./project-users";
 import activityRouter from "./activity";
 import draftsRouter from "./drafts";
+import projectKeysRouter from "./project-keys";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/projects/:projectId/domains", domainsRouter);
 router.use("/projects/:projectId/users", projectUsersRouter);
 router.use("/projects/:projectId/activity", activityRouter);
 router.use("/projects/:projectId/drafts", draftsRouter);
+router.use("/projects/:projectId/keys", projectKeysRouter);
 
 export default router;

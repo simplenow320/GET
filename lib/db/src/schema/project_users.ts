@@ -6,7 +6,7 @@ export const projectUsersTable = pgTable("project_users", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull(),
   userId: integer("user_id").notNull(),
-  role: text("role", { enum: ["owner", "editor", "viewer"] }).notNull().default("editor"),
+  role: text("role", { enum: ["owner", "admin", "editor", "viewer"] }).notNull().default("editor"),
   joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

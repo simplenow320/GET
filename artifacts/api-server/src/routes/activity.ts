@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { db, activityTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 
 const router = Router({ mergeParams: true });
 
-router.get("/", requireAuth, async (req: AuthRequest, res) => {
+router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
   const entries = await db.select().from(activityTable)
     .where(eq(activityTable.projectId, projectId))
