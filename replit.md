@@ -54,6 +54,19 @@ Session-based auth using scrypt password hashing + random session tokens (SHA-25
 3. **CORS allowlist** is explicit (REPLIT_DEV_DOMAIN, APP_BASE_URL, localhost) — never wildcards on shared hosting domains. Disallowed origins receive no `Access-Control-Allow-Origin` (soft reject via `cb(null, false)`), so browsers cannot read responses.
 4. **XSS hardening**: every user-supplied string is run through `xss({ whiteList: {} })` in `lib/sanitize.ts` before persistence; the frontend renders no user-generated HTML and uses no `dangerouslySetInnerHTML`.
 
+### Token storage
+Every share-equivalent credential is stored as a SHA-256 hash, never plaintext:
+- **Sessions** (`sessions.token`) — hashed; raw token only in the `gs` cookie.
+- **Project keys** (`project_keys.key_hash`) — hashed; raw `pk_…` returned once at creation.
+- **Password reset tokens** (`password_reset_tokens.token`) — hashed; raw token only in the email link.
+- **Invite tokens** (`invites.token` — DB column kept for migration safety, JS field is `tokenHash`) — hashed; raw token returned ONCE in the create response and embedded in the invite email. List endpoints always return `token: null`. Re-invite if the link is lost.
+
+### Database integrity
+All FK columns now have explicit `references()` with documented delete behavior:
+- `CASCADE` on project-scoped children: `content_fields`, `domains`, `drafts`, `invites`, `project_keys`, `project_users`, `activity` — deleting a project cleans up everything it owns in one shot.
+- `CASCADE` on `sessions.user_id`, `password_reset_tokens.user_id`, `project_users.user_id` — deleting a user purges their auth + memberships.
+- `RESTRICT` on `projects.owner_id` and `activity.user_id` — projects must always have an owner; audit history must outlive a user.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages

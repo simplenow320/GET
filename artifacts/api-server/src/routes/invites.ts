@@ -16,8 +16,17 @@ const router = Router({ mergeParams: true });
 const StrictCreateInvite = z.object({ email: Email, role: InviteRole });
 const INVITE_TTL_DAYS = 7;
 
-function generateInviteToken(): string {
-  return crypto.randomBytes(24).toString("hex");
+/**
+ * Generate a fresh invite token pair: a high-entropy raw token (sent in the
+ * email and shown to the admin once) and the SHA-256 hash that we store at
+ * rest. The DB never sees the raw value, so a leaked DB does not yield
+ * working invite links — the same hardening pattern we use for sessions and
+ * password-reset tokens.
+ */
+function generateInviteTokenPair(): { raw: string; hash: string } {
+  const raw = crypto.randomBytes(24).toString("hex");
+  const hash = crypto.createHash("sha256").update(raw).digest("hex");
+  return { raw, hash };
 }
 
 function effectiveStatus(i: typeof invitesTable.$inferSelect): string {
@@ -29,7 +38,7 @@ function effectiveStatus(i: typeof invitesTable.$inferSelect): string {
 
 function inviteToResponse(
   i: typeof invitesTable.$inferSelect,
-  opts: { includeToken: boolean },
+  opts: { rawToken?: string },
 ) {
   return {
     id: String(i.id),
@@ -38,19 +47,19 @@ function inviteToResponse(
     role: i.role,
     status: effectiveStatus(i),
     createdAt: i.createdAt.toISOString(),
-    // Tokens are share-equivalent credentials — only admins see them.
-    token: opts.includeToken ? i.token : null,
+    // The raw token is only ever returned in the create response — at rest
+    // we only have the SHA-256 hash, so subsequent GETs always return null.
+    // If an admin needs a fresh acceptance link they should re-invite.
+    token: opts.rawToken ?? null,
     expiresAt: i.expiresAt ? i.expiresAt.toISOString() : null,
   };
 }
 
-// GET / — any member; tokens only revealed to admin/owner
-router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+// GET / — any member; tokens are NEVER returned (we only store hashes at rest).
+router.get("/", requireAuth, requireProjectAccess("viewer"), async (_req: AuthRequest, res) => {
+  const projectId = parseInt(_req.params.projectId);
   const invites = await db.select().from(invitesTable).where(eq(invitesTable.projectId, projectId));
-  const role = req.projectRole;
-  const includeToken = role === "owner" || role === "admin";
-  res.json(invites.map((i) => inviteToResponse(i, { includeToken })));
+  res.json(invites.map((i) => inviteToResponse(i, {})));
 });
 
 // POST / — admin+
@@ -95,12 +104,12 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
     return res.status(409).json({ error: "A pending invite already exists for this email" });
   }
 
-  const token = generateInviteToken();
+  const { raw: rawToken, hash: tokenHash } = generateInviteTokenPair();
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
   const [invite] = await db
     .insert(invitesTable)
-    .values({ projectId, email, role: parsed.data.role, token, expiresAt })
+    .values({ projectId, email, role: parsed.data.role, tokenHash, expiresAt })
     .returning();
 
   await logAudit({
@@ -112,14 +121,16 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
 
   // Fire the invite email asynchronously — never block the response on
   // outbound mail. Look up the project name for the email subject; fall back
-  // to a generic phrasing if the lookup fails.
+  // to a generic phrasing if the lookup fails. The email link uses the raw
+  // token so that hashing the URL token at /accept-invite resolves to this
+  // invite's stored tokenHash.
   (async () => {
     try {
       const projects = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
       const projectName = projects[0]?.name ?? "a project";
       // Accept URL is built from the trusted, server-configured app base URL —
       // never from request headers (those can be forged).
-      const acceptUrl = buildAppUrl(`/accept-invite/${token}`);
+      const acceptUrl = buildAppUrl(`/accept-invite/${rawToken}`);
       await sendInviteEmail({
         to: email,
         inviterName: req.userName!,
@@ -133,8 +144,9 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
     }
   })();
 
-  // Admin-only POST always returns the token in the create response.
-  res.status(201).json(inviteToResponse(invite, { includeToken: true }));
+  // Admin-only POST returns the raw token ONCE — this is the only chance to
+  // surface it to the UI for copy-link flows.
+  res.status(201).json(inviteToResponse(invite, { rawToken }));
 });
 
 // DELETE /:inviteId — admin+; soft-revoke (token becomes unusable but row stays

@@ -1,10 +1,13 @@
 import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { projectsTable } from "./projects";
 
 export const contentFieldsTable = pgTable("content_fields", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").notNull(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
   type: text("type", { enum: ["text", "richtext", "image", "url", "number", "boolean"] }).notNull().default("text"),
   selector: text("selector"),

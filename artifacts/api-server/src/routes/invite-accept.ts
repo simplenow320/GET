@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { db, invitesTable, projectUsersTable, projectsTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -8,6 +9,15 @@ const router = Router();
 
 const TOKEN_RE = /^[a-f0-9]{32,128}$/i;
 
+/**
+ * Hash a raw invite token to match the format we store in `invites.token`
+ * (SHA-256 hex). The raw token only ever exists in the email link / the
+ * one-time create response; everything DB-side is the hash.
+ */
+function hashToken(raw: string): string {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
 function isExpired(invite: { expiresAt: Date | null; status: string }): boolean {
   if (invite.status !== "pending") return false;
   if (!invite.expiresAt) return false;
@@ -16,12 +26,13 @@ function isExpired(invite: { expiresAt: Date | null; status: string }): boolean 
 
 router.get("/:token", async (req, res) => {
   // Tokens are hex; normalize case so a copied link with mixed case still works.
-  const token = String(req.params.token || "").toLowerCase();
-  if (!TOKEN_RE.test(token)) {
+  const raw = String(req.params.token || "").toLowerCase();
+  if (!TOKEN_RE.test(raw)) {
     return res.status(404).json({ error: "Invite not found" });
   }
 
-  const rows = await db.select().from(invitesTable).where(eq(invitesTable.token, token));
+  const tokenHash = hashToken(raw);
+  const rows = await db.select().from(invitesTable).where(eq(invitesTable.tokenHash, tokenHash));
   const invite = rows[0];
   if (!invite) return res.status(404).json({ error: "Invite not found" });
 
@@ -44,12 +55,13 @@ router.get("/:token", async (req, res) => {
 });
 
 router.post("/:token/accept", requireAuth, async (req: AuthRequest, res) => {
-  const token = String(req.params.token || "").toLowerCase();
-  if (!TOKEN_RE.test(token)) return res.status(404).json({ error: "Invite not found" });
+  const raw = String(req.params.token || "").toLowerCase();
+  if (!TOKEN_RE.test(raw)) return res.status(404).json({ error: "Invite not found" });
+  const tokenHash = hashToken(raw);
 
   // First read (outside txn) so we can return the right user-facing error before
   // attempting the consume. The actual consume below is atomic and re-validates.
-  const preRows = await db.select().from(invitesTable).where(eq(invitesTable.token, token));
+  const preRows = await db.select().from(invitesTable).where(eq(invitesTable.tokenHash, tokenHash));
   const pre = preRows[0];
   if (!pre) return res.status(404).json({ error: "Invite not found" });
 

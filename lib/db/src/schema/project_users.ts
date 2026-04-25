@@ -1,13 +1,19 @@
 import { pgTable, text, serial, timestamp, integer, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { projectsTable } from "./projects";
+import { usersTable } from "./users";
 
 export const projectUsersTable = pgTable(
   "project_users",
   {
     id: serial("id").primaryKey(),
-    projectId: integer("project_id").notNull(),
-    userId: integer("user_id").notNull(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projectsTable.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     role: text("role", { enum: ["owner", "admin", "editor", "viewer"] }).notNull().default("editor"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -1,6 +1,7 @@
 import { pgTable, text, serial, timestamp, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { usersTable } from "./users";
 
 /**
  * Single-use password reset tokens. We store the SHA-256 hash of the raw
@@ -14,7 +15,9 @@ export const passwordResetTokensTable = pgTable(
   "password_reset_tokens",
   {
     id: serial("id").primaryKey(),
-    userId: integer("user_id").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     token: text("token").notNull().unique(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     usedAt: timestamp("used_at", { withTimezone: true }),

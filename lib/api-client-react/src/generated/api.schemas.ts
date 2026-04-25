@@ -170,7 +170,7 @@ export interface Invite {
   role: InviteRole;
   status: InviteStatus;
   createdAt: string;
-  /** Single-use invite token used to build the acceptance link */
+  /** Raw invite token. Returned ONLY in the create response (POST). All other responses (GET list) return null because only the SHA-256 hash is stored at rest. Re-invite if the link is lost. */
   token?: string | null;
   expiresAt?: string | null;
 }
