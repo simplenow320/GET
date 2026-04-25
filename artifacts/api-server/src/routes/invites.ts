@@ -7,6 +7,7 @@ import { CreateInviteBody } from "@workspace/api-zod";
 import { Email, InviteRole, parseIdParam } from "../lib/validation";
 import { logAudit } from "../lib/audit";
 import { sendInviteEmail } from "../lib/email";
+import { buildAppUrl } from "../lib/origin";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 
@@ -116,9 +117,9 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
     try {
       const projects = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
       const projectName = projects[0]?.name ?? "a project";
-      const origin = (req.headers.origin as string | undefined) ??
-        `${req.protocol}://${req.get("host")}`;
-      const acceptUrl = `${origin}/accept-invite/${token}`;
+      // Accept URL is built from the trusted, server-configured app base URL —
+      // never from request headers (those can be forged).
+      const acceptUrl = buildAppUrl(`/accept-invite/${token}`);
       await sendInviteEmail({
         to: email,
         inviterName: req.userName!,

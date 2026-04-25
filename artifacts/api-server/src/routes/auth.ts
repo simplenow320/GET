@@ -14,6 +14,7 @@ import { generateSessionToken, hashSessionToken } from "../lib/tokens";
 import { Email, Password, PersonName } from "../lib/validation";
 import { logger } from "../lib/logger";
 import { sendPasswordResetEmail } from "../lib/email";
+import { buildAppUrl } from "../lib/origin";
 import { z } from "zod";
 
 const router = Router();
@@ -210,11 +211,10 @@ router.post("/forgot-password", authLimiter, async (req, res) => {
         expiresAt: new Date(Date.now() + RESET_TTL_MS),
       });
 
-      // Build the absolute reset URL using the request origin so it works
-      // across dev / preview / prod without env config.
-      const origin = (req.headers.origin as string | undefined) ??
-        `${req.protocol}://${req.get("host")}`;
-      const resetUrl = `${origin}/reset-password/${rawToken}`;
+      // Reset URL is built from the trusted, server-configured app base URL —
+      // NEVER from request headers, which an attacker can forge to make us
+      // email out attacker-controlled links carrying real tokens.
+      const resetUrl = buildAppUrl(`/reset-password/${rawToken}`);
 
       // Fire-and-forget — never block the response on email send. If SendGrid
       // is misconfigured we still want a generic 200.
@@ -245,38 +245,48 @@ router.post("/reset-password", authLimiter, async (req, res) => {
   const { token, password } = parsed.data;
 
   const tokenHash = hashSessionToken(token);
-  const rows = await db
-    .select()
-    .from(passwordResetTokensTable)
-    .where(
-      and(
-        eq(passwordResetTokensTable.token, tokenHash),
-        isNull(passwordResetTokensTable.usedAt),
-        gt(passwordResetTokensTable.expiresAt, new Date()),
-      ),
-    );
-  const reset = rows[0];
-  if (!reset) {
+  // Hash the new password OUTSIDE the transaction — scrypt is intentionally
+  // slow and we don't want to hold a row-lock during it.
+  const newHash = await hashPassword(password);
+
+  // Atomic single-use consume: the UPDATE … WHERE used_at IS NULL is the
+  // compare-and-set. Only one concurrent request can flip the row from unused
+  // → used, and only that request gets the userId back. Everything else
+  // (password change + session revocation) happens inside the same txn so a
+  // mid-flight failure can't leave the password changed but sessions intact
+  // (or vice versa).
+  const consumedUserId = await db.transaction(async (tx) => {
+    const consumed = await tx
+      .update(passwordResetTokensTable)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(passwordResetTokensTable.token, tokenHash),
+          isNull(passwordResetTokensTable.usedAt),
+          gt(passwordResetTokensTable.expiresAt, new Date()),
+        ),
+      )
+      .returning({ userId: passwordResetTokensTable.userId });
+
+    const userId = consumed[0]?.userId;
+    if (!userId) return null;
+
+    await tx
+      .update(usersTable)
+      .set({ passwordHash: newHash })
+      .where(eq(usersTable.id, userId));
+
+    // Force every existing session for this user to log out — anyone with a
+    // hijacked session loses access the moment the password changes.
+    await tx.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+    return userId;
+  });
+
+  if (!consumedUserId) {
     return res.status(400).json({ error: "This link has expired or has already been used. Request a new one." });
   }
 
-  const newHash = await hashPassword(password);
-  await db
-    .update(usersTable)
-    .set({ passwordHash: newHash })
-    .where(eq(usersTable.id, reset.userId));
-
-  // Single-use token: mark used immediately.
-  await db
-    .update(passwordResetTokensTable)
-    .set({ usedAt: new Date() })
-    .where(eq(passwordResetTokensTable.id, reset.id));
-
-  // Force every existing session for this user to log out — anyone with a
-  // hijacked session loses access the moment the password changes.
-  await db.delete(sessionsTable).where(eq(sessionsTable.userId, reset.userId));
-
-  logger.info({ audit: true, userId: reset.userId, action: "password_reset_completed" }, "audit");
+  logger.info({ audit: true, userId: consumedUserId, action: "password_reset_completed" }, "audit");
   res.json({ ok: true });
 });
 

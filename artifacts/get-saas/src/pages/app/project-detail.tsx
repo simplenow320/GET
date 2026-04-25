@@ -373,7 +373,8 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <button
+                {canManage ? (
+                  <button
                   onClick={() =>
                     updateMutation.mutate(
                       { projectId, fieldId: field.id, data: { isLocked: !field.isLocked } },
@@ -402,6 +403,30 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                   )}
                   {field.isLocked ? "Locked" : "Open"}
                 </button>
+                ) : (
+                  // Read-only badge for viewers/editors so they can still see
+                  // whether a field is locked, but can't toggle it.
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: type.xs,
+                      fontWeight: 600,
+                      padding: "6px 11px",
+                      borderRadius: 8,
+                      background: field.isLocked ? BRAND.ink : tone[100],
+                      color: field.isLocked ? BRAND.paper : tone[600],
+                    }}
+                  >
+                    {field.isLocked ? (
+                      <Lock style={{ width: 12, height: 12 }} />
+                    ) : (
+                      <Unlock style={{ width: 12, height: 12 }} />
+                    )}
+                    {field.isLocked ? "Locked" : "Open"}
+                  </span>
+                )}
                 {canManage && (
                   <IconDeleteButton
                     onClick={() =>

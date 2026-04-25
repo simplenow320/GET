@@ -47,17 +47,31 @@ const publicCors = cors({
 });
 app.use("/api/public", publicCors);
 
-// Restrictive CORS for the admin dashboard — Replit/repl domains and
-// localhost only. We explicitly skip /api/public/* so the permissive CORS
-// above is not overwritten by this restrictive one for cross-origin
-// customer requests.
+// Restrictive CORS for the admin dashboard. Because we now use cookie sessions
+// (`credentials: true`), the allowlist must be EXPLICIT — never a wildcard
+// over shared hosting domains. A wildcard like `*.replit.dev` would let any
+// other Replit project on the same shared domain make credentialed requests
+// against this API on behalf of a logged-in user.
+//
+// Allowed:
+//   - Same-origin requests (no Origin header sent by the browser)
+//   - The current Replit dev domain ($REPLIT_DEV_DOMAIN, exact match)
+//   - APP_BASE_URL env var (production frontend, exact match)
+//   - localhost / 127.0.0.1 on any port (local dev)
+const explicitOrigins = new Set<string>();
+const replitDomain = process.env.REPLIT_DEV_DOMAIN?.trim();
+if (replitDomain) explicitOrigins.add(`https://${replitDomain}`);
+const appBase = process.env.APP_BASE_URL?.trim();
+if (appBase) explicitOrigins.add(appBase.replace(/\/+$/, ""));
+
 const restrictiveCors = cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    const allowed =
-      /^https?:\/\/.*\.(replit\.dev|repl\.co|replit\.app)(:\d+)?$/.test(origin) ||
-      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    cb(null, allowed ? true : new Error("Not allowed by CORS"));
+    if (!origin) return cb(null, true); // same-origin / curl / server-to-server
+    if (explicitOrigins.has(origin)) return cb(null, true);
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return cb(null, true);
+    }
+    cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
 });
