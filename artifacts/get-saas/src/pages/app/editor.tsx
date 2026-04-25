@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
 import {
   useListContentFields,
@@ -8,11 +8,189 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, FileEdit, Lock, Check, RefreshCw } from "lucide-react";
+import {
+  Loader2, Save, FileEdit, Lock, Check, RefreshCw, Undo2, AlertTriangle, X,
+} from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
   EmptyState,
 } from "@/lib/ui";
+
+const SKIP_WARN_KEY = "get_skip_save_warning";
+
+// ---------------------------------------------------------------------------
+// Save-confirmation dialog
+// ---------------------------------------------------------------------------
+function SaveWarningDialog({
+  fieldLabel,
+  onConfirm,
+  onCancel,
+}: {
+  fieldLabel: string;
+  onConfirm: (skipNext: boolean) => void;
+  onCancel: () => void;
+}) {
+  const [skipNext, setSkipNext] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Close on overlay click
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === overlayRef.current) onCancel();
+  };
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 200,
+        background: "rgba(26,26,46,0.38)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          background: BRAND.paper,
+          borderRadius: 18,
+          padding: 28,
+          maxWidth: 400,
+          width: "100%",
+          boxShadow: "0 24px 60px rgba(26,26,46,0.18)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 11,
+                background: "rgba(255,215,71,0.18)",
+                border: "1px solid rgba(255,215,71,0.55)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <AlertTriangle style={{ width: 17, height: 17, color: "#b45309" }} />
+            </div>
+            <div>
+              <p style={{ fontSize: type.md, fontWeight: 700, color: BRAND.ink, lineHeight: 1.3 }}>
+                Publish this change?
+              </p>
+              <p style={{ fontSize: type.sm, color: tone[500], marginTop: 3, lineHeight: 1.4 }}>
+                {fieldLabel}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onCancel}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: tone[400],
+              padding: 2,
+              borderRadius: 6,
+              flexShrink: 0,
+            }}
+          >
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65 }}>
+          Saving this will make it visible to everyone visiting the site — usually within a few minutes. Make sure you're happy with it before continuing.
+        </p>
+
+        {/* Don't show again */}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <div
+            onClick={() => setSkipNext((v) => !v)}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 5,
+              border: `2px solid ${skipNext ? BRAND.ink : line.base}`,
+              background: skipNext ? BRAND.ink : "transparent",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              flexShrink: 0,
+              transition: `background 0.14s ${ease}, border-color 0.14s ${ease}`,
+            }}
+          >
+            {skipNext && <Check style={{ width: 11, height: 11, color: BRAND.paper }} />}
+          </div>
+          <span style={{ fontSize: type.sm, color: tone[600] }}>
+            Don't ask me again
+          </span>
+        </label>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: "11px 16px",
+              borderRadius: 10,
+              border: `1px solid ${line.base}`,
+              background: "transparent",
+              cursor: "pointer",
+              fontSize: type.sm,
+              fontWeight: 600,
+              color: BRAND.ink,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(skipNext)}
+            style={{
+              flex: 1,
+              padding: "11px 16px",
+              borderRadius: 10,
+              border: "none",
+              background: BRAND.ink,
+              cursor: "pointer",
+              fontSize: type.sm,
+              fontWeight: 600,
+              color: BRAND.paper,
+            }}
+          >
+            Yes, save it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main editor
+// ---------------------------------------------------------------------------
 
 // Brand rule: this is inside the authenticated product UI — do NOT render
 // any get branding (logo, mascot, wordmark) on this surface.
@@ -27,6 +205,12 @@ export default function ClientEditor() {
   const [savingField, setSavingField] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [justRefreshed, setJustRefreshed] = useState(false);
+
+  // Warning dialog state
+  const [pendingFieldId, setPendingFieldId] = useState<string | null>(null);
+  const [skipWarning, setSkipWarning] = useState(
+    () => localStorage.getItem(SKIP_WARN_KEY) === "true",
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -54,7 +238,33 @@ export default function ClientEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields]);
 
-  const handleSave = (fieldId: string) => {
+  // Attempt save — show dialog if warning not suppressed
+  const handleSaveClick = (fieldId: string) => {
+    if (skipWarning) {
+      executeSave(fieldId);
+    } else {
+      setPendingFieldId(fieldId);
+    }
+  };
+
+  // Dialog confirmed
+  const handleDialogConfirm = (skipNext: boolean) => {
+    if (skipNext) {
+      localStorage.setItem(SKIP_WARN_KEY, "true");
+      setSkipWarning(true);
+    }
+    const fieldId = pendingFieldId!;
+    setPendingFieldId(null);
+    executeSave(fieldId);
+  };
+
+  // Dialog cancelled
+  const handleDialogCancel = () => {
+    setPendingFieldId(null);
+  };
+
+  // Actually call the API
+  const executeSave = (fieldId: string) => {
     setSavingField(fieldId);
     updateMutation.mutate(
       {
@@ -64,8 +274,6 @@ export default function ClientEditor() {
       },
       {
         onSuccess: (data: any) => {
-          // If the server auto-published (owner/admin), draftValue comes back
-          // null. If it's pending review (client editor), draftValue is set.
           const isPending = data?.draftValue != null;
           toast({
             title: isPending ? "Saved — pending review" : "Saved",
@@ -80,8 +288,18 @@ export default function ClientEditor() {
           toast({ variant: "destructive", title: "Save failed", description: err.message });
           setSavingField(null);
         },
-      }
+      },
     );
+  };
+
+  // Discard local edits for a field
+  const handleUndo = (fieldId: string) => {
+    const field = fields?.find((f) => f.id === fieldId);
+    if (!field) return;
+    setLocalValues((prev) => ({
+      ...prev,
+      [fieldId]: field.draftValue || field.value || "",
+    }));
   };
 
   const handleValueChange = (fieldId: string, val: string) => {
@@ -140,8 +358,20 @@ export default function ClientEditor() {
     );
   }
 
+  // Find the label for whichever field is waiting on the dialog
+  const pendingField = fields.find((f) => f.id === pendingFieldId);
+
   return (
     <div style={{ minHeight: "100dvh", background: BRAND.paper, color: BRAND.ink }}>
+      {/* Confirmation dialog */}
+      {pendingFieldId && pendingField && (
+        <SaveWarningDialog
+          fieldLabel={pendingField.label}
+          onConfirm={handleDialogConfirm}
+          onCancel={handleDialogCancel}
+        />
+      )}
+
       {/* Sticky top bar */}
       <div
         style={{
@@ -240,14 +470,14 @@ export default function ClientEditor() {
             Your content
           </h1>
           <p style={{ fontSize: type.base, color: tone[500], lineHeight: 1.55 }}>
-            Update the fields below and hit Save. Changes go live immediately.
+            Update the fields below and hit Save. Changes go live within minutes.
           </p>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
           {fields.map((field) => {
-            const hasChanges =
-              localValues[field.id] !== (field.draftValue || field.value || "");
+            const serverValue = field.draftValue || field.value || "";
+            const hasChanges = localValues[field.id] !== serverValue;
             const isSaving = savingField === field.id;
             const hasDraftPending =
               field.draftValue && field.draftValue !== field.value && !hasChanges;
@@ -299,33 +529,61 @@ export default function ClientEditor() {
                   </div>
 
                   {!field.isLocked && (
-                    <button
-                      onClick={() => handleSave(field.id)}
-                      disabled={!hasChanges || isSaving}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        fontSize: type.xs,
-                        fontWeight: 600,
-                        padding: "6px 12px",
-                        borderRadius: 8,
-                        border: "none",
-                        cursor: hasChanges ? "pointer" : "default",
-                        background: hasChanges ? BRAND.ink : tone[100],
-                        color: hasChanges ? "#fff" : tone[400],
-                        transition: `background 0.18s ${ease}, color 0.18s ${ease}`,
-                      }}
-                    >
-                      {isSaving ? (
-                        <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
-                      ) : hasChanges ? (
-                        <Save style={{ width: 12, height: 12 }} />
-                      ) : (
-                        <Check style={{ width: 12, height: 12 }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {/* Undo button — only visible when there are unsaved changes */}
+                      {hasChanges && (
+                        <button
+                          onClick={() => handleUndo(field.id)}
+                          title="Undo changes"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            fontSize: type.xs,
+                            fontWeight: 600,
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            border: `1px solid ${line.base}`,
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: tone[500],
+                            transition: `color 0.14s ${ease}, border-color 0.14s ${ease}`,
+                          }}
+                        >
+                          <Undo2 style={{ width: 12, height: 12 }} />
+                          Undo
+                        </button>
                       )}
-                      {hasChanges ? "Save" : "Saved"}
-                    </button>
+
+                      {/* Save button */}
+                      <button
+                        onClick={() => handleSaveClick(field.id)}
+                        disabled={!hasChanges || isSaving}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: type.xs,
+                          fontWeight: 600,
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          border: "none",
+                          cursor: hasChanges ? "pointer" : "default",
+                          background: hasChanges ? BRAND.ink : tone[100],
+                          color: hasChanges ? "#fff" : tone[400],
+                          transition: `background 0.18s ${ease}, color 0.18s ${ease}`,
+                        }}
+                      >
+                        {isSaving ? (
+                          <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
+                        ) : hasChanges ? (
+                          <Save style={{ width: 12, height: 12 }} />
+                        ) : (
+                          <Check style={{ width: 12, height: 12 }} />
+                        )}
+                        {hasChanges ? "Save" : "Saved"}
+                      </button>
+                    </div>
                   )}
                 </div>
 
