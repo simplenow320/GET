@@ -1,4 +1,5 @@
 import React from "react";
+import mascotPath from "@assets/B56BFD2D-C1F8-4FD4-92D3-52BF5E977238_1777117580694.png";
 
 export const BRAND = {
   ink: "#1a1a2e",
@@ -460,6 +461,34 @@ export function Wordmark({ size = 18, style }: { size?: number; style?: React.CS
     >
       get<span style={{ color: BRAND.yellow }}>.</span>
     </span>
+  );
+}
+
+export function Mascot({
+  size = 56,
+  style,
+  alt = "get mascot",
+}: {
+  size?: number;
+  style?: React.CSSProperties;
+  alt?: string;
+}) {
+  return (
+    <img
+      src={mascotPath}
+      alt={alt}
+      width={size}
+      height={size}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        display: "block",
+        userSelect: "none",
+        ...style,
+      }}
+      draggable={false}
+    />
   );
 }
 

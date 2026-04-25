@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, Wordmark } from "@/lib/ui";
+import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, Wordmark, Mascot } from "@/lib/ui";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -63,9 +63,10 @@ export default function Signup() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 360 }}>
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
           <Link href="/">
-            <span style={{ cursor: "pointer", display: "inline-flex" }}>
+            <span style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <Mascot size={40} />
               <Wordmark size={22} />
             </span>
           </Link>

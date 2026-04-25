@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
-  PrimaryButton, SecondaryButton, GhostButton, Card, Field, Wordmark,
+  PrimaryButton, SecondaryButton, GhostButton, Card, Field, Wordmark, Mascot,
   inputStyle, labelStyle,
 } from "@/lib/ui";
 
@@ -459,7 +459,10 @@ export default function SetupWizard() {
           >
             <ChevronLeft style={{ width: 16, height: 16 }} />
           </button>
-          <Wordmark size={18} />
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Mascot size={28} />
+            <Wordmark size={18} />
+          </span>
         </div>
 
         <StepDots step={step} />
