@@ -157,6 +157,192 @@ function KeyReveal({ keyValue }: { keyValue: string }) {
   );
 }
 
+// Two clearly-labeled copy boxes side-by-side so vibe coders know
+// EXACTLY which value goes in which Replit Secrets field. The most
+// common mistake here is putting the key string in the "Key" field
+// instead of the "Value" field.
+function KeyValuePair({ secretName, secretValue }: { secretName: string; secretValue: string }) {
+  const [copiedName, setCopiedName] = useState(false);
+  const [copiedValue, setCopiedValue] = useState(false);
+  const copy = async (text: string, which: "name" | "value") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (which === "name") {
+        setCopiedName(true);
+        setTimeout(() => setCopiedName(false), 1800);
+      } else {
+        setCopiedValue(true);
+        setTimeout(() => setCopiedValue(false), 1800);
+      }
+    } catch {}
+  };
+  const cellLabel: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: tone[500],
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
+    marginBottom: 6,
+  };
+  const cellWrap: React.CSSProperties = {
+    background: tone[50],
+    border: `1px solid ${line.base}`,
+    borderRadius: r.md,
+    padding: "10px 12px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 0,
+  };
+  const codeStyle: React.CSSProperties = {
+    flex: 1,
+    fontSize: type.sm,
+    fontFamily: "ui-monospace, Menlo, monospace",
+    color: BRAND.ink,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+  const copyBtn: React.CSSProperties = {
+    flexShrink: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    border: "none",
+    background: tone[100],
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: BRAND.ink,
+  };
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 10,
+      }}
+    >
+      <div>
+        <p style={cellLabel}>Key — left field</p>
+        <div style={cellWrap}>
+          <code style={codeStyle}>{secretName}</code>
+          <button
+            type="button"
+            onClick={() => copy(secretName, "name")}
+            aria-label="Copy key"
+            style={copyBtn}
+          >
+            {copiedName ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
+          </button>
+        </div>
+      </div>
+      <div>
+        <p style={cellLabel}>Value — right field</p>
+        <div style={cellWrap}>
+          <code style={codeStyle}>{secretValue}</code>
+          <button
+            type="button"
+            onClick={() => copy(secretValue, "value")}
+            aria-label="Copy value"
+            style={copyBtn}
+          >
+            {copiedValue ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Replit-specific 3-step recipe. Used for `appType === "replit"`. Aim:
+// short, punchy, copy-paste-able instructions a "vibe coder" can follow
+// without needing to know what an env var is.
+function ReplitConnectGuide({ keyValue, apiOrigin }: { keyValue: string; apiOrigin: string }) {
+  const fetchSnippet =
+    `// In your main server file (e.g. index.js, server.js, app.js)
+const res = await fetch(
+  "${apiOrigin}/api/public/content",
+  { headers: { Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\` } }
+);
+const { content } = await res.json();
+
+// Use a field by the label you gave it:
+// content["Hero Headline"]?.value`;
+
+  const stepNumStyle: React.CSSProperties = {
+    width: 24,
+    height: 24,
+    borderRadius: "50%",
+    background: BRAND.ink,
+    color: BRAND.paper,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 700,
+    flexShrink: 0,
+  };
+  const stepHeadStyle: React.CSSProperties = {
+    fontSize: type.base,
+    fontWeight: 600,
+    color: BRAND.ink,
+    lineHeight: 1.4,
+  };
+  const stepBodyStyle: React.CSSProperties = {
+    fontSize: type.sm,
+    color: tone[600],
+    lineHeight: 1.6,
+    margin: "8px 0 12px",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {/* Step 1 — Add to Replit Secrets */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span style={stepNumStyle}>1</span>
+          <span style={stepHeadStyle}>Add the key to Replit Secrets</span>
+        </div>
+        <p style={stepBodyStyle}>
+          In your Replit project, click the <strong>🔒 Secrets</strong> icon in the left sidebar, then click <strong>+ New Secret</strong>.
+        </p>
+        <KeyValuePair secretName="GET_PROJECT_KEY" secretValue={keyValue} />
+        <p style={{ fontSize: type.xs, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+          The name on the left must be spelled exactly <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>GET_PROJECT_KEY</code> — the snippet below looks for that name.
+        </p>
+      </div>
+
+      {/* Step 2 — Paste the snippet */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span style={stepNumStyle}>2</span>
+          <span style={stepHeadStyle}>Paste this into your code</span>
+        </div>
+        <p style={stepBodyStyle}>
+          Open the file your app uses to handle requests — usually{" "}
+          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>index.js</code>,{" "}
+          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>server.js</code>, or{" "}
+          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>app.js</code>. Paste this where you want to load editable content:
+        </p>
+        <CodeBlock code={fetchSnippet} />
+      </div>
+
+      {/* Step 3 — Restart */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span style={stepNumStyle}>3</span>
+          <span style={stepHeadStyle}>Restart your Repl</span>
+        </div>
+        <p style={stepBodyStyle}>
+          Click the green <strong>▶ Run</strong> button (or <strong>Stop</strong> then <strong>Run</strong> if it's already running). Replit only loads new secrets when the app restarts.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function StepDots({ step }: { step: number }) {
   return (
     <div
@@ -755,43 +941,52 @@ export default function SetupWizard() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
                   <KeyReveal keyValue={state.generatedKey} />
 
-                  <div>
-                    <p
-                      style={{
-                        fontSize: type.xs,
-                        fontWeight: 600,
-                        color: tone[500],
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        marginBottom: 10,
-                      }}
-                    >
-                      1. Save it as an environment variable
-                    </p>
-                    <CodeBlock code={getEnvCode(state.generatedKey)} />
-                    <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
-                      {getEnvHint(state.appType)}
-                    </p>
-                  </div>
+                  {state.appType === "replit" ? (
+                    <ReplitConnectGuide
+                      keyValue={state.generatedKey}
+                      apiOrigin={apiOrigin}
+                    />
+                  ) : (
+                    <>
+                      <div>
+                        <p
+                          style={{
+                            fontSize: type.xs,
+                            fontWeight: 600,
+                            color: tone[500],
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            marginBottom: 10,
+                          }}
+                        >
+                          1. Save it as an environment variable
+                        </p>
+                        <CodeBlock code={getEnvCode(state.generatedKey)} />
+                        <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+                          {getEnvHint(state.appType)}
+                        </p>
+                      </div>
 
-                  <div>
-                    <p
-                      style={{
-                        fontSize: type.xs,
-                        fontWeight: 600,
-                        color: tone[500],
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        marginBottom: 10,
-                      }}
-                    >
-                      2. Read your content from your code
-                    </p>
-                    <CodeBlock code={getReadCode(apiOrigin)} />
-                    <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
-                      Drop this anywhere your app needs editable content. Works from any framework, any host — no library to install.
-                    </p>
-                  </div>
+                      <div>
+                        <p
+                          style={{
+                            fontSize: type.xs,
+                            fontWeight: 600,
+                            color: tone[500],
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            marginBottom: 10,
+                          }}
+                        >
+                          2. Read your content from your code
+                        </p>
+                        <CodeBlock code={getReadCode(apiOrigin)} />
+                        <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+                          Drop this anywhere your app needs editable content. Works from any framework, any host — no library to install.
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <Card padded style={{ padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
