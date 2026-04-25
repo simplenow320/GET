@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useLocation, useParams, Link } from "wouter";
 import { format } from "date-fns";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetProject,
   useUpdateProject,
@@ -25,19 +25,22 @@ import {
 } from "@workspace/api-client-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Globe, Users, Database, FileEdit, Settings, Trash2,
   Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2,
-  KeyRound, Eye, EyeOff, Copy, Check, RefreshCw, ShieldCheck, X
+  KeyRound, Copy, Check, ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  BRAND, tone, line, type, ease, r,
+  cardStyle, inputStyle, labelStyle,
+  PrimaryButton, SecondaryButton, GhostButton, DangerButton,
+  Card, SectionTitle, EmptyState, Pill, Field,
+} from "@/lib/ui";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -48,7 +51,11 @@ function getToken() {
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const r = await fetch(`${BASE}${path}`, {
     ...opts,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}`, ...(opts.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+      ...(opts.headers ?? {}),
+    },
   });
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
@@ -58,46 +65,27 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
   return r.json();
 }
 
-const S = {
-  card: {
-    background: "#fff",
-    border: "1px solid rgba(0,0,0,0.05)",
-    borderRadius: 18,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
-  } as React.CSSProperties,
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    marginBottom: 16,
-    color: "#1a1a2e",
-  } as React.CSSProperties,
-  row: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "16px 20px",
-    borderTop: "1px solid rgba(0,0,0,0.04)",
-  } as React.CSSProperties,
-  emptyState: {
-    padding: "52px 24px",
-    textAlign: "center",
-    color: "rgba(26,26,46,0.45)",
-    fontSize: 13.5,
-  } as React.CSSProperties,
+const rowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "16px 20px",
+  borderTop: `1px solid ${line.faint}`,
+  gap: 12,
 };
 
 export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { data: project, isLoading } = useGetProject(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) }
+    query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) },
   });
 
   if (isLoading) {
     return (
       <AppLayout>
-        <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px" }}>
-          <Skeleton style={{ height: 28, width: "35%", borderRadius: 8, background: "rgba(0,0,0,0.05)", marginBottom: 32 }} />
-          <Skeleton style={{ height: 400, borderRadius: 18, background: "rgba(0,0,0,0.04)" }} />
+        <div style={{ maxWidth: 880, margin: "0 auto", padding: "44px clamp(20px, 4vw, 40px) 80px" }}>
+          <Skeleton style={{ height: 32, width: "35%", borderRadius: 8, background: tone[100], marginBottom: 32 }} />
+          <Skeleton style={{ height: 400, borderRadius: 18, background: tone[100] }} />
         </div>
       </AppLayout>
     );
@@ -106,79 +94,117 @@ export default function ProjectDetail() {
   if (!project) {
     return (
       <AppLayout>
-        <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px", textAlign: "center" }}>
-          <p style={{ fontSize: 16, fontWeight: 500, marginBottom: 20 }}>Project not found</p>
+        <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px clamp(20px, 4vw, 40px)", textAlign: "center" }}>
+          <p style={{ fontSize: type.md, fontWeight: 600, marginBottom: 18 }}>Project not found</p>
           <Link href="/app/projects">
-            <Button style={{ background: "#1a1a2e", color: "#fff", borderRadius: 10, height: 40, padding: "0 18px", border: "none", cursor: "pointer", fontSize: 13.5 }}>
-              Back to projects
-            </Button>
+            <PrimaryButton>Back to projects</PrimaryButton>
           </Link>
         </div>
       </AppLayout>
     );
   }
 
-  const statusBg: Record<string, string> = { active: "#ecfdf5", draft: "#fffbeb", archived: "#f4f4f5" };
-  const statusColor: Record<string, string> = { active: "#059669", draft: "#b45309", archived: "#71717a" };
+  const tabs = [
+    { value: "content",  icon: Database,    label: "Content"  },
+    { value: "clients",  icon: Users,       label: "Clients"  },
+    { value: "domains",  icon: Globe,       label: "Domains"  },
+    { value: "drafts",   icon: FileEdit,    label: "Drafts"   },
+    { value: "keys",     icon: KeyRound,    label: "API keys" },
+    { value: "activity", icon: ActivityIcon,label: "Activity" },
+    { value: "settings", icon: Settings,    label: "Settings" },
+  ];
 
   return (
     <AppLayout>
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 32px" }}>
-
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "44px clamp(20px, 4vw, 40px) 80px" }}>
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 32 }}>
           <Link href="/app/projects">
-            <button style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(26,26,46,0.5)", flexShrink: 0, marginTop: 2 }}>
+            <button
+              aria-label="Back to projects"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                border: `1px solid ${line.base}`,
+                background: "transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: tone[600],
+                flexShrink: 0,
+                marginTop: 2,
+                transition: `background 0.15s ${ease}`,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = tone[50];
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "transparent";
+              }}
+            >
               <ArrowLeft style={{ width: 15, height: 15 }} />
             </button>
           </Link>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em" }}>{project.name}</h1>
-              <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: statusBg[project.status] || "#f4f4f5", color: statusColor[project.status] || "#71717a", textTransform: "capitalize" }}>
-                {project.status}
-              </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+              <h1
+                style={{
+                  fontSize: type.display,
+                  fontWeight: 600,
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.15,
+                  margin: 0,
+                }}
+              >
+                {project.name}
+              </h1>
+              <Pill variant={(project.status as any) || "archived"}>{project.status}</Pill>
             </div>
-            <p style={{ fontSize: 13.5, color: "rgba(26,26,46,0.45)" }}>{project.description || "No description"}</p>
+            <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55 }}>
+              {project.description || "No description"}
+            </p>
           </div>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="content">
-          <TabsList
-            style={{
-              background: "rgba(0,0,0,0.04)",
-              padding: 4,
-              borderRadius: 12,
-              height: "auto",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 2,
-              width: "fit-content",
-            }}
-          >
-            {[
-              { value: "content", icon: Database, label: "Content" },
-              { value: "clients", icon: Users, label: "Clients" },
-              { value: "domains", icon: Globe, label: "Domains" },
-              { value: "drafts", icon: FileEdit, label: "Drafts" },
-              { value: "keys", icon: KeyRound, label: "API Keys" },
-              { value: "activity", icon: ActivityIcon, label: "Activity" },
-              { value: "settings", icon: Settings, label: "Settings" },
-            ].map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                style={{ borderRadius: 9, padding: "7px 14px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
-                className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1a2e] text-[rgba(26,26,46,0.5)]"
-              >
-                <tab.icon style={{ width: 13, height: 13 }} />
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="no-scrollbar" style={{ overflowX: "auto", marginRight: -16, paddingRight: 16 }}>
+            <TabsList
+              style={{
+                background: tone[100],
+                padding: 4,
+                borderRadius: 12,
+                height: "auto",
+                display: "inline-flex",
+                gap: 2,
+                width: "max-content",
+              }}
+            >
+              {tabs.map((tab) => (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  style={{
+                    borderRadius: 9,
+                    padding: "8px 14px",
+                    fontSize: type.sm,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 7,
+                    fontWeight: 500,
+                  }}
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1a2e] text-[rgba(26,26,46,0.55)] whitespace-nowrap"
+                >
+                  <tab.icon style={{ width: 14, height: 14 }} />
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
-          <div style={{ marginTop: 32 }}>
+          <div style={{ marginTop: 28 }}>
             <TabsContent value="content"><ContentMapTab projectId={project.id} /></TabsContent>
             <TabsContent value="clients"><ClientsTab projectId={project.id} /></TabsContent>
             <TabsContent value="domains"><DomainsTab projectId={project.id} /></TabsContent>
@@ -206,99 +232,175 @@ function ContentMapTab({ projectId }: { projectId: string }) {
   const [newType, setNewType] = useState<any>("text");
 
   const handleAdd = () => {
-    createMutation.mutate({ projectId, data: { label: newLabel, type: newType } }, {
-      onSuccess: () => { setIsAdding(false); setNewLabel(""); setNewType("text"); refetch(); },
-      onError: (err) => toast({ variant: "destructive", title: "Error", description: err.message }),
-    });
+    createMutation.mutate(
+      { projectId, data: { label: newLabel, type: newType } },
+      {
+        onSuccess: () => {
+          setIsAdding(false);
+          setNewLabel("");
+          setNewType("text");
+          refetch();
+        },
+        onError: (err) =>
+          toast({ variant: "destructive", title: "Couldn't add field", description: err.message }),
+      }
+    );
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <p style={S.sectionTitle}>Content fields</p>
-          <p style={{ fontSize: 13, color: "rgba(26,26,46,0.45)", marginTop: -12 }}>What your clients can edit.</p>
-        </div>
-        <button
-          onClick={() => setIsAdding(true)}
-          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, padding: "8px 14px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", cursor: "pointer" }}
-        >
-          <Plus style={{ width: 13, height: 13 }} /> Add field
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <SectionTitle
+        description="What your clients can edit."
+        action={
+          !isAdding ? (
+            <PrimaryButton onClick={() => setIsAdding(true)}>
+              <Plus style={{ width: 14, height: 14 }} />
+              Add field
+            </PrimaryButton>
+          ) : null
+        }
+      >
+        Content fields
+      </SectionTitle>
 
       {isAdding && (
-        <div style={{ ...S.card, padding: 20, display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
-            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Label</Label>
-            <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Hero Headline" style={{ height: 40, borderRadius: 9, fontSize: 13.5 }} />
+        <Card padded style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <Field label="Label">
+              <Input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="e.g. Hero Headline"
+                style={inputStyle}
+              />
+            </Field>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
-            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Type</Label>
-            <Select value={newType} onValueChange={setNewType}>
-              <SelectTrigger style={{ height: 40, borderRadius: 9, fontSize: 13.5 }}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">Text</SelectItem>
-                <SelectItem value="richtext">Rich text</SelectItem>
-                <SelectItem value="image">Image</SelectItem>
-                <SelectItem value="url">URL</SelectItem>
-                <SelectItem value="number">Number</SelectItem>
-                <SelectItem value="boolean">Toggle</SelectItem>
-              </SelectContent>
-            </Select>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <Field label="Type">
+              <Select value={newType} onValueChange={setNewType}>
+                <SelectTrigger style={{ height: 44, borderRadius: r.md, fontSize: type.base }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="richtext">Rich text</SelectItem>
+                  <SelectItem value="image">Image</SelectItem>
+                  <SelectItem value="url">URL</SelectItem>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="boolean">Toggle</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setIsAdding(false)} style={{ height: 40, padding: "0 14px", borderRadius: 9, border: "1px solid rgba(0,0,0,0.12)", background: "transparent", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-            <button onClick={handleAdd} disabled={!newLabel || createMutation.isPending} style={{ height: 40, padding: "0 14px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+            <SecondaryButton onClick={() => setIsAdding(false)}>Cancel</SecondaryButton>
+            <PrimaryButton
+              onClick={handleAdd}
+              disabled={!newLabel}
+              loading={createMutation.isPending}
+            >
               {createMutation.isPending ? "Saving…" : "Save"}
-            </button>
+            </PrimaryButton>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div style={S.card}>
+      <Card>
         {isLoading ? (
-          <div style={{ padding: 20 }}><Skeleton style={{ height: 48, borderRadius: 8, background: "rgba(0,0,0,0.04)" }} /></div>
+          <div style={{ padding: 22 }}>
+            <Skeleton style={{ height: 48, borderRadius: 8, background: tone[100] }} />
+          </div>
         ) : !fields?.length ? (
-          <div style={S.emptyState}>No content fields yet. Add one above.</div>
+          <EmptyState
+            icon={Database}
+            compact
+            title="No content fields yet"
+            description="Add a field to give your clients something to edit."
+          />
         ) : (
           fields.map((field, idx) => (
-            <div key={field.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Database style={{ width: 15, height: 15, color: "rgba(26,26,46,0.4)" }} />
-                </div>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 500 }}>{field.label}</p>
-                  <p style={{ fontSize: 11.5, color: "rgba(26,26,46,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginTop: 2 }}>{field.type}</p>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  onClick={() => updateMutation.mutate({ projectId, fieldId: field.id, data: { isLocked: !field.isLocked } }, { onSuccess: () => refetch() })}
+            <div
+              key={field.id}
+              style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                <div
                   style={{
-                    display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 500, padding: "5px 12px", borderRadius: 8, cursor: "pointer", border: "none",
-                    background: field.isLocked ? "#fffbeb" : "rgba(0,0,0,0.05)",
-                    color: field.isLocked ? "#b45309" : "rgba(26,26,46,0.55)",
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: tone[50],
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  {field.isLocked ? <Lock style={{ width: 12, height: 12 }} /> : <Unlock style={{ width: 12, height: 12 }} />}
-                  {field.isLocked ? "Locked" : "Unlocked"}
-                </button>
-                <button onClick={() => deleteMutation.mutate({ projectId, fieldId: field.id }, { onSuccess: () => refetch() })}
-                  style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(26,26,46,0.3)" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fef2f2"; (e.currentTarget as HTMLElement).style.color = "#dc2626"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(26,26,46,0.3)"; }}
+                  <Database style={{ width: 15, height: 15, color: tone[400] }} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: type.base, fontWeight: 600 }}>{field.label}</p>
+                  <p style={{ fontSize: type.xs, color: tone[500], marginTop: 2 }}>
+                    {prettyType(field.type)}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() =>
+                    updateMutation.mutate(
+                      { projectId, fieldId: field.id, data: { isLocked: !field.isLocked } },
+                      { onSuccess: () => refetch() }
+                    )
+                  }
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    fontSize: type.xs,
+                    fontWeight: 600,
+                    padding: "6px 11px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    border: "none",
+                    background: field.isLocked ? "#fffbeb" : tone[100],
+                    color: field.isLocked ? "#b45309" : tone[600],
+                    transition: `background 0.18s ${ease}`,
+                  }}
                 >
-                  <Trash2 style={{ width: 14, height: 14 }} />
+                  {field.isLocked ? (
+                    <Lock style={{ width: 12, height: 12 }} />
+                  ) : (
+                    <Unlock style={{ width: 12, height: 12 }} />
+                  )}
+                  {field.isLocked ? "Locked" : "Open"}
                 </button>
+                <IconDeleteButton
+                  onClick={() =>
+                    deleteMutation.mutate(
+                      { projectId, fieldId: field.id },
+                      { onSuccess: () => refetch() }
+                    )
+                  }
+                />
               </div>
             </div>
           ))
         )}
-      </div>
+      </Card>
     </div>
   );
+}
+
+function prettyType(t: string) {
+  return ({
+    text: "Short text",
+    richtext: "Rich text",
+    image: "Image",
+    url: "Link",
+    number: "Number",
+    boolean: "Toggle",
+  } as Record<string, string>)[t] ?? t;
 }
 
 // ── Clients ─────────────────────────────────────────────────────────────────
@@ -314,64 +416,133 @@ function ClientsTab({ projectId }: { projectId: string }) {
   const [role, setRole] = useState<any>("editor");
 
   const handleInvite = () => {
-    inviteMutation.mutate({ projectId, data: { email, role } }, {
-      onSuccess: () => { setEmail(""); refetchInvites(); toast({ title: "Invite sent" }); },
-    });
+    inviteMutation.mutate(
+      { projectId, data: { email, role } },
+      {
+        onSuccess: () => {
+          setEmail("");
+          refetchInvites();
+          toast({ title: "Invite sent" });
+        },
+        onError: (err) =>
+          toast({ variant: "destructive", title: "Invite failed", description: err.message }),
+      }
+    );
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-
-      {/* Invite form */}
-      <div style={{ ...S.card, padding: 24 }}>
-        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Invite a client</p>
+      <Card padded>
+        <SectionTitle description="Send a private editor link to your client.">
+          Invite a client
+        </SectionTitle>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
-          <div style={{ flex: 2, minWidth: 200, display: "flex", flexDirection: "column", gap: 6 }}>
-            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Email address</Label>
-            <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="client@example.com" style={{ height: 40, borderRadius: 9, fontSize: 13.5 }} />
+          <div style={{ flex: 2, minWidth: 200 }}>
+            <Field label="Email">
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="client@example.com"
+                style={inputStyle}
+              />
+            </Field>
           </div>
-          <div style={{ flex: 1, minWidth: 140, display: "flex", flexDirection: "column", gap: 6 }}>
-            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Role</Label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger style={{ height: 40, borderRadius: 9, fontSize: 13.5 }}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="editor">Editor</SelectItem>
-                <SelectItem value="viewer">Viewer</SelectItem>
-              </SelectContent>
-            </Select>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <Field label="Role">
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger style={{ height: 44, borderRadius: r.md, fontSize: type.base }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
-          <button
+          <PrimaryButton
             onClick={handleInvite}
             disabled={!email || inviteMutation.isPending}
-            style={{ height: 40, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}
+            loading={inviteMutation.isPending}
           >
             {inviteMutation.isPending ? "Sending…" : "Send invite"}
-          </button>
+          </PrimaryButton>
         </div>
-      </div>
+      </Card>
 
-      {/* Active clients */}
       <div>
-        <p style={S.sectionTitle}>Active clients</p>
-        <div style={S.card}>
+        <SectionTitle>Active clients</SectionTitle>
+        <Card>
           {!users?.length ? (
-            <div style={S.emptyState}>No clients yet.</div>
+            <EmptyState
+              icon={Users}
+              compact
+              title="No clients yet"
+              description="Invite a client above to give them editor access."
+            />
           ) : (
             users.map((u, idx) => (
-              <div key={u.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 14.5, color: "#1a1a2e" }}>
+              <div
+                key={u.id}
+                style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: tone[100],
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 600,
+                      fontSize: type.base,
+                      color: BRAND.ink,
+                      flexShrink: 0,
+                    }}
+                  >
                     {u.name.charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 500 }}>{u.name}</p>
-                    <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.45)" }}>{u.email}</p>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: type.base, fontWeight: 600 }}>{u.name}</p>
+                    <p
+                      style={{
+                        fontSize: type.xs,
+                        color: tone[500],
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {u.email}
+                    </p>
                   </div>
                 </div>
-                <Select value={u.role} onValueChange={r => roleMutation.mutate({ projectId, userId: u.id, data: { role: r as any } }, { onSuccess: () => refetchUsers() })}>
-                  <SelectTrigger style={{ width: 120, height: 36, borderRadius: 9, fontSize: 13, border: "1px solid rgba(0,0,0,0.1)", background: "transparent" }}><SelectValue /></SelectTrigger>
+                <Select
+                  value={u.role}
+                  onValueChange={(role) =>
+                    roleMutation.mutate(
+                      { projectId, userId: u.id, data: { role: role as any } },
+                      { onSuccess: () => refetchUsers() }
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    style={{
+                      width: 124,
+                      height: 36,
+                      borderRadius: 9,
+                      fontSize: type.sm,
+                      border: `1px solid ${line.base}`,
+                      background: "transparent",
+                    }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner" disabled>Owner</SelectItem>
+                    <SelectItem value="owner" disabled>
+                      Owner
+                    </SelectItem>
                     <SelectItem value="editor">Editor</SelectItem>
                     <SelectItem value="viewer">Viewer</SelectItem>
                   </SelectContent>
@@ -379,29 +550,38 @@ function ClientsTab({ projectId }: { projectId: string }) {
               </div>
             ))
           )}
-        </div>
+        </Card>
       </div>
 
-      {/* Pending invites */}
       {!!invites?.length && (
         <div>
-          <p style={S.sectionTitle}>Pending invites</p>
-          <div style={S.card}>
+          <SectionTitle>Pending invites</SectionTitle>
+          <Card>
             {invites.map((inv, idx) => (
-              <div key={inv.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 500 }}>{inv.email}</p>
-                  <p style={{ fontSize: 12, color: "rgba(26,26,46,0.45)", marginTop: 2, textTransform: "capitalize" }}>{inv.role} · {inv.status}</p>
+              <div
+                key={inv.id}
+                style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: type.base, fontWeight: 600 }}>{inv.email}</p>
+                  <p style={{ fontSize: type.xs, color: tone[500], marginTop: 2 }}>
+                    {inv.role} · {inv.status}
+                  </p>
                 </div>
-                <button
-                  onClick={() => revokeMutation.mutate({ projectId, inviteId: inv.id }, { onSuccess: () => refetchInvites() })}
-                  style={{ fontSize: 12.5, padding: "5px 12px", borderRadius: 8, border: "none", background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontWeight: 500 }}
+                <DangerButton
+                  size="sm"
+                  onClick={() =>
+                    revokeMutation.mutate(
+                      { projectId, inviteId: inv.id },
+                      { onSuccess: () => refetchInvites() }
+                    )
+                  }
                 >
                   Revoke
-                </button>
+                </DangerButton>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       )}
     </div>
@@ -414,56 +594,86 @@ function DomainsTab({ projectId }: { projectId: string }) {
   const { data: domains, refetch } = useListDomains(projectId);
   const addMutation = useAddDomain();
   const removeMutation = useRemoveDomain();
+  const { toast } = useToast();
   const [hostname, setHostname] = useState("");
 
   const handleAdd = () => {
-    addMutation.mutate({ projectId, data: { hostname } }, {
-      onSuccess: () => { setHostname(""); refetch(); }
-    });
+    addMutation.mutate(
+      { projectId, data: { hostname } },
+      {
+        onSuccess: () => {
+          setHostname("");
+          refetch();
+        },
+        onError: (err) =>
+          toast({ variant: "destructive", title: "Couldn't add domain", description: err.message }),
+      }
+    );
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ ...S.card, padding: 24 }}>
-        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Add a domain</p>
-        <p style={{ fontSize: 13, color: "rgba(26,26,46,0.5)", marginBottom: 16 }}>Restrict where this editor can be embedded via iframe.</p>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Input value={hostname} onChange={e => setHostname(e.target.value)} placeholder="e.g. yoursite.com" style={{ flex: 1, height: 40, borderRadius: 9, fontSize: 13.5 }} />
-          <button
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Card padded>
+        <SectionTitle description="Restrict where the editor can be embedded.">
+          Allowed domains
+        </SectionTitle>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Input
+            value={hostname}
+            onChange={(e) => setHostname(e.target.value)}
+            placeholder="e.g. yoursite.com"
+            style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+          />
+          <PrimaryButton
             onClick={handleAdd}
             disabled={!hostname || addMutation.isPending}
-            style={{ height: 40, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}
+            loading={addMutation.isPending}
           >
             Add domain
-          </button>
+          </PrimaryButton>
         </div>
-      </div>
+      </Card>
 
-      <div style={S.card}>
+      <Card>
         {!domains?.length ? (
-          <div style={S.emptyState}>No domains added. Default Replit domains are allowed.</div>
+          <EmptyState
+            icon={Globe}
+            compact
+            title="No domains added"
+            description="Default Replit domains are allowed automatically."
+          />
         ) : (
           domains.map((d, idx) => (
-            <div key={d.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Globe style={{ width: 14, height: 14, color: "rgba(26,26,46,0.35)" }} />
-                <span style={{ fontSize: 14, fontWeight: 500 }}>{d.hostname}</span>
-                {d.verified && (
-                  <span style={{ fontSize: 11, fontWeight: 500, background: "#ecfdf5", color: "#059669", padding: "2px 8px", borderRadius: 6 }}>Verified</span>
-                )}
+            <div
+              key={d.id}
+              style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <Globe style={{ width: 14, height: 14, color: tone[400], flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontSize: type.base,
+                    fontWeight: 600,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {d.hostname}
+                </span>
+                {d.verified && <Pill variant="active">Verified</Pill>}
               </div>
-              <button
-                onClick={() => removeMutation.mutate({ projectId, domainId: d.id }, { onSuccess: () => refetch() })}
-                style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(26,26,46,0.3)" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fef2f2"; (e.currentTarget as HTMLElement).style.color = "#dc2626"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(26,26,46,0.3)"; }}
-              >
-                <Trash2 style={{ width: 14, height: 14 }} />
-              </button>
+              <IconDeleteButton
+                onClick={() =>
+                  removeMutation.mutate(
+                    { projectId, domainId: d.id },
+                    { onSuccess: () => refetch() }
+                  )
+                }
+              />
             </div>
           ))
         )}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -474,7 +684,6 @@ function DraftsTab({ projectId }: { projectId: string }) {
   const { data: drafts, refetch } = useListDrafts(projectId);
   const publishMutation = usePublishDraft();
   const { toast } = useToast();
-
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const handleReject = async (draftId: string) => {
@@ -484,79 +693,114 @@ function DraftsTab({ projectId }: { projectId: string }) {
       refetch();
       toast({ title: "Draft rejected" });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Couldn't reject", description: e.message });
     } finally {
       setRejectingId(null);
     }
   };
 
-  const pendingDrafts = drafts?.filter(d => d.status === "pending") || [];
-  const pastDrafts = drafts?.filter(d => d.status !== "pending") || [];
+  const pendingDrafts = drafts?.filter((d) => d.status === "pending") || [];
+  const pastDrafts = drafts?.filter((d) => d.status !== "pending") || [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       <div>
-        <p style={S.sectionTitle}>Pending review</p>
-        <div style={S.card}>
+        <SectionTitle description="Approve client edits before they go live.">
+          Pending review
+        </SectionTitle>
+        <Card>
           {!pendingDrafts.length ? (
-            <div style={S.emptyState}>No drafts waiting for review.</div>
+            <EmptyState
+              icon={FileEdit}
+              compact
+              title="No drafts waiting"
+              description="When clients save edits, they'll appear here for review."
+            />
           ) : (
             pendingDrafts.map((d, idx) => (
-              <div key={d.id} style={{ padding: "20px 22px", borderTop: idx > 0 ? "1px solid rgba(0,0,0,0.04)" : "none" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 500 }}>{d.fieldLabel}</p>
-                    <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.45)", marginTop: 3 }}>
+              <div
+                key={d.id}
+                style={{
+                  padding: "20px 22px",
+                  borderTop: idx > 0 ? `1px solid ${line.faint}` : "none",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: type.base, fontWeight: 600 }}>{d.fieldLabel}</p>
+                    <p style={{ fontSize: type.xs, color: tone[500], marginTop: 3 }}>
                       By {d.authorName} · {format(new Date(d.createdAt), "MMM d, h:mm a")}
                     </p>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <button
+                    <DangerButton
                       onClick={() => handleReject(d.id)}
                       disabled={rejectingId === d.id}
-                      style={{ height: 36, padding: "0 14px", borderRadius: 9, background: "#fef2f2", color: "#dc2626", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
                     >
                       {rejectingId === d.id ? "…" : "Reject"}
-                    </button>
-                    <button
-                      onClick={() => publishMutation.mutate({ projectId, draftId: d.id }, { onSuccess: () => refetch() })}
+                    </DangerButton>
+                    <PrimaryButton
+                      onClick={() =>
+                        publishMutation.mutate(
+                          { projectId, draftId: d.id },
+                          { onSuccess: () => refetch() }
+                        )
+                      }
                       disabled={publishMutation.isPending}
-                      style={{ height: 36, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
                     >
                       Publish
-                    </button>
+                    </PrimaryButton>
                   </div>
                 </div>
-                <div style={{ background: "rgba(0,0,0,0.02)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: 10, padding: "12px 14px", fontSize: 13, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
+                <div
+                  style={{
+                    background: tone[50],
+                    border: `1px solid ${line.faint}`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    fontSize: type.sm,
+                    fontFamily: "monospace",
+                    wordBreak: "break-all",
+                    lineHeight: 1.6,
+                  }}
+                >
                   {d.value}
                 </div>
               </div>
             ))
           )}
-        </div>
+        </Card>
       </div>
 
       {!!pastDrafts.length && (
         <div>
-          <p style={S.sectionTitle}>History</p>
-          <div style={S.card}>
+          <SectionTitle>History</SectionTitle>
+          <Card>
             {pastDrafts.map((d, idx) => (
-              <div key={d.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
-                <div>
-                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>{d.fieldLabel}</span>
-                  <span style={{ fontSize: 13, color: "rgba(26,26,46,0.45)", marginLeft: 8 }}>by {d.authorName}</span>
+              <div
+                key={d.id}
+                style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontSize: type.base, fontWeight: 600 }}>{d.fieldLabel}</span>
+                  <span style={{ fontSize: type.sm, color: tone[500], marginLeft: 8 }}>
+                    by {d.authorName}
+                  </span>
                 </div>
-                <span style={{
-                  fontSize: 11.5, fontWeight: 500, padding: "3px 9px", borderRadius: 6,
-                  background: d.status === "published" ? "#ecfdf5" : "rgba(0,0,0,0.05)",
-                  color: d.status === "published" ? "#059669" : "rgba(26,26,46,0.5)",
-                  textTransform: "capitalize",
-                }}>
+                <Pill variant={d.status === "published" ? "published" : "rejected"}>
                   {d.status}
-                </span>
+                </Pill>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       )}
     </div>
@@ -569,25 +813,68 @@ function ActivityTab({ projectId }: { projectId: string }) {
   const { data: activity } = useListActivity(projectId);
 
   return (
-    <div style={S.card}>
+    <Card>
       {!activity?.length ? (
-        <div style={S.emptyState}>No activity yet.</div>
+        <EmptyState
+          icon={ActivityIcon}
+          compact
+          title="No activity yet"
+          description="Edits, invites, and publishes will appear here."
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
           {activity.map((a, idx) => (
-            <div key={a.id} style={{ display: "flex", gap: 14, padding: "18px 22px", borderTop: idx > 0 ? "1px solid rgba(0,0,0,0.04)" : "none" }}>
-              <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                <ActivityIcon style={{ width: 13, height: 13, color: "rgba(26,26,46,0.4)" }} />
+            <div
+              key={a.id}
+              style={{
+                display: "flex",
+                gap: 14,
+                padding: "18px 22px",
+                borderTop: idx > 0 ? `1px solid ${line.faint}` : "none",
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: tone[50],
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: 2,
+                }}
+              >
+                <ActivityIcon style={{ width: 13, height: 13, color: tone[400] }} />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <p style={{ fontSize: 13.5, color: "#1a1a2e", lineHeight: 1.5 }}>
-                    <span style={{ fontWeight: 600 }}>{a.userName}</span>
-                    {" "}
-                    <span style={{ color: "rgba(26,26,46,0.6)" }}>{a.action}</span>
-                    {a.fieldLabel && <>{" "}<span style={{ fontWeight: 500 }}>"{a.fieldLabel}"</span></>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 8,
+                  }}
+                >
+                  <p style={{ fontSize: type.sm, color: BRAND.ink, lineHeight: 1.55 }}>
+                    <span style={{ fontWeight: 600 }}>{a.userName}</span>{" "}
+                    <span style={{ color: tone[600] }}>{a.action}</span>
+                    {a.fieldLabel && (
+                      <>
+                        {" "}
+                        <span style={{ fontWeight: 500 }}>"{a.fieldLabel}"</span>
+                      </>
+                    )}
                   </p>
-                  <span style={{ fontSize: 11.5, color: "rgba(26,26,46,0.4)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <span
+                    style={{
+                      fontSize: type.xs,
+                      color: tone[400],
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
                     {format(new Date(a.createdAt), "MMM d, h:mm a")}
                   </span>
                 </div>
@@ -596,7 +883,7 @@ function ActivityTab({ projectId }: { projectId: string }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -611,53 +898,82 @@ function SettingsTab({ project }: { project: any }) {
   const [desc, setDesc] = useState(project.description || "");
 
   const handleSave = () => {
-    updateMutation.mutate({ projectId: project.id, data: { name, description: desc } }, {
-      onSuccess: () => toast({ title: "Project updated" }),
-    });
+    updateMutation.mutate(
+      { projectId: project.id, data: { name, description: desc } },
+      {
+        onSuccess: () => toast({ title: "Project updated" }),
+        onError: (err) =>
+          toast({ variant: "destructive", title: "Couldn't update", description: err.message }),
+      }
+    );
   };
 
   const handleDelete = () => {
-    if (confirm("Are you sure? This cannot be undone.")) {
-      deleteMutation.mutate({ projectId: project.id }, {
-        onSuccess: () => setLocation("/app/projects"),
-      });
+    if (confirm("Delete this project? This cannot be undone.")) {
+      deleteMutation.mutate(
+        { projectId: project.id },
+        { onSuccess: () => setLocation("/app/projects") }
+      );
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 520 }}>
-
-      <div style={{ ...S.card, padding: 28 }}>
-        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>Project details</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 540 }}>
+      <Card padded style={{ padding: 28 }}>
+        <SectionTitle description="Update the basics for this project.">
+          Project details
+        </SectionTitle>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Name</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} style={{ height: 42, borderRadius: 10, fontSize: 14 }} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <Label style={{ fontSize: 12.5, fontWeight: 500 }}>Description</Label>
-            <Textarea value={desc} onChange={e => setDesc(e.target.value)} style={{ borderRadius: 10, resize: "none", fontSize: 14, minHeight: 90 }} />
-          </div>
-          <button
+          <Field label="Name">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+          <Field label="Description" optional>
+            <Textarea
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              style={{
+                borderRadius: r.md,
+                resize: "none",
+                fontSize: type.base,
+                minHeight: 92,
+                border: `1px solid ${line.base}`,
+                background: BRAND.surface,
+              }}
+            />
+          </Field>
+          <PrimaryButton
             onClick={handleSave}
             disabled={updateMutation.isPending}
-            style={{ alignSelf: "flex-start", height: 40, padding: "0 18px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}
+            loading={updateMutation.isPending}
+            style={{ alignSelf: "flex-start" }}
           >
             {updateMutation.isPending ? "Saving…" : "Save changes"}
-          </button>
+          </PrimaryButton>
         </div>
-      </div>
+      </Card>
 
-      <div style={{ ...S.card, padding: 28, border: "1px solid rgba(220,38,38,0.15)", background: "#fef2f2" }}>
-        <p style={{ fontSize: 14, fontWeight: 600, color: "#dc2626", marginBottom: 6 }}>Danger zone</p>
-        <p style={{ fontSize: 13, color: "rgba(220,38,38,0.7)", marginBottom: 20 }}>Permanently delete this project and all its data.</p>
-        <button
-          onClick={handleDelete}
-          style={{ height: 38, padding: "0 16px", borderRadius: 9, background: "#dc2626", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}
-        >
+      <Card
+        padded
+        style={{
+          padding: 24,
+          border: `1px solid ${line.base}`,
+        }}
+      >
+        <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink, marginBottom: 4 }}>
+          Delete this project
+        </p>
+        <p style={{ fontSize: type.sm, color: tone[500], marginBottom: 18, lineHeight: 1.55 }}>
+          This permanently removes the project, fields, drafts, and revokes all keys.
+        </p>
+        <DangerButton onClick={handleDelete} disabled={deleteMutation.isPending}>
+          <Trash2 style={{ width: 13, height: 13 }} />
           Delete project
-        </button>
-      </div>
+        </DangerButton>
+      </Card>
     </div>
   );
 }
@@ -701,7 +1017,7 @@ function KeysTab({ projectId }: { projectId: string }) {
       setNewKeyName("");
       qc.invalidateQueries({ queryKey: ["project-keys", projectId] });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Couldn't generate key", description: e.message });
     } finally {
       setIsGenerating(false);
     }
@@ -715,7 +1031,7 @@ function KeysTab({ projectId }: { projectId: string }) {
       qc.invalidateQueries({ queryKey: ["project-keys", projectId] });
       toast({ title: "Key revoked" });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Couldn't revoke", description: e.message });
     } finally {
       setRevokingId(null);
     }
@@ -729,120 +1045,219 @@ function KeysTab({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 620 }}>
-
-      {/* One-time key reveal */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 640 }}>
       {generatedKey && (
-        <div style={{ ...S.card, padding: 24, border: "1px solid rgba(16,185,129,0.2)", background: "#f0fdf4" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Card
+          padded
+          style={{
+            padding: 22,
+            border: "1px solid rgba(16,185,129,0.25)",
+            background: "#f0fdf4",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <ShieldCheck style={{ width: 16, height: 16, color: "#059669" }} />
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#059669" }}>Key generated — copy it now</p>
+            <p style={{ fontSize: type.base, fontWeight: 600, color: "#059669" }}>
+              Key generated — copy it now
+            </p>
           </div>
-          <p style={{ fontSize: 13, color: "rgba(26,46,26,0.6)", marginBottom: 14, lineHeight: 1.6 }}>
-            This key will only be shown once. Store it in your environment variables — never expose it in client-side code.
+          <p style={{ fontSize: type.sm, color: "rgba(26,46,26,0.65)", marginBottom: 14, lineHeight: 1.55 }}>
+            This key is shown only once. Store it as a server environment variable.
           </p>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div style={{
-              flex: 1, background: "#fff", border: "1px solid rgba(0,0,0,0.1)", borderRadius: 10,
-              padding: "10px 14px", fontSize: 13, fontFamily: "monospace", wordBreak: "break-all",
-              color: "#1a1a2e", userSelect: "all",
-            }}>
+            <div
+              style={{
+                flex: 1,
+                background: BRAND.surface,
+                border: `1px solid ${line.base}`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                fontSize: type.sm,
+                fontFamily: "monospace",
+                wordBreak: "break-all",
+                color: BRAND.ink,
+                userSelect: "all",
+              }}
+            >
               {generatedKey}
             </div>
-            <button
+            <PrimaryButton
               onClick={handleCopy}
-              style={{ height: 40, padding: "0 14px", borderRadius: 9, background: copied ? "#059669" : "#1a1a2e", color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexShrink: 0, transition: "background 0.2s" }}
+              style={{
+                background: copied ? "#059669" : BRAND.ink,
+              }}
             >
               {copied ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
               {copied ? "Copied" : "Copy"}
-            </button>
+            </PrimaryButton>
           </div>
           <button
             onClick={() => setGeneratedKey(null)}
-            style={{ marginTop: 12, fontSize: 12.5, color: "rgba(26,26,46,0.45)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            style={{
+              marginTop: 12,
+              fontSize: type.xs,
+              color: tone[500],
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+            }}
           >
             I've saved it — dismiss
           </button>
-        </div>
+        </Card>
       )}
 
-      {/* Generate new key */}
-      <div style={{ ...S.card, padding: 24 }}>
-        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Generate a new key</p>
-        <p style={{ fontSize: 13, color: "rgba(26,26,46,0.5)", marginBottom: 18, lineHeight: 1.6 }}>
-          Project keys authenticate your app's SDK calls to this project. Each key is shown only once.
-        </p>
-        <div style={{ display: "flex", gap: 12 }}>
+      <Card padded>
+        <SectionTitle description="Project keys authenticate your app's SDK calls.">
+          Generate a new key
+        </SectionTitle>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Input
             value={newKeyName}
-            onChange={e => setNewKeyName(e.target.value)}
+            onChange={(e) => setNewKeyName(e.target.value)}
             placeholder="Key name, e.g. Production"
-            style={{ flex: 1, height: 40, borderRadius: 9, fontSize: 13.5 }}
-            onKeyDown={e => e.key === "Enter" && handleGenerate()}
+            style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+            onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
           />
-          <button
+          <PrimaryButton
             onClick={handleGenerate}
             disabled={!newKeyName.trim() || isGenerating}
-            style={{ height: 40, padding: "0 16px", borderRadius: 9, background: "#1a1a2e", color: "#fff", border: "none", fontSize: 13.5, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}
+            loading={isGenerating}
           >
-            {isGenerating ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <KeyRound style={{ width: 13, height: 13 }} />}
+            {isGenerating ? (
+              <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
+            ) : (
+              <KeyRound style={{ width: 13, height: 13 }} />
+            )}
             Generate
-          </button>
+          </PrimaryButton>
         </div>
-      </div>
+      </Card>
 
-      {/* Existing keys */}
       <div>
-        <p style={S.sectionTitle}>Active keys</p>
-        <div style={S.card}>
+        <SectionTitle>Active keys</SectionTitle>
+        <Card>
           {isLoading ? (
-            <div style={{ padding: 20 }}>
-              <Skeleton style={{ height: 48, borderRadius: 8, background: "rgba(0,0,0,0.04)" }} />
+            <div style={{ padding: 22 }}>
+              <Skeleton style={{ height: 48, borderRadius: 8, background: tone[100] }} />
             </div>
           ) : !keys.length ? (
-            <div style={S.emptyState}>No keys yet. Generate one above to connect your SDK.</div>
+            <EmptyState
+              icon={KeyRound}
+              compact
+              title="No keys yet"
+              description="Generate one above to connect your SDK."
+            />
           ) : (
             keys.map((k, idx) => (
-              <div key={k.id} style={{ ...S.row, borderTop: idx === 0 ? "none" : S.row.borderTop }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <KeyRound style={{ width: 15, height: 15, color: "rgba(26,26,46,0.4)" }} />
+              <div
+                key={k.id}
+                style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: tone[50],
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <KeyRound style={{ width: 15, height: 15, color: tone[400] }} />
                   </div>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 500 }}>{k.name}</p>
-                    <p style={{ fontSize: 12, fontFamily: "monospace", color: "rgba(26,26,46,0.4)", marginTop: 2 }}>
-                      {k.keyPrefix}••••••••••••••••
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: type.base, fontWeight: 600 }}>{k.name}</p>
+                    <p
+                      style={{
+                        fontSize: type.xs,
+                        fontFamily: "monospace",
+                        color: tone[500],
+                        marginTop: 2,
+                      }}
+                    >
+                      {k.keyPrefix}••••••••••••
                       <span style={{ fontFamily: "inherit", marginLeft: 10 }}>
                         Created {format(new Date(k.createdAt), "MMM d, yyyy")}
                       </span>
                       {k.lastUsedAt && (
-                        <span style={{ marginLeft: 10 }}>· Last used {format(new Date(k.lastUsedAt), "MMM d")}</span>
+                        <span style={{ marginLeft: 10 }}>
+                          · Last used {format(new Date(k.lastUsedAt), "MMM d")}
+                        </span>
                       )}
                     </p>
                   </div>
                 </div>
-                <button
+                <DangerButton
+                  size="sm"
                   onClick={() => handleRevoke(k.id)}
                   disabled={revokingId === k.id}
-                  style={{ fontSize: 12.5, padding: "5px 12px", borderRadius: 8, border: "none", background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap" }}
                 >
                   {revokingId === k.id ? "Revoking…" : "Revoke"}
-                </button>
+                </DangerButton>
               </div>
             ))
           )}
-        </div>
+        </Card>
       </div>
 
-      <div style={{ ...S.card, padding: 20, background: "#fafaf9", border: "1px solid rgba(0,0,0,0.05)" }}>
-        <p style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6, color: "#1a1a2e" }}>How to use</p>
-        <p style={{ fontSize: 12.5, color: "rgba(26,26,46,0.55)", lineHeight: 1.7 }}>
-          Store your key as an environment variable (<code style={{ fontFamily: "monospace", background: "rgba(0,0,0,0.06)", padding: "1px 5px", borderRadius: 4 }}>GET_PROJECT_KEY</code>) on your server.
-          Never include it in frontend JavaScript or commit it to source control.
-          Use it to sign SDK requests to authenticate as this project.
+      <Card style={{ padding: 18, background: tone[50], border: `1px solid ${line.faint}` }}>
+        <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 6, color: BRAND.ink }}>
+          How to use
         </p>
-      </div>
-
+        <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65 }}>
+          Store your key as a server environment variable (
+          <code
+            style={{
+              fontFamily: "monospace",
+              background: tone[100],
+              padding: "1px 6px",
+              borderRadius: 4,
+            }}
+          >
+            GET_PROJECT_KEY
+          </code>
+          ). Never commit it or include it in frontend code.
+        </p>
+      </Card>
     </div>
+  );
+}
+
+// ── Shared icon button ───────────────────────────────────────────────────────
+
+function IconDeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Delete"
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: tone[400],
+        transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.background = "#fef2f2";
+        (e.currentTarget as HTMLElement).style.color = "#dc2626";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.background = "transparent";
+        (e.currentTarget as HTMLElement).style.color = tone[400];
+      }}
+    >
+      <Trash2 style={{ width: 14, height: 14 }} />
+    </button>
   );
 }

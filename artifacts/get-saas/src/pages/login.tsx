@@ -10,14 +10,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, Wordmark } from "@/lib/ui";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
-
-const C = "#1a1a2e";
-const BG = "#faf9f6";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -51,46 +49,64 @@ export default function Login() {
   }
 
   return (
-    <div style={{
-      minHeight: "100dvh", background: BG, color: C,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "32px 24px",
-    }}>
+    <div
+      style={{
+        minHeight: "100dvh",
+        background: BRAND.paper,
+        color: BRAND.ink,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "32px 24px",
+      }}
+    >
       <div style={{ width: "100%", maxWidth: 360 }}>
+        <div style={{ marginBottom: 32 }}>
+          <Link href="/">
+            <span style={{ cursor: "pointer", display: "inline-flex" }}>
+              <Wordmark size={22} />
+            </span>
+          </Link>
+        </div>
 
-        <div style={{ marginBottom: 40 }}>
-          <h1 style={{
-            fontSize: 28, fontWeight: 700, letterSpacing: "-0.025em",
-            marginBottom: 8, lineHeight: 1.2,
-          }}>
-            Sign in
+        <div style={{ marginBottom: 32 }}>
+          <h1
+            style={{
+              fontSize: 28,
+              fontWeight: 600,
+              letterSpacing: "-0.025em",
+              marginBottom: 8,
+              lineHeight: 1.2,
+            }}
+          >
+            Welcome back
           </h1>
-          <p style={{ fontSize: 15, color: `${C}80`, lineHeight: 1.55 }}>
-            Welcome back.
+          <p style={{ fontSize: type.md, color: tone[600], lineHeight: 1.55 }}>
+            Sign in to manage your projects.
           </p>
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            style={{ display: "flex", flexDirection: "column", gap: 18 }}
+          >
             <FormField
               control={form.control}
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel style={{ fontSize: 13, fontWeight: 500, color: `${C}b3` }}>Email</FormLabel>
+                  <FormLabel style={labelStyle}>Email</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="you@example.com"
                       autoComplete="email"
-                      style={{
-                        height: 48, padding: "0 14px", borderRadius: 12,
-                        border: `1px solid ${C}1a`, background: "#fff",
-                        fontSize: 15,
-                      }}
+                      style={inputStyle}
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage style={{ fontSize: 12.5 }} />
+                  <FormMessage style={{ fontSize: type.xs }} />
                 </FormItem>
               )}
             />
@@ -99,49 +115,53 @@ export default function Login() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel style={{ fontSize: 13, fontWeight: 500, color: `${C}b3` }}>Password</FormLabel>
+                  <FormLabel style={labelStyle}>Password</FormLabel>
                   <FormControl>
                     <Input
                       type="password"
                       placeholder="••••••••"
                       autoComplete="current-password"
-                      style={{
-                        height: 48, padding: "0 14px", borderRadius: 12,
-                        border: `1px solid ${C}1a`, background: "#fff",
-                        fontSize: 15,
-                      }}
+                      style={inputStyle}
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage style={{ fontSize: 12.5 }} />
+                  <FormMessage style={{ fontSize: type.xs }} />
                 </FormItem>
               )}
             />
 
-            <button
+            <PrimaryButton
               type="submit"
-              disabled={loginMutation.isPending}
-              style={{
-                marginTop: 6, height: 48, borderRadius: 12,
-                background: C, color: BG, border: "none",
-                fontSize: 15, fontWeight: 600, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "opacity 0.25s cubic-bezier(0.4,0,0.2,1)",
-                opacity: loginMutation.isPending ? 0.7 : 1,
-              }}
+              size="lg"
+              block
+              loading={loginMutation.isPending}
+              style={{ marginTop: 6 }}
             >
-              {loginMutation.isPending ? <Loader2 style={{ width: 18, height: 18 }} className="animate-spin" /> : "Sign in"}
-            </button>
+              {loginMutation.isPending ? (
+                <Loader2 style={{ width: 18, height: 18 }} className="animate-spin" />
+              ) : (
+                "Sign in"
+              )}
+            </PrimaryButton>
           </form>
         </Form>
 
-        <p style={{ textAlign: "center", marginTop: 32, fontSize: 14, color: `${C}80` }}>
-          Don't have an account?{" "}
-          <Link href="/signup" style={{ color: C, fontWeight: 600, textDecoration: "none" }}>
-            Create one
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 28,
+            fontSize: type.base,
+            color: tone[600],
+          }}
+        >
+          New here?{" "}
+          <Link
+            href="/signup"
+            style={{ color: BRAND.ink, fontWeight: 600, textDecoration: "none" }}
+          >
+            Create an account
           </Link>
         </p>
-
       </div>
     </div>
   );

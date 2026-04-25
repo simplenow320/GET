@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, AlertCircle, Lock } from "lucide-react";
+import { Loader2, Save, FileEdit, Lock, Check } from "lucide-react";
+import {
+  BRAND, tone, line, type, ease, r,
+  EmptyState, Wordmark, GhostButton, PrimaryButton,
+} from "@/lib/ui";
 
 export default function ClientEditor() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -22,111 +26,202 @@ export default function ClientEditor() {
   useEffect(() => {
     if (fields) {
       const newValues: Record<string, string> = {};
-      fields.forEach(f => {
+      fields.forEach((f) => {
         if (localValues[f.id] === undefined) {
           newValues[f.id] = f.draftValue || f.value || "";
         }
       });
       if (Object.keys(newValues).length > 0) {
-        setLocalValues(prev => ({ ...prev, ...newValues }));
+        setLocalValues((prev) => ({ ...prev, ...newValues }));
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields]);
 
   const handleSave = (fieldId: string) => {
     setSavingField(fieldId);
-    updateMutation.mutate({
-      projectId,
-      fieldId,
-      data: { draftValue: localValues[fieldId] }
-    }, {
-      onSuccess: () => {
-        toast({ title: "Saved as draft", description: "Your change is pending review." });
-        refetch();
-        setSavingField(null);
+    updateMutation.mutate(
+      {
+        projectId,
+        fieldId,
+        data: { draftValue: localValues[fieldId] },
       },
-      onError: (err) => {
-        toast({ variant: "destructive", title: "Save failed", description: err.message });
-        setSavingField(null);
+      {
+        onSuccess: () => {
+          toast({
+            title: "Saved as draft",
+            description: "Your change is pending review.",
+          });
+          refetch();
+          setSavingField(null);
+        },
+        onError: (err) => {
+          toast({ variant: "destructive", title: "Save failed", description: err.message });
+          setSavingField(null);
+        },
       }
-    });
+    );
   };
 
   const handleValueChange = (fieldId: string, val: string) => {
-    setLocalValues(prev => ({ ...prev, [fieldId]: val }));
+    setLocalValues((prev) => ({ ...prev, [fieldId]: val }));
+  };
+
+  const fieldInputStyle: React.CSSProperties = {
+    height: 46,
+    borderRadius: r.md,
+    fontSize: type.base,
+    background: BRAND.surface,
+    border: `1px solid ${line.base}`,
   };
 
   if (isLoading) {
     return (
-      <div style={{ minHeight: "100dvh", background: "#faf9f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Loader2 style={{ width: 24, height: 24, color: "rgba(26,26,46,0.2)", animation: "spin 1s linear infinite" }} />
+      <div
+        style={{
+          minHeight: "100dvh",
+          background: BRAND.paper,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Loader2
+          style={{
+            width: 24,
+            height: 24,
+            color: tone[300],
+            animation: "spin 1s linear infinite",
+          }}
+        />
       </div>
     );
   }
 
   if (!fields || fields.length === 0) {
     return (
-      <div style={{ minHeight: "100dvh", background: "#faf9f6", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ textAlign: "center", maxWidth: 360 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-            <AlertCircle style={{ width: 22, height: 22, color: "rgba(26,26,46,0.3)" }} />
-          </div>
-          <p style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>Nothing to edit yet</p>
-          <p style={{ fontSize: 14, color: "rgba(26,26,46,0.5)", lineHeight: 1.6 }}>Your developer hasn't mapped any editable fields for this project.</p>
-        </div>
+      <div
+        style={{
+          minHeight: "100dvh",
+          background: BRAND.paper,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+        }}
+      >
+        <EmptyState
+          icon={FileEdit}
+          title="Nothing to edit yet"
+          description="Your team hasn't set up any editable areas for this project. Check back soon."
+        />
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#faf9f6", color: "#1a1a2e", fontFamily: "inherit" }}>
-
+    <div style={{ minHeight: "100dvh", background: BRAND.paper, color: BRAND.ink }}>
       {/* Sticky top bar */}
-      <div style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 40,
-        background: "rgba(250,249,246,0.92)",
-        backdropFilter: "blur(12px)",
-        borderBottom: "1px solid rgba(0,0,0,0.05)",
-        height: 60,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 32px",
-      }}>
-        <span style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.01em" }}>Edit content</span>
-        <span style={{ fontSize: 12, fontWeight: 500, background: "rgba(0,0,0,0.05)", color: "rgba(26,26,46,0.55)", padding: "4px 12px", borderRadius: 20 }}>
-          Changes require approval
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 40,
+          background: "rgba(250,249,246,0.9)",
+          backdropFilter: "blur(14px)",
+          borderBottom: `1px solid ${line.faint}`,
+          height: 60,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 clamp(20px, 4vw, 32px)",
+        }}
+      >
+        <Wordmark size={18} />
+        <span
+          style={{
+            fontSize: type.xs,
+            fontWeight: 500,
+            background: tone[100],
+            color: tone[600],
+            padding: "5px 12px",
+            borderRadius: 20,
+          }}
+        >
+          Drafts go live after review
         </span>
       </div>
 
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "52px 24px 80px" }}>
-
-        <div style={{ marginBottom: 48 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 6 }}>Your content</h1>
-          <p style={{ fontSize: 14, color: "rgba(26,26,46,0.5)", lineHeight: 1.6 }}>
-            Update the fields below. Changes are saved as drafts and reviewed before going live.
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "44px clamp(20px, 4vw, 32px) 80px" }}>
+        <div style={{ marginBottom: 40 }}>
+          <h1
+            style={{
+              fontSize: 28,
+              fontWeight: 600,
+              letterSpacing: "-0.025em",
+              marginBottom: 8,
+              lineHeight: 1.2,
+            }}
+          >
+            Your content
+          </h1>
+          <p style={{ fontSize: type.base, color: tone[500], lineHeight: 1.55 }}>
+            Update the fields below. Changes save as drafts.
           </p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
           {fields.map((field) => {
-            const hasChanges = localValues[field.id] !== (field.draftValue || field.value || "");
+            const hasChanges =
+              localValues[field.id] !== (field.draftValue || field.value || "");
             const isSaving = savingField === field.id;
-            const hasDraftPending = field.draftValue && field.draftValue !== field.value && !hasChanges;
+            const hasDraftPending =
+              field.draftValue && field.draftValue !== field.value && !hasChanges;
 
             return (
-              <div key={field.id} style={{ opacity: field.isLocked ? 0.55 : 1, transition: "opacity 0.2s ease" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500 }}>{field.label}</span>
-                    <span style={{ fontSize: 10.5, color: "rgba(26,26,46,0.35)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{field.type}</span>
-                    {field.isLocked && (
-                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "rgba(26,26,46,0.4)", background: "rgba(0,0,0,0.05)", padding: "2px 8px", borderRadius: 6 }}>
+              <div
+                key={field.id}
+                style={{
+                  opacity: field.isLocked ? 0.55 : 1,
+                  transition: `opacity 0.2s ${ease}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 10,
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: type.base, fontWeight: 600 }}>
+                      {field.label}
+                    </span>
+                    {field.isLocked ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontSize: 11,
+                          color: tone[500],
+                          background: tone[100],
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                        }}
+                      >
                         <Lock style={{ width: 10, height: 10 }} /> Locked
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   {!field.isLocked && (
@@ -134,24 +229,28 @@ export default function ClientEditor() {
                       onClick={() => handleSave(field.id)}
                       disabled={!hasChanges || isSaving}
                       style={{
-                        display: "flex",
+                        display: "inline-flex",
                         alignItems: "center",
-                        gap: 5,
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                        padding: "5px 12px",
+                        gap: 6,
+                        fontSize: type.xs,
+                        fontWeight: 600,
+                        padding: "6px 12px",
                         borderRadius: 8,
                         border: "none",
                         cursor: hasChanges ? "pointer" : "default",
-                        background: hasChanges ? "#1a1a2e" : "rgba(0,0,0,0.05)",
-                        color: hasChanges ? "#fff" : "rgba(26,26,46,0.3)",
-                        transition: "all 0.2s ease",
+                        background: hasChanges ? BRAND.ink : tone[100],
+                        color: hasChanges ? "#fff" : tone[400],
+                        transition: `background 0.18s ${ease}, color 0.18s ${ease}`,
                       }}
                     >
-                      {isSaving
-                        ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
-                        : <Save style={{ width: 12, height: 12 }} />}
-                      Save draft
+                      {isSaving ? (
+                        <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
+                      ) : hasChanges ? (
+                        <Save style={{ width: 12, height: 12 }} />
+                      ) : (
+                        <Check style={{ width: 12, height: 12 }} />
+                      )}
+                      {hasChanges ? "Save" : "Saved"}
                     </button>
                   )}
                 </div>
@@ -159,18 +258,25 @@ export default function ClientEditor() {
                 {field.type === "text" && (
                   <Input
                     value={localValues[field.id] || ""}
-                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    onChange={(e) => handleValueChange(field.id, e.target.value)}
                     disabled={field.isLocked}
-                    style={{ height: 48, borderRadius: 11, fontSize: 15, background: "#fff", border: "1px solid rgba(0,0,0,0.09)" }}
+                    style={fieldInputStyle}
                   />
                 )}
 
                 {field.type === "richtext" && (
                   <Textarea
                     value={localValues[field.id] || ""}
-                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    onChange={(e) => handleValueChange(field.id, e.target.value)}
                     disabled={field.isLocked}
-                    style={{ borderRadius: 11, fontSize: 15, background: "#fff", border: "1px solid rgba(0,0,0,0.09)", minHeight: 140, resize: "vertical", lineHeight: 1.6, padding: "12px 14px" }}
+                    style={{
+                      ...fieldInputStyle,
+                      height: "auto",
+                      minHeight: 140,
+                      resize: "vertical",
+                      lineHeight: 1.6,
+                      padding: "12px 14px",
+                    }}
                   />
                 )}
 
@@ -178,27 +284,46 @@ export default function ClientEditor() {
                   <Input
                     type="url"
                     value={localValues[field.id] || ""}
-                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    onChange={(e) => handleValueChange(field.id, e.target.value)}
                     disabled={field.isLocked}
                     placeholder="https://"
-                    style={{ height: 48, borderRadius: 11, fontSize: 14, fontFamily: "monospace", background: "#fff", border: "1px solid rgba(0,0,0,0.09)" }}
+                    style={{ ...fieldInputStyle, fontFamily: "monospace", fontSize: type.sm }}
                   />
                 )}
 
                 {field.type === "image" && (
                   <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                     {localValues[field.id] && (
-                      <div style={{ width: 80, height: 80, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)", flexShrink: 0 }}>
-                        <img src={localValues[field.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <div
+                        style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          border: `1px solid ${line.base}`,
+                          flexShrink: 0,
+                          background: tone[50],
+                        }}
+                      >
+                        <img
+                          src={localValues[field.id]}
+                          alt=""
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
                       </div>
                     )}
                     <Input
                       type="url"
                       value={localValues[field.id] || ""}
-                      onChange={e => handleValueChange(field.id, e.target.value)}
+                      onChange={(e) => handleValueChange(field.id, e.target.value)}
                       disabled={field.isLocked}
                       placeholder="Image URL"
-                      style={{ flex: 1, height: 48, borderRadius: 11, fontSize: 14, fontFamily: "monospace", background: "#fff", border: "1px solid rgba(0,0,0,0.09)" }}
+                      style={{
+                        ...fieldInputStyle,
+                        flex: 1,
+                        fontFamily: "monospace",
+                        fontSize: type.sm,
+                      }}
                     />
                   </div>
                 )}
@@ -207,28 +332,37 @@ export default function ClientEditor() {
                   <Input
                     type="number"
                     value={localValues[field.id] || ""}
-                    onChange={e => handleValueChange(field.id, e.target.value)}
+                    onChange={(e) => handleValueChange(field.id, e.target.value)}
                     disabled={field.isLocked}
-                    style={{ height: 48, borderRadius: 11, fontSize: 15, background: "#fff", border: "1px solid rgba(0,0,0,0.09)", maxWidth: 180 }}
+                    style={{ ...fieldInputStyle, maxWidth: 180 }}
                   />
                 )}
 
                 {field.type === "boolean" && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, height: 48 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, height: 46 }}>
                     <Switch
                       checked={localValues[field.id] === "true"}
-                      onCheckedChange={c => handleValueChange(field.id, c ? "true" : "false")}
+                      onCheckedChange={(c) => handleValueChange(field.id, c ? "true" : "false")}
                       disabled={field.isLocked}
                       className="data-[state=checked]:bg-[#1a1a2e]"
                     />
-                    <span style={{ fontSize: 15, fontWeight: 500 }}>
+                    <span style={{ fontSize: type.base, fontWeight: 500 }}>
                       {localValues[field.id] === "true" ? "Yes" : "No"}
                     </span>
                   </div>
                 )}
 
                 {hasDraftPending && (
-                  <p style={{ marginTop: 6, fontSize: 12, color: "#b45309", display: "flex", alignItems: "center", gap: 4 }}>
+                  <p
+                    style={{
+                      marginTop: 8,
+                      fontSize: type.xs,
+                      color: "#b45309",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
                     Draft pending approval
                   </p>
                 )}

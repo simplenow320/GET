@@ -172,15 +172,44 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(255, 215, 71, 0.45);
+    color: #1a1a2e;
   }
 
   button:focus-visible,
   a:focus-visible,
-  [role="button"]:focus-visible {
-    outline: 2px solid rgba(26, 26, 46, 0.45);
-    outline-offset: 3px;
-    border-radius: 6px;
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid rgba(26, 26, 46, 0.4);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* Tame scrollbar in horizontal tab list */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
   }
 }

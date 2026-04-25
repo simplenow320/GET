@@ -34,9 +34,13 @@ Full-stack SaaS called "get" — a hosted control plane that lets developers giv
 
 ## Brand
 - **Logo/mascot**: attached_assets/IMG_6687_1777091776547.jpeg (hero) + B56BFD2D...png (mascot)
+- **Wordmark**: "get" with a yellow dot — exposed as `<Wordmark />` from `src/lib/ui.tsx`
 - **Tagline**: "Let clients edit your app without breaking it."
 - **Landing palette**: Warm cream (#faf9f6), dark navy (#1a1a2e), yellow accent (#FFD747)
-- **App palette**: White-label, clean grayscale, no get branding inside the app
+- **App palette**: White-label, clean grayscale, navy primary buttons
+
+## Shared UI primitives (`src/lib/ui.tsx`)
+All pages import design tokens (`BRAND`, `tone`, `line`, `type`, `r`, `ease`, `status`) and components (`PrimaryButton`, `SecondaryButton`, `GhostButton`, `DangerButton`, `Card`, `PageHeader`, `SectionTitle`, `EmptyState`, `Pill`, `Field`, `Wordmark`, `PageContainer`) from this module. When adding new pages, reuse these instead of inventing one-off styles. `Field` auto-generates an `id` for its child input and wires `htmlFor` on the label.
 
 ## Auth
 Session-based auth using SHA-256 password hashing + random bearer tokens stored in `sessions` table. Pass `Authorization: Bearer <token>` header on all authenticated API calls. Token is stored in localStorage.
