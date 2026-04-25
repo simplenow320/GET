@@ -1,0 +1,125 @@
+Now that Supabase is set up, do a full verification and in-depth security audit of this app.
+
+IMPORTANT ARCHITECTURE RULE:
+Keep the current backend architecture.
+Do NOT rewrite this app into a frontend-direct Supabase app.
+Assume the intended model is:
+- keep Express backend
+- keep server-side auth/session logic
+- keep RBAC and server-side authorization
+- keep draft/publish workflow on the server
+- use Supabase as managed Postgres in this pass
+
+GOALS:
+1. Verify Supabase is actually wired up correctly
+2. Verify the app still uses secure server-side patterns
+3. Identify and fix security issues
+4. Produce a clear audit summary at the end
+
+PART 1 — VERIFY SUPABASE IS REALLY CONNECTED
+Check and verify all of the following:
+- the app is using the Supabase Postgres connection string, not the old database
+- database reads/writes are actually hitting Supabase
+- schema/tables exist and match current app expectations
+- migrations are applied correctly
+- the app can connect successfully in the current runtime environment
+- no stale local DB config is still being used
+- no duplicate database clients or conflicting env vars exist
+- environment variables are wired correctly
+- secrets are loaded from environment variables / Replit Secrets, not hardcoded
+- database failures are handled cleanly
+
+Actually test:
+- database connection on startup
+- a read query
+- a write query
+- a project-scoped query
+- an audit-log insert if applicable
+- draft/publish related DB operations if applicable
+
+PART 2 — VERIFY SECURITY BOUNDARIES
+Audit the trust model and confirm:
+- frontend/browser never receives Supabase secret/service_role keys
+- only safe public keys are ever exposed client-side if they are needed
+- privileged database/admin operations stay server-side
+- auth/session logic is still handled securely
+- httpOnly cookies/session protections still work if present
+- project-scoped authorization is enforced server-side
+- RBAC checks still happen on the server
+- publish actions require authorization and server validation
+- invite/role/domain management actions are protected
+- no sensitive logic was accidentally moved into the client
+
+PART 3 — SUPABASE-SPECIFIC SECURITY AUDIT
+Audit Supabase usage for:
+- whether any secret/service_role key is exposed or improperly used
+- whether publishable/anon key usage is appropriate
+- whether Row Level Security is enabled anywhere it should be enabled
+- whether RLS is being relied on or bypassed in this architecture
+- whether any tables exposed to client-side access need RLS
+- whether any policies are overly broad
+- whether auth-related metadata is being used safely
+- whether database roles and privileges are too permissive
+- whether any direct client database access should be removed
+- whether any database functions/views need tighter restrictions
+
+Also check whether the database would pass Supabase Security Advisor / linter expectations:
+- improperly set up RLS
+- missing protections
+- risky schema patterns
+- anything obviously unsafe or too permissive
+
+PART 4 — APP-LEVEL SECURITY AUDIT
+Run a deep audit on:
+- route protection
+- session/auth flow
+- role-based access control
+- input validation
+- sanitization of editable content
+- XSS risk in user-editable content
+- CSRF-sensitive actions where relevant
+- error handling and information leakage
+- secrets handling
+- domain allowlist logic
+- project key handling
+- audit logging coverage
+- publish/review workflow protections
+- privilege escalation risks
+- broken object-level authorization risks between projects/users
+
+Specifically test whether:
+- one user can access another user’s project data
+- a lower role can publish or manage roles/domains improperly
+- a client could tamper with project IDs or route params to access unauthorized data
+- hidden frontend controls can be bypassed unless the server blocks them
+- any admin/server routes are missing authorization checks
+
+PART 5 — CODE QUALITY + SECURITY CLEANUP
+Fix directly where appropriate:
+- leaked secrets
+- weak env var handling
+- unsafe frontend usage of keys
+- missing server-side auth checks
+- missing input validation
+- missing sanitization
+- weak project-scoped authorization
+- dead or fake security-related UI
+- insecure placeholder logic
+- duplicated auth/permission logic
+- unsafe error messages
+- any route that trusts the client too much
+
+PART 6 — OUTPUT
+At the end, give me a structured audit report with:
+1. Supabase connection verification status
+2. Confirmed database runtime path
+3. Security findings by severity: critical / high / medium / low
+4. What was fixed automatically
+5. What still needs manual decision
+6. Whether this app is safe to continue with on the current architecture
+7. Specific recommendations that would satisfy a security review
+
+Do not just comment on issues.
+Actually inspect, test, and implement fixes where safe.
+Do not migrate to a new architecture in this pass.
+Preserve the current backend-first security model.
