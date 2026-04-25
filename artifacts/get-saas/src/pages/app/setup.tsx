@@ -257,9 +257,12 @@ function KeyValuePair({ secretName, secretValue }: { secretName: string; secretV
 }
 
 // Replit-specific 3-step recipe. Used for `appType === "replit"`. Aim:
-// short, punchy, copy-paste-able instructions a "vibe coder" can follow
-// without needing to know what an env var is.
+// short, punchy — primary path is an AI prompt the vibe coder pastes into
+// Cursor / Claude / Replit AI. A toggle exposes the raw snippet for those
+// who prefer doing it manually.
 function ReplitConnectGuide({ keyValue, apiOrigin }: { keyValue: string; apiOrigin: string }) {
+  const [mode, setMode] = useState<"ai" | "code">("ai");
+
   const fetchSnippet =
     `// In your main server file (e.g. index.js, server.js, app.js)
 const res = await fetch("${apiOrigin}/api/public/content", {
@@ -268,18 +271,56 @@ const res = await fetch("${apiOrigin}/api/public/content", {
     Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
     "Content-Type": "application/json",
   },
-  // seed: your current content for each field you created.
-  // get stores it once (only if the field is still empty) so
-  // clients see real text in the editor — not blank boxes.
+  // seed: your current hardcoded text so the editor shows real content,
+  // not blank boxes. get only writes it once — client edits always win.
   body: JSON.stringify({ seed: {
     // "Hero Headline": "Welcome to My App",
-    // "Body Text": "We build great things.",
+    // "Body Text":     "We build great things.",
   }}),
 });
 const { content } = await res.json();
 
-// Use a field value (falls back to your seed if get isn't set yet):
+// Replace your hardcoded strings with dynamic values, e.g.:
 // content["Hero Headline"]?.value ?? "Welcome to My App"`;
+
+  const aiPrompt =
+    `I want to connect my Replit app to a CMS called get so a client can edit the text without touching the code. Please make ONLY the changes described below — do not refactor, rename, or remove anything else.
+
+## Step 1 — Add a secret
+In Replit Secrets (🔒 icon, left sidebar), add:
+  Key:   GET_PROJECT_KEY
+  Value: ${keyValue}
+
+## Step 2 — Add the fetch call
+Find my main server file (index.js, server.js, or app.js). At the very top of the file, after any existing require/import lines but before any routes or logic, add:
+
+\`\`\`js
+const res = await fetch("${apiOrigin}/api/public/content", {
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  // Fill in the seed values with the current hardcoded text in the app.
+  // get stores them once (only on empty fields) so the editor starts with
+  // real content instead of blank boxes. Client edits always win.
+  body: JSON.stringify({ seed: {
+    // "Hero Headline": "<current headline text>",
+    // "Body Text":     "<current body text>",
+  }}),
+});
+const { content } = await res.json();
+\`\`\`
+
+Then replace each hardcoded string with its dynamic value, for example:
+  "Welcome to My App"  →  content["Hero Headline"]?.value ?? "Welcome to My App"
+
+## Ground rules — follow these exactly
+1. Only add the get CMS fetch and the content variable replacements. Change nothing else.
+2. Do not rename, move, or delete any existing files, functions, or routes.
+3. Do not change any styling, logic, or behaviour beyond swapping the strings.
+4. After making the changes, show me a diff (or paste the modified lines) so I can review what changed.
+5. Confirm the app still starts without errors after the change.`;
 
   const stepNumStyle: React.CSSProperties = {
     width: 24,
@@ -320,25 +361,68 @@ const { content } = await res.json();
         </p>
         <KeyValuePair secretName="GET_PROJECT_KEY" secretValue={keyValue} />
         <p style={{ fontSize: type.xs, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
-          The name on the left must be spelled exactly <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>GET_PROJECT_KEY</code> — the snippet below looks for that name.
+          The name must be spelled exactly <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>GET_PROJECT_KEY</code> — the snippet looks for that name.
         </p>
       </div>
 
-      {/* Step 2 — Paste the snippet */}
+      {/* Step 2 — AI prompt or raw code */}
       <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span style={stepNumStyle}>2</span>
-          <span style={stepHeadStyle}>Paste this into your code</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={stepNumStyle}>2</span>
+            <span style={stepHeadStyle}>Connect your code</span>
+          </div>
+          {/* Toggle */}
+          <div
+            style={{
+              display: "flex",
+              background: tone[100],
+              borderRadius: 8,
+              padding: 3,
+              gap: 2,
+            }}
+          >
+            {(["ai", "code"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: type.xs,
+                  fontWeight: 600,
+                  background: mode === m ? BRAND.ink : "transparent",
+                  color: mode === m ? BRAND.paper : tone[500],
+                  transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
+                }}
+              >
+                {m === "ai" ? "Ask your AI" : "See code"}
+              </button>
+            ))}
+          </div>
         </div>
-        <p style={stepBodyStyle}>
-          Open the file your app uses to handle requests — usually{" "}
-          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>index.js</code>,{" "}
-          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>server.js</code>, or{" "}
-          <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>app.js</code>.
-          Paste this snippet, then <strong>fill in the <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>seed</code> values with whatever text is currently in your app</strong>.
-          get will store them the first time your app runs, so clients see real content — not blank fields.
-        </p>
-        <CodeBlock code={fetchSnippet} />
+
+        {mode === "ai" ? (
+          <>
+            <p style={stepBodyStyle}>
+              Copy this prompt and paste it into Cursor, Claude, or Replit AI. It tells the AI exactly what to add, what to leave alone, and how to verify nothing broke.
+            </p>
+            <CodeBlock code={aiPrompt} />
+          </>
+        ) : (
+          <>
+            <p style={stepBodyStyle}>
+              Open your main server file (usually{" "}
+              <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>index.js</code>,{" "}
+              <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>server.js</code>, or{" "}
+              <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>app.js</code>).
+              Paste this at the top, fill in the <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>seed</code> values with your current hardcoded text, then replace those strings with <code style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>content["Field"]?.value</code>.
+            </p>
+            <CodeBlock code={fetchSnippet} />
+          </>
+        )}
       </div>
 
       {/* Step 3 — Restart */}
@@ -348,7 +432,7 @@ const { content } = await res.json();
           <span style={stepHeadStyle}>Restart your Repl</span>
         </div>
         <p style={stepBodyStyle}>
-          Click the green <strong>▶ Run</strong> button (or <strong>Stop</strong> then <strong>Run</strong> if it's already running). Replit only loads new secrets when the app restarts.
+          Click the green <strong>▶ Run</strong> button (or <strong>Stop → Run</strong> if it's already running). Replit only loads new secrets on restart.
         </p>
       </div>
     </div>
@@ -481,18 +565,129 @@ const res = await fetch("${apiOrigin}/api/public/content", {
     Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
     "Content-Type": "application/json",
   },
-  // seed: your current content for each field.
-  // get stores it once (only if the field is empty) so
-  // clients see real text in the editor — not blank boxes.
+  // seed: your current hardcoded text so the editor starts populated.
+  // get stores it once — client edits always win over seed values.
   body: JSON.stringify({ seed: {
     // "Hero Headline": "Welcome to My App",
-    // "Body Text": "We build great things.",
+    // "Body Text":     "We build great things.",
   }}),
 });
 const { content } = await res.json();
 
-// Use a field value (falls back to your seed if get isn't set yet):
+// Replace hardcoded strings with live values, e.g.:
 // content["Hero Headline"]?.value ?? "Welcome to My App"`;
+}
+
+// Generic connect guide (Next.js / Remix / anything non-Replit).
+// Same AI-prompt-first pattern as ReplitConnectGuide.
+function GenericConnectGuide({
+  keyValue,
+  apiOrigin,
+  appType,
+}: {
+  keyValue: string;
+  apiOrigin: string;
+  appType: AppType | null;
+}) {
+  const [mode, setMode] = useState<"ai" | "code">("ai");
+
+  const envHint = getEnvHint(appType);
+  const framework =
+    appType === "nextjs" ? "Next.js / Remix" : "your app";
+
+  const aiPrompt =
+    `I want to connect ${framework} to a CMS called get so a client can edit the text without touching the code. Please make ONLY the changes described below — do not refactor, rename, or remove anything else.
+
+## Step 1 — Add the environment variable
+${envHint}
+  Key:   GET_PROJECT_KEY
+  Value: ${keyValue}
+
+## Step 2 — Add the fetch call
+In my main server entry point (or the file that runs on each request), add this after any existing imports but before any routes:
+
+\`\`\`js
+const res = await fetch("${apiOrigin}/api/public/content", {
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${process.env.GET_PROJECT_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  // Fill in seed values with the current hardcoded text in the app.
+  // get stores them once (only on empty fields). Client edits always win.
+  body: JSON.stringify({ seed: {
+    // "Hero Headline": "<current headline>",
+    // "Body Text":     "<current body text>",
+  }}),
+});
+const { content } = await res.json();
+\`\`\`
+
+Then replace each hardcoded string with its dynamic value, for example:
+  "Welcome to My App"  →  content["Hero Headline"]?.value ?? "Welcome to My App"
+
+## Ground rules — follow these exactly
+1. Only add the get CMS fetch and the content variable replacements. Change nothing else.
+2. Do not rename, move, or delete any existing files, functions, or routes.
+3. Do not change any styling, logic, or behaviour beyond swapping the strings.
+4. After making the changes, show me a diff (or paste the modified lines) so I can review what changed.
+5. Confirm the app still starts/builds without errors after the change.`;
+
+  const toggleStyle = (active: boolean): React.CSSProperties => ({
+    padding: "4px 12px",
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+    fontSize: type.xs,
+    fontWeight: 600,
+    background: active ? BRAND.ink : "transparent",
+    color: active ? BRAND.paper : tone[500],
+    transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {/* Env var */}
+      <div>
+        <p style={{ fontSize: type.xs, fontWeight: 600, color: tone[500], textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+          1. Save it as an environment variable
+        </p>
+        <CodeBlock code={getEnvCode(keyValue)} />
+        <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+          {envHint}
+        </p>
+      </div>
+
+      {/* Fetch + toggle */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <p style={{ fontSize: type.xs, fontWeight: 600, color: tone[500], textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            2. Connect your code
+          </p>
+          <div style={{ display: "flex", background: tone[100], borderRadius: 8, padding: 3, gap: 2 }}>
+            <button onClick={() => setMode("ai")} style={toggleStyle(mode === "ai")}>Ask your AI</button>
+            <button onClick={() => setMode("code")} style={toggleStyle(mode === "code")}>See code</button>
+          </div>
+        </div>
+
+        {mode === "ai" ? (
+          <>
+            <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.6, marginBottom: 10 }}>
+              Copy this prompt and paste it into Cursor, Claude, or your AI of choice. It includes the guardrails so nothing else gets changed.
+            </p>
+            <CodeBlock code={aiPrompt} />
+          </>
+        ) : (
+          <>
+            <CodeBlock code={getReadCode(apiOrigin)} />
+            <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
+              Drop this anywhere your app needs editable content. Works from any framework, any host — no library needed.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Main wizard ───────────────────────────────────────────────────────────────
@@ -970,45 +1165,11 @@ export default function SetupWizard() {
                       apiOrigin={apiOrigin}
                     />
                   ) : (
-                    <>
-                      <div>
-                        <p
-                          style={{
-                            fontSize: type.xs,
-                            fontWeight: 600,
-                            color: tone[500],
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            marginBottom: 10,
-                          }}
-                        >
-                          1. Save it as an environment variable
-                        </p>
-                        <CodeBlock code={getEnvCode(state.generatedKey)} />
-                        <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
-                          {getEnvHint(state.appType)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p
-                          style={{
-                            fontSize: type.xs,
-                            fontWeight: 600,
-                            color: tone[500],
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            marginBottom: 10,
-                          }}
-                        >
-                          2. Read your content from your code
-                        </p>
-                        <CodeBlock code={getReadCode(apiOrigin)} />
-                        <p style={{ fontSize: type.sm, color: tone[500], marginTop: 8, lineHeight: 1.55 }}>
-                          Drop this anywhere your app needs editable content. Works from any framework, any host — no library to install.
-                        </p>
-                      </div>
-                    </>
+                    <GenericConnectGuide
+                      keyValue={state.generatedKey}
+                      apiOrigin={apiOrigin}
+                      appType={state.appType}
+                    />
                   )}
                 </div>
               ) : (
