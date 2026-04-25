@@ -37,6 +37,11 @@ export default function Signup() {
   const queryClient = useQueryClient();
 
   const params = readQueryParams();
+  // Reframe copy when arriving from an invite link — the visitor isn't
+  // signing up to BUILD anything, they're creating an account so they
+  // can edit a project they were invited to. Dev-marketing copy ("Set up
+  // safe client editing in minutes") is wrong for them.
+  const isInviteFlow = params.next?.startsWith("/accept-invite/") ?? false;
 
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
@@ -91,14 +96,19 @@ export default function Signup() {
               lineHeight: 1.2,
             }}
           >
-            Create your account
+            {isInviteFlow ? "Almost there" : "Create your account"}
           </h1>
           <p style={{ fontSize: type.md, color: tone[600], lineHeight: 1.55 }}>
-            Set up safe client editing in minutes.
+            {isInviteFlow
+              ? "Create your account to accept your invite."
+              : "Set up safe client editing in minutes."}
           </p>
         </div>
 
-        <GoogleSignInButton next={params.next ?? undefined} label="Sign up with Google" />
+        <GoogleSignInButton
+          next={params.next ?? undefined}
+          label={isInviteFlow ? "Continue with Google" : "Sign up with Google"}
+        />
         <OrDivider />
 
         <Form {...form}>

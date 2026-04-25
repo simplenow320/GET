@@ -50,6 +50,12 @@ export default function Login() {
   const loginMutation = useLogin();
   const queryClient = useQueryClient();
 
+  // Reframe copy when arriving from an invite link — "Welcome back" /
+  // "manage your projects" reads like product marketing for someone
+  // who's just trying to accept a client invite.
+  const nextParam = readNextParam();
+  const isInviteFlow = nextParam?.startsWith("/accept-invite/") ?? false;
+
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -138,14 +144,16 @@ export default function Login() {
               lineHeight: 1.2,
             }}
           >
-            Welcome back
+            {isInviteFlow ? "Sign in to accept your invite" : "Welcome back"}
           </h1>
           <p style={{ fontSize: type.md, color: tone[600], lineHeight: 1.55 }}>
-            Sign in to manage your projects.
+            {isInviteFlow
+              ? "Use your existing account to continue."
+              : "Sign in to manage your projects."}
           </p>
         </div>
 
-        <GoogleSignInButton next={readNextParam() ?? undefined} />
+        <GoogleSignInButton next={nextParam ?? undefined} />
         <OrDivider />
 
         <Form {...form}>

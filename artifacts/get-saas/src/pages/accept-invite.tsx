@@ -258,22 +258,26 @@ function ReadyView({
       </div>
 
       {!user ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.55, marginBottom: 4 }}>
-            Sign in or create an account with <strong style={{ color: BRAND.ink }}>{invite.email}</strong> to accept.
+            Create your account with <strong style={{ color: BRAND.ink }}>{invite.email}</strong> to start editing.
           </p>
-          <Link href={`/login?next=${encodeURIComponent(next)}`}>
+          <Link href={`/signup?next=${encodeURIComponent(next)}&email=${encodeURIComponent(invite.email)}`}>
             <span>
               <PrimaryButton block>
-                Sign in <ArrowRight style={{ width: 16, height: 16 }} />
+                Create your account <ArrowRight style={{ width: 16, height: 16 }} />
               </PrimaryButton>
             </span>
           </Link>
-          <Link href={`/signup?next=${encodeURIComponent(next)}&email=${encodeURIComponent(invite.email)}`}>
-            <span>
-              <SecondaryButton block>Create an account</SecondaryButton>
-            </span>
-          </Link>
+          <p style={{ textAlign: "center", fontSize: type.sm, color: tone[600], marginTop: 4 }}>
+            Already have an account?{" "}
+            <Link
+              href={`/login?next=${encodeURIComponent(next)}`}
+              style={{ color: BRAND.ink, fontWeight: 600, textDecoration: "none" }}
+            >
+              Sign in
+            </Link>
+          </p>
         </div>
       ) : !emailMatches ? (
         <div>
