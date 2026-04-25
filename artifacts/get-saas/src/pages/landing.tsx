@@ -14,7 +14,7 @@ export default function LandingPage() {
           src={logoHeroPath}
           alt="get"
           style={{
-            width: "100%", maxWidth: 320, marginBottom: 28,
+            width: "100%", maxWidth: 320, marginBottom: -40,
             mixBlendMode: "multiply",
           }}
         />
