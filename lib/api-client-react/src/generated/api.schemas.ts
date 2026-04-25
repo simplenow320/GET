@@ -40,6 +40,20 @@ export const ProjectStatus = {
   archived: "archived",
 } as const;
 
+/**
+ * The caller's role on this project. Drives client-side RBAC
+(which destructive controls render, which tabs are visible).
+
+ */
+export type ProjectMyRole = (typeof ProjectMyRole)[keyof typeof ProjectMyRole];
+
+export const ProjectMyRole = {
+  owner: "owner",
+  admin: "admin",
+  editor: "editor",
+  viewer: "viewer",
+} as const;
+
 export interface Project {
   id: string;
   name: string;
@@ -49,6 +63,10 @@ export interface Project {
   clientCount: number;
   lastActivityAt?: string;
   createdAt: string;
+  /** The caller's role on this project. Drives client-side RBAC
+(which destructive controls render, which tabs are visible).
+ */
+  myRole?: ProjectMyRole;
 }
 
 export interface CreateProjectBody {

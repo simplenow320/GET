@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "wouter";
+import { Eye, EyeOff } from "lucide-react";
 import brandLogoPath from "@assets/IMG_6687_1777091776547.jpeg";
 import {
   AlertDialog,
@@ -622,6 +623,75 @@ export function BrandLogo({
     </Link>
   );
 }
+
+/**
+ * Password input with a built-in eye / eye-off toggle. Uses the standard
+ * `inputStyle` so it matches every other input in the auth surface, but
+ * reserves room on the right for the toggle button. The toggle is purely
+ * client-side — toggling type="text" lets the user verify what they typed.
+ */
+export const PasswordInput = React.forwardRef<
+  HTMLInputElement,
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> & {
+    /** Override the rendered style if you need to adapt to a non-default container. */
+    style?: React.CSSProperties;
+  }
+>(function PasswordInput({ style, ...props }, ref) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        {...props}
+        ref={ref}
+        type={show ? "text" : "password"}
+        style={{
+          ...inputStyle,
+          width: "100%",
+          paddingRight: 44,
+          ...style,
+        }}
+      />
+      <button
+        type="button"
+        aria-label={show ? "Hide password" : "Show password"}
+        aria-pressed={show}
+        onClick={() => setShow((s) => !s)}
+        tabIndex={-1}
+        style={{
+          position: "absolute",
+          right: 6,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: 32,
+          height: 32,
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          color: tone[500],
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: r.sm,
+          transition: `color 0.15s ${ease}, background 0.15s ${ease}`,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.color = BRAND.ink;
+          (e.currentTarget as HTMLElement).style.background = tone[50];
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.color = tone[500];
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+        }}
+      >
+        {show ? (
+          <EyeOff style={{ width: 16, height: 16 }} />
+        ) : (
+          <Eye style={{ width: 16, height: 16 }} />
+        )}
+      </button>
+    </div>
+  );
+});
 
 export function PageContainer({
   children,

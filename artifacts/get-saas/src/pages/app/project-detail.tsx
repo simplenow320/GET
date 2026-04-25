@@ -44,16 +44,12 @@ import {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function getToken() {
-  return localStorage.getItem("auth_token") ?? "";
-}
-
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const r = await fetch(`${BASE}${path}`, {
+    credentials: "include",
     ...opts,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
       ...(opts.headers ?? {}),
     },
   });
@@ -104,6 +100,15 @@ export default function ProjectDetail() {
     );
   }
 
+  // ── Frontend RBAC ──
+  // Single source of truth for what the current user can do on this project.
+  // The server still enforces every mutation, but driving the UI from this
+  // map is what stops viewers/editors from seeing destructive controls and
+  // getting "permission denied" toasts after the fact.
+  const myRole = (project.myRole ?? "viewer") as "owner" | "admin" | "editor" | "viewer";
+  const isOwner = myRole === "owner";
+  const isAdmin = isOwner || myRole === "admin";
+
   const tabs = [
     { value: "content",  icon: Database,    label: "Content"  },
     { value: "clients",  icon: Users,       label: "Clients"  },
@@ -111,7 +116,8 @@ export default function ProjectDetail() {
     { value: "drafts",   icon: FileEdit,    label: "Drafts"   },
     { value: "keys",     icon: KeyRound,    label: "API keys" },
     { value: "activity", icon: ActivityIcon,label: "Activity" },
-    { value: "settings", icon: Settings,    label: "Settings" },
+    // Settings holds rename + delete; owners only.
+    ...(isOwner ? [{ value: "settings", icon: Settings, label: "Settings" }] : []),
   ];
 
   return (
@@ -161,6 +167,25 @@ export default function ProjectDetail() {
                 {project.name}
               </h1>
               <Pill variant={(project.status as any) || "archived"}>{project.status}</Pill>
+              {/* Read-only badge for non-managers so they understand why the
+                  destructive controls are missing instead of thinking the UI
+                  is broken. */}
+              {!isAdmin && (
+                <span
+                  style={{
+                    fontSize: type.xs,
+                    fontWeight: 600,
+                    color: tone[600],
+                    background: tone[100],
+                    padding: "3px 9px",
+                    borderRadius: 999,
+                    textTransform: "capitalize",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {myRole}
+                </span>
+              )}
             </div>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55 }}>
               {project.description || "No description"}
@@ -205,13 +230,15 @@ export default function ProjectDetail() {
           </div>
 
           <div style={{ marginTop: 28 }}>
-            <TabsContent value="content"><ContentMapTab projectId={project.id} /></TabsContent>
-            <TabsContent value="clients"><ClientsTab projectId={project.id} /></TabsContent>
-            <TabsContent value="domains"><DomainsTab projectId={project.id} /></TabsContent>
-            <TabsContent value="drafts"><DraftsTab projectId={project.id} /></TabsContent>
-            <TabsContent value="keys"><KeysTab projectId={project.id} /></TabsContent>
+            <TabsContent value="content"><ContentMapTab projectId={project.id} canManage={isAdmin} /></TabsContent>
+            <TabsContent value="clients"><ClientsTab projectId={project.id} canManage={isAdmin} /></TabsContent>
+            <TabsContent value="domains"><DomainsTab projectId={project.id} canManage={isAdmin} /></TabsContent>
+            <TabsContent value="drafts"><DraftsTab projectId={project.id} canManage={isAdmin} /></TabsContent>
+            <TabsContent value="keys"><KeysTab projectId={project.id} canManage={isAdmin} /></TabsContent>
             <TabsContent value="activity"><ActivityTab projectId={project.id} /></TabsContent>
-            <TabsContent value="settings"><SettingsTab project={project} /></TabsContent>
+            {isOwner && (
+              <TabsContent value="settings"><SettingsTab project={project} /></TabsContent>
+            )}
           </div>
         </Tabs>
       </div>
@@ -221,7 +248,7 @@ export default function ProjectDetail() {
 
 // ── Content Map ─────────────────────────────────────────────────────────────
 
-function ContentMapTab({ projectId }: { projectId: string }) {
+function ContentMapTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: fields, isLoading, refetch } = useListContentFields(projectId);
   const createMutation = useCreateContentField();
   const updateMutation = useUpdateContentField();
@@ -250,9 +277,9 @@ function ContentMapTab({ projectId }: { projectId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <SectionTitle
-        description="What your clients can edit."
+        description={canManage ? "What your clients can edit." : "What clients can edit on this project."}
         action={
-          !isAdding ? (
+          canManage && !isAdding ? (
             <PrimaryButton onClick={() => setIsAdding(true)}>
               <Plus style={{ width: 14, height: 14 }} />
               Add field
@@ -375,14 +402,16 @@ function ContentMapTab({ projectId }: { projectId: string }) {
                   )}
                   {field.isLocked ? "Locked" : "Open"}
                 </button>
-                <IconDeleteButton
-                  onClick={() =>
-                    deleteMutation.mutate(
-                      { projectId, fieldId: field.id },
-                      { onSuccess: () => refetch() }
-                    )
-                  }
-                />
+                {canManage && (
+                  <IconDeleteButton
+                    onClick={() =>
+                      deleteMutation.mutate(
+                        { projectId, fieldId: field.id },
+                        { onSuccess: () => refetch() }
+                      )
+                    }
+                  />
+                )}
               </div>
             </div>
           ))
@@ -432,7 +461,7 @@ function CopyInviteLinkButton({ token, label = "Copy link" }: { token: string; l
   );
 }
 
-function ClientsTab({ projectId }: { projectId: string }) {
+function ClientsTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: users, refetch: refetchUsers } = useListProjectUsers(projectId);
   const { data: invites, refetch: refetchInvites } = useListInvites(projectId);
   const inviteMutation = useCreateInvite();
@@ -468,6 +497,7 @@ function ClientsTab({ projectId }: { projectId: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      {canManage && (
       <Card padded>
         <SectionTitle description="Send a private editor link to your client.">
           Invite a client
@@ -564,6 +594,7 @@ function ClientsTab({ projectId }: { projectId: string }) {
           </div>
         )}
       </Card>
+      )}
 
       <div>
         <SectionTitle>Active clients</SectionTitle>
@@ -613,35 +644,51 @@ function ClientsTab({ projectId }: { projectId: string }) {
                     </p>
                   </div>
                 </div>
-                <Select
-                  value={u.role}
-                  onValueChange={(role) =>
-                    roleMutation.mutate(
-                      { projectId, userId: u.id, data: { role: role as any } },
-                      { onSuccess: () => refetchUsers() }
-                    )
-                  }
-                >
-                  <SelectTrigger
+                {canManage && u.role !== "owner" ? (
+                  <Select
+                    value={u.role}
+                    onValueChange={(role) =>
+                      roleMutation.mutate(
+                        { projectId, userId: u.id, data: { role: role as any } },
+                        { onSuccess: () => refetchUsers() }
+                      )
+                    }
+                  >
+                    <SelectTrigger
+                      style={{
+                        width: 124,
+                        height: 36,
+                        borderRadius: 9,
+                        fontSize: type.sm,
+                        border: `1px solid ${line.base}`,
+                        background: "transparent",
+                      }}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner" disabled>
+                        Owner
+                      </SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span
                     style={{
-                      width: 124,
-                      height: 36,
-                      borderRadius: 9,
-                      fontSize: type.sm,
-                      border: `1px solid ${line.base}`,
-                      background: "transparent",
+                      fontSize: type.xs,
+                      fontWeight: 600,
+                      color: tone[600],
+                      background: tone[100],
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      textTransform: "capitalize",
                     }}
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner" disabled>
-                      Owner
-                    </SelectItem>
-                    <SelectItem value="editor">Editor</SelectItem>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                  </SelectContent>
-                </Select>
+                    {u.role}
+                  </span>
+                )}
               </div>
             ))
           )}
@@ -669,18 +716,20 @@ function ClientsTab({ projectId }: { projectId: string }) {
                       </p>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                      {token && <CopyInviteLinkButton token={token} />}
-                      <DangerButton
-                        size="sm"
-                        onClick={() =>
-                          revokeMutation.mutate(
-                            { projectId, inviteId: inv.id },
-                            { onSuccess: () => refetchInvites() }
-                          )
-                        }
-                      >
-                        Revoke
-                      </DangerButton>
+                      {canManage && token && <CopyInviteLinkButton token={token} />}
+                      {canManage && (
+                        <DangerButton
+                          size="sm"
+                          onClick={() =>
+                            revokeMutation.mutate(
+                              { projectId, inviteId: inv.id },
+                              { onSuccess: () => refetchInvites() }
+                            )
+                          }
+                        >
+                          Revoke
+                        </DangerButton>
+                      )}
                     </div>
                   </div>
                 );
@@ -695,7 +744,7 @@ function ClientsTab({ projectId }: { projectId: string }) {
 
 // ── Domains ──────────────────────────────────────────────────────────────────
 
-function DomainsTab({ projectId }: { projectId: string }) {
+function DomainsTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: domains, refetch } = useListDomains(projectId);
   const addMutation = useAddDomain();
   const removeMutation = useRemoveDomain();
@@ -718,6 +767,7 @@ function DomainsTab({ projectId }: { projectId: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {canManage && (
       <Card padded>
         <SectionTitle description="Add the domains where your app lives. Your client's editor will only load content for those domains.">
           Allowed domains
@@ -738,6 +788,7 @@ function DomainsTab({ projectId }: { projectId: string }) {
           </PrimaryButton>
         </div>
       </Card>
+      )}
 
       <Card>
         {!domains?.length ? (
@@ -767,14 +818,16 @@ function DomainsTab({ projectId }: { projectId: string }) {
                 </span>
                 {d.verified && <Pill variant="active">Verified</Pill>}
               </div>
-              <IconDeleteButton
-                onClick={() =>
-                  removeMutation.mutate(
-                    { projectId, domainId: d.id },
-                    { onSuccess: () => refetch() }
-                  )
-                }
-              />
+              {canManage && (
+                <IconDeleteButton
+                  onClick={() =>
+                    removeMutation.mutate(
+                      { projectId, domainId: d.id },
+                      { onSuccess: () => refetch() }
+                    )
+                  }
+                />
+              )}
             </div>
           ))
         )}
@@ -785,7 +838,7 @@ function DomainsTab({ projectId }: { projectId: string }) {
 
 // ── Drafts ───────────────────────────────────────────────────────────────────
 
-function DraftsTab({ projectId }: { projectId: string }) {
+function DraftsTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { data: drafts, refetch } = useListDrafts(projectId);
   const publishMutation = usePublishDraft();
   const { toast } = useToast();
@@ -845,25 +898,27 @@ function DraftsTab({ projectId }: { projectId: string }) {
                       By {d.authorName} · {format(new Date(d.createdAt), "MMM d, h:mm a")}
                     </p>
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <DangerButton
-                      onClick={() => handleReject(d.id)}
-                      disabled={rejectingId === d.id}
-                    >
-                      {rejectingId === d.id ? "…" : "Reject"}
-                    </DangerButton>
-                    <PrimaryButton
-                      onClick={() =>
-                        publishMutation.mutate(
-                          { projectId, draftId: d.id },
-                          { onSuccess: () => refetch() }
-                        )
-                      }
-                      disabled={publishMutation.isPending}
-                    >
-                      Publish
-                    </PrimaryButton>
-                  </div>
+                  {canManage && (
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <DangerButton
+                        onClick={() => handleReject(d.id)}
+                        disabled={rejectingId === d.id}
+                      >
+                        {rejectingId === d.id ? "…" : "Reject"}
+                      </DangerButton>
+                      <PrimaryButton
+                        onClick={() =>
+                          publishMutation.mutate(
+                            { projectId, draftId: d.id },
+                            { onSuccess: () => refetch() }
+                          )
+                        }
+                        disabled={publishMutation.isPending}
+                      >
+                        Publish
+                      </PrimaryButton>
+                    </div>
+                  )}
                 </div>
                 <div
                   style={{
@@ -1108,7 +1163,7 @@ interface ProjectKey {
   rawKey?: string;
 }
 
-function KeysTab({ projectId }: { projectId: string }) {
+function KeysTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [newKeyName, setNewKeyName] = useState("");
@@ -1221,6 +1276,7 @@ function KeysTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
+      {canManage && (
       <Card padded>
         <SectionTitle description="A project key lets your app read live content from this project. Treat it like a password.">
           Generate a new key
@@ -1247,6 +1303,7 @@ function KeysTab({ projectId }: { projectId: string }) {
           </PrimaryButton>
         </div>
       </Card>
+      )}
 
       <div>
         <SectionTitle>Active keys</SectionTitle>
@@ -1305,13 +1362,15 @@ function KeysTab({ projectId }: { projectId: string }) {
                     </p>
                   </div>
                 </div>
-                <DangerButton
-                  size="sm"
-                  onClick={() => setPendingRevokeId(k.id)}
-                  disabled={revokingId === k.id}
-                >
-                  {revokingId === k.id ? "Revoking…" : "Revoke"}
-                </DangerButton>
+                {canManage && (
+                  <DangerButton
+                    size="sm"
+                    onClick={() => setPendingRevokeId(k.id)}
+                    disabled={revokingId === k.id}
+                  >
+                    {revokingId === k.id ? "Revoking…" : "Revoke"}
+                  </DangerButton>
+                )}
               </div>
             ))
           )}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, ReactNode } from "react";
-import { useGetMe, ApiError, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import type { User } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
@@ -17,23 +17,11 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // The session lives in an httpOnly cookie — there's no client-side token to
+  // clear. A 401 just means "not signed in", which is reflected by user=null.
   const { data: user, isLoading, error } = useGetMe({
     query: { retry: false, queryKey: getGetMeQueryKey() },
   });
-
-  // Only clear the stored token when the server explicitly rejects it (401).
-  // Network errors, 5xx, or CORS hiccups must NOT log the user out — those are
-  // transient and the existing session may still be valid on retry.
-  useEffect(() => {
-    if (
-      error &&
-      error instanceof ApiError &&
-      error.status === 401 &&
-      typeof window !== "undefined"
-    ) {
-      localStorage.removeItem("auth_token");
-    }
-  }, [error]);
 
   return (
     <AuthContext.Provider value={{ user: user ?? null, isLoading, error }}>

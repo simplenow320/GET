@@ -1,5 +1,6 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -64,6 +65,9 @@ app.use((req, res, next) => {
   if (req.path.startsWith("/api/public/")) return next();
   return restrictiveCors(req, res, next);
 });
+
+// Parse cookies so the auth middleware can read the httpOnly session cookie.
+app.use(cookieParser());
 
 // Request size limits — protect against large payload attacks
 app.use(express.json({ limit: "256kb" }));

@@ -63,6 +63,12 @@ export const ListProjectsResponseItem = zod.object({
   clientCount: zod.number(),
   lastActivityAt: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),
+  myRole: zod
+    .enum(["owner", "admin", "editor", "viewer"])
+    .optional()
+    .describe(
+      "The caller's role on this project. Drives client-side RBAC\n(which destructive controls render, which tabs are visible).\n",
+    ),
 });
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
 
@@ -90,6 +96,12 @@ export const GetProjectResponse = zod.object({
   clientCount: zod.number(),
   lastActivityAt: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),
+  myRole: zod
+    .enum(["owner", "admin", "editor", "viewer"])
+    .optional()
+    .describe(
+      "The caller's role on this project. Drives client-side RBAC\n(which destructive controls render, which tabs are visible).\n",
+    ),
 });
 
 /**
@@ -114,6 +126,12 @@ export const UpdateProjectResponse = zod.object({
   clientCount: zod.number(),
   lastActivityAt: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),
+  myRole: zod
+    .enum(["owner", "admin", "editor", "viewer"])
+    .optional()
+    .describe(
+      "The caller's role on this project. Drives client-side RBAC\n(which destructive controls render, which tabs are visible).\n",
+    ),
 });
 
 /**

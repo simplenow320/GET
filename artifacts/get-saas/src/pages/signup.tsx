@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo } from "@/lib/ui";
+import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo, PasswordInput } from "@/lib/ui";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -46,8 +46,8 @@ export default function Signup() {
     signupMutation.mutate(
       { data: values },
       {
-        onSuccess: async (data: any) => {
-          if (data?.token) localStorage.setItem("auth_token", data.token);
+        onSuccess: async () => {
+          // Auth lives in an httpOnly session cookie set by the API.
           await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setLocation(params.next ?? "/app/dashboard");
         },
@@ -135,11 +135,9 @@ export default function Signup() {
                 <FormItem>
                   <FormLabel style={labelStyle}>Password</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
+                    <PasswordInput
                       placeholder="At least 8 characters"
                       autoComplete="new-password"
-                      style={inputStyle}
                       {...field}
                     />
                   </FormControl>

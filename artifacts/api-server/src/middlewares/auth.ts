@@ -4,6 +4,8 @@ import { eq, and } from "drizzle-orm";
 import { hashSessionToken } from "../lib/tokens";
 import { parseIdParam } from "../lib/validation";
 
+export const SESSION_COOKIE_NAME = "gs";
+
 export interface AuthRequest extends Request {
   userId?: number;
   userName?: string;
@@ -11,7 +13,14 @@ export interface AuthRequest extends Request {
   projectRole?: "owner" | "admin" | "editor" | "viewer";
 }
 
-function extractBearer(req: Request): string | null {
+/**
+ * Pull the session token from either the httpOnly session cookie (web) or the
+ * Authorization: Bearer header (Expo / CLI / server-to-server). Cookie wins
+ * when both are present.
+ */
+export function extractSessionToken(req: Request): string | null {
+  const cookieToken = (req as any).cookies?.[SESSION_COOKIE_NAME];
+  if (typeof cookieToken === "string" && cookieToken.length > 0) return cookieToken;
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;
   const raw = header.slice(7).trim();
@@ -23,7 +32,7 @@ function extractBearer(req: Request): string | null {
  * unknown, or expired. Looks up by hashed token so plaintext is never stored.
  */
 export async function resolveSessionUser(req: Request) {
-  const raw = extractBearer(req);
+  const raw = extractSessionToken(req);
   if (!raw) return null;
   const tokenHash = hashSessionToken(raw);
   const sessions = await db

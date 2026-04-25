@@ -8,3 +8,4 @@ export * from "./project_keys";
 export * from "./activity";
 export * from "./drafts";
 export * from "./sessions";
+export * from "./password_reset_tokens";

@@ -37,11 +37,6 @@ function buildBase(): string {
   return import.meta.env.BASE_URL.replace(/\/$/, "");
 }
 
-function authHeader(): Record<string, string> {
-  const t = localStorage.getItem("auth_token");
-  return t ? { Authorization: `Bearer ${t}` } : {};
-}
-
 export default function AcceptInvitePage() {
   const [, params] = useRoute("/accept-invite/:token");
   const token = params?.token ?? "";
@@ -94,7 +89,8 @@ export default function AcceptInvitePage() {
     try {
       const res = await fetch(`/api/invites/${encodeURIComponent(token)}/accept`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -315,9 +311,8 @@ function SignOutAndRetry({ next }: { next: string }) {
       block
       onClick={async () => {
         try {
-          await fetch(`/api/auth/logout`, { method: "POST", headers: authHeader() });
+          await fetch(`/api/auth/logout`, { method: "POST", credentials: "include" });
         } catch {}
-        localStorage.removeItem("auth_token");
         await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
         setLocation(`/login?next=${encodeURIComponent(next)}`);
       }}

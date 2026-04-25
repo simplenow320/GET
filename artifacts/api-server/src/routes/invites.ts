@@ -1,11 +1,13 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { db, invitesTable, projectUsersTable, usersTable } from "@workspace/db";
+import { db, invitesTable, projectUsersTable, usersTable, projectsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateInviteBody } from "@workspace/api-zod";
 import { Email, InviteRole, parseIdParam } from "../lib/validation";
 import { logAudit } from "../lib/audit";
+import { sendInviteEmail } from "../lib/email";
+import { logger } from "../lib/logger";
 import { z } from "zod";
 
 const router = Router({ mergeParams: true });
@@ -106,6 +108,29 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
     userName: req.userName!,
     action: `invited ${email} as ${parsed.data.role}`,
   });
+
+  // Fire the invite email asynchronously — never block the response on
+  // outbound mail. Look up the project name for the email subject; fall back
+  // to a generic phrasing if the lookup fails.
+  (async () => {
+    try {
+      const projects = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
+      const projectName = projects[0]?.name ?? "a project";
+      const origin = (req.headers.origin as string | undefined) ??
+        `${req.protocol}://${req.get("host")}`;
+      const acceptUrl = `${origin}/accept-invite/${token}`;
+      await sendInviteEmail({
+        to: email,
+        inviterName: req.userName!,
+        inviterEmail: req.userEmail!,
+        projectName,
+        role: parsed.data.role,
+        acceptUrl,
+      });
+    } catch (err) {
+      logger.warn({ err, projectId, email }, "invite email failed");
+    }
+  })();
 
   // Admin-only POST always returns the token in the create response.
   res.status(201).json(inviteToResponse(invite, { includeToken: true }));

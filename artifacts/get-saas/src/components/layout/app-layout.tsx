@@ -33,7 +33,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
-        localStorage.removeItem("auth_token");
+        // Server clears the httpOnly cookie; nothing for us to wipe locally.
         setLocation("/login");
       },
     });

@@ -663,6 +663,12 @@ components:
         createdAt:
           type: string
           format: date-time
+        myRole:
+          type: string
+          enum: [owner, admin, editor, viewer]
+          description: |
+            The caller's role on this project. Drives client-side RBAC
+            (which destructive controls render, which tabs are visible).
       required: [id, name, status, fieldCount, clientCount, createdAt]
 
     CreateProjectBody:

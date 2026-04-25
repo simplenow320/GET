@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo } from "@/lib/ui";
+import { BRAND, tone, type, inputStyle, labelStyle, PrimaryButton, BrandLogo, PasswordInput } from "@/lib/ui";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -40,8 +40,8 @@ export default function Login() {
     loginMutation.mutate(
       { data: values },
       {
-        onSuccess: async (data: any) => {
-          if (data?.token) localStorage.setItem("auth_token", data.token);
+        onSuccess: async () => {
+          // Auth lives in an httpOnly session cookie set by the API.
           await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           const next = readNextParam();
           setLocation(next ?? "/app/dashboard");
@@ -120,13 +120,24 @@ export default function Login() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel style={labelStyle}>Password</FormLabel>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <FormLabel style={labelStyle}>Password</FormLabel>
+                    <Link
+                      href="/forgot-password"
+                      style={{
+                        fontSize: type.xs,
+                        color: tone[600],
+                        textDecoration: "none",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Forgot?
+                    </Link>
+                  </div>
                   <FormControl>
-                    <Input
-                      type="password"
+                    <PasswordInput
                       placeholder="••••••••"
                       autoComplete="current-password"
-                      style={inputStyle}
                       {...field}
                     />
                   </FormControl>

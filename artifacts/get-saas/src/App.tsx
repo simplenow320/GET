@@ -7,6 +7,8 @@ import { AuthProvider, RequireAuth } from "@/components/auth-context";
 import LandingPage from "@/pages/landing";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import AcceptInvite from "@/pages/accept-invite";
 import Dashboard from "@/pages/app/dashboard";
 import Projects from "@/pages/app/projects";
@@ -23,6 +25,8 @@ function AppRoutes() {
       <Route path="/" component={LandingPage} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password/:token" component={ResetPassword} />
       <Route path="/accept-invite/:token" component={AcceptInvite} />
 
       {/* Authenticated Routes */}

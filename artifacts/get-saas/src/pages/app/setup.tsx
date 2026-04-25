@@ -26,11 +26,11 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-function getToken() { return localStorage.getItem("auth_token") ?? ""; }
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const r = await fetch(`${BASE}${path}`, {
+    credentials: "include",
     ...opts,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}`, ...(opts.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
   });
   if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error ?? `HTTP ${r.status}`); }
   if (r.status === 204) return null;
