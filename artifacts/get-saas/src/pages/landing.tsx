@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import logoHeroPath from "@assets/IMG_6687_1777091776547.jpeg";
+import logoHeroPath from "@assets/6BEE8433-78A4-49DD-9122-EDC5A3E40858_1777094465701.png";
 
 const C = "#1a1a2e";
 const BG = "#faf9f6";
@@ -13,13 +13,16 @@ export default function LandingPage() {
         <img
           src={logoHeroPath}
           alt="get"
-          style={{ width: "100%", maxWidth: 400, marginBottom: 48 }}
+          style={{
+            width: "100%", maxWidth: 320, marginBottom: 28,
+            mixBlendMode: "multiply",
+          }}
         />
 
         <h1 style={{
-          fontSize: "clamp(32px, 6vw, 52px)", fontWeight: 700,
-          letterSpacing: "-0.03em", lineHeight: 1.12,
-          maxWidth: 560, margin: "0 auto 20px",
+          fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 700,
+          letterSpacing: "-0.03em", lineHeight: 1.15,
+          maxWidth: 520, margin: "0 auto 20px",
         }}>
           Let clients edit your app without breaking it.
         </h1>
