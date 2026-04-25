@@ -4,7 +4,7 @@ import { LayoutGrid, FolderOpen, LogOut, Menu } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { BRAND, tone, line, type, ease } from "@/lib/ui";
+import { BRAND, tone, line, type, ease, IconTile } from "@/lib/ui";
 
 // Brand rule: the authenticated product UI is white-label.
 // Do NOT import or render any get branding (logo, mascot, wordmark) here.
@@ -42,7 +42,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div
       className="flex flex-col h-full"
-      style={{ background: "#f6f5f2", borderRight: `1px solid ${line.faint}` }}
+      style={{ background: BRAND.paper, borderRight: `1px solid ${line.soft}` }}
     >
       <div
         style={{
@@ -81,26 +81,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   display: "flex",
                   alignItems: "center",
                   gap: 11,
-                  padding: "10px 12px",
-                  borderRadius: 10,
+                  padding: "8px 10px",
+                  borderRadius: 12,
                   marginBottom: 2,
                   cursor: "pointer",
                   transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
                   background: isActive ? BRAND.surface : "transparent",
-                  boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.04)" : "none",
+                  boxShadow: isActive ? "0 1px 2px rgba(26,26,46,0.06)" : "none",
                   border: isActive
                     ? `1px solid ${line.faint}`
                     : "1px solid transparent",
-                  color: isActive ? BRAND.ink : tone[600],
+                  color: isActive ? BRAND.ink : tone[700],
                 }}
               >
-                <item.icon
-                  style={{
-                    width: 16,
-                    height: 16,
-                    color: isActive ? BRAND.ink : tone[400],
-                  }}
-                />
+                <IconTile icon={item.icon} variant={isActive ? "ink" : "soft"} size={28} />
                 <span style={{ fontSize: type.base, fontWeight: isActive ? 600 : 500 }}>
                   {item.label}
                 </span>

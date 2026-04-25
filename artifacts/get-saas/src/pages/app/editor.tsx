@@ -379,12 +379,22 @@ export default function ClientEditor() {
                     style={{
                       marginTop: 8,
                       fontSize: type.xs,
-                      color: "#b45309",
-                      display: "flex",
+                      color: tone[600],
+                      display: "inline-flex",
                       alignItems: "center",
-                      gap: 4,
+                      gap: 6,
                     }}
                   >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: BRAND.yellow,
+                        display: "inline-block",
+                      }}
+                    />
                     Draft pending approval
                   </p>
                 )}

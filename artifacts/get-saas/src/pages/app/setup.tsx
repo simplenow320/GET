@@ -17,7 +17,7 @@ import {
 import {
   BRAND, tone, line, type, ease, r,
   PrimaryButton, SecondaryButton, GhostButton, Card, Field,
-  inputStyle, labelStyle,
+  inputStyle, labelStyle, IconTile,
 } from "@/lib/ui";
 
 // Brand rule: this is inside the authenticated product UI — do NOT render
@@ -63,14 +63,14 @@ function CodeBlock({ code }: { code: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div style={{ position: "relative", background: "#0f111a", borderRadius: r.lg, overflow: "hidden" }}>
+    <div style={{ position: "relative", background: BRAND.ink, borderRadius: r.lg, overflow: "hidden" }}>
       <pre
         style={{
           margin: 0,
           padding: "16px 56px 16px 18px",
           fontSize: type.sm,
           fontFamily: "ui-monospace, Menlo, monospace",
-          color: "#e8eaf6",
+          color: BRAND.paper,
           lineHeight: 1.7,
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
@@ -88,13 +88,13 @@ function CodeBlock({ code }: { code: string }) {
           width: 32,
           height: 32,
           borderRadius: 8,
-          background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.07)",
+          background: copied ? "rgba(255,215,71,0.22)" : "rgba(255,255,255,0.07)",
           border: "none",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: copied ? "#10b981" : "rgba(255,255,255,0.6)",
+          color: copied ? BRAND.yellow : "rgba(255,255,255,0.65)",
           transition: `background 0.18s ${ease}`,
         }}
       >
@@ -114,8 +114,8 @@ function KeyReveal({ keyValue }: { keyValue: string }) {
   return (
     <div
       style={{
-        background: "#f0fdf4",
-        border: "1px solid rgba(16,185,129,0.25)",
+        background: tone[50],
+        border: `1px solid ${BRAND.ink}`,
         borderRadius: r.lg,
         overflow: "hidden",
       }}
@@ -126,11 +126,12 @@ function KeyReveal({ keyValue }: { keyValue: string }) {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          borderBottom: "1px solid rgba(16,185,129,0.15)",
+          borderBottom: `1px solid ${tone[200]}`,
+          background: BRAND.surface,
         }}
       >
-        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981" }} />
-        <span style={{ fontSize: type.xs, fontWeight: 600, color: "#059669" }}>
+        <div style={{ width: 7, height: 7, borderRadius: "50%", background: BRAND.yellow }} />
+        <span style={{ fontSize: type.xs, fontWeight: 600, color: BRAND.ink }}>
           Copy now — your key won't be shown again
         </span>
       </div>
@@ -147,10 +148,7 @@ function KeyReveal({ keyValue }: { keyValue: string }) {
         >
           {keyValue}
         </code>
-        <PrimaryButton
-          onClick={handleCopy}
-          style={{ background: copied ? "#10b981" : BRAND.ink, flexShrink: 0 }}
-        >
+        <PrimaryButton onClick={handleCopy} style={{ flexShrink: 0 }}>
           {copied ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
           {copied ? "Copied" : "Copy"}
         </PrimaryButton>
@@ -700,7 +698,7 @@ export default function SetupWizard() {
                         gap: 14,
                         textAlign: "left",
                         transition: `border-color 0.15s ${ease}, background 0.15s ${ease}`,
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                        boxShadow: "0 1px 2px rgba(26,26,46,0.03)",
                       }}
                     >
                       <div
@@ -817,12 +815,26 @@ export default function SetupWizard() {
               <div
                 style={{
                   background: "rgba(255,215,71,0.14)",
-                  border: "1px solid rgba(255,215,71,0.4)",
+                  border: "1px solid rgba(255,215,71,0.55)",
                   borderRadius: 12,
                   padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10,
                 }}
               >
-                <p style={{ fontSize: type.sm, color: "#92700a", lineHeight: 1.55 }}>
+                <span
+                  aria-hidden
+                  style={{
+                    width: 7,
+                    height: 7,
+                    marginTop: 7,
+                    borderRadius: "50%",
+                    background: BRAND.yellow,
+                    flexShrink: 0,
+                  }}
+                />
+                <p style={{ fontSize: type.sm, color: BRAND.ink, lineHeight: 1.55 }}>
                   Keep this key on your server only — never paste it into frontend code that ships to browsers.
                 </p>
               </div>
@@ -905,7 +917,7 @@ export default function SetupWizard() {
                         gap: 12,
                       }}
                     >
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", flexShrink: 0 }} />
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: BRAND.yellow, flexShrink: 0 }} />
                       <span style={{ fontSize: type.base, fontWeight: 600 }}>{f.label}</span>
                       <span style={{ fontSize: type.xs, color: tone[500], marginLeft: "auto" }}>
                         {FIELD_TYPES.find((t) => t.value === f.type)?.label ?? f.type}
@@ -1105,20 +1117,7 @@ export default function SetupWizard() {
           {step === 7 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 28, textAlign: "center", alignItems: "center" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-                <div
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 20,
-                    background: "linear-gradient(135deg, #1a1a2e, #2d2d5a)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 8px 24px rgba(26,26,46,0.16)",
-                  }}
-                >
-                  <CheckCircle2 style={{ width: 32, height: 32, color: "#fff" }} />
-                </div>
+                <IconTile icon={CheckCircle2} variant="ink" size={72} />
                 <div>
                   <h1
                     style={{
@@ -1180,7 +1179,7 @@ export default function SetupWizard() {
                         {item.value}
                       </span>
                       {item.done && (
-                        <CheckCircle2 style={{ width: 14, height: 14, color: "#10b981", flexShrink: 0 }} />
+                        <CheckCircle2 style={{ width: 14, height: 14, color: BRAND.ink, flexShrink: 0 }} />
                       )}
                     </div>
                   </div>

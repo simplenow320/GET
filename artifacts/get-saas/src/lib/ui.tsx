@@ -31,10 +31,10 @@ export const tone = {
 } as const;
 
 export const line = {
-  faint: "rgba(0,0,0,0.04)",
-  soft: "rgba(0,0,0,0.06)",
-  base: "rgba(0,0,0,0.08)",
-  strong: "rgba(0,0,0,0.12)",
+  faint: "rgba(26,26,46,0.05)",
+  soft: "rgba(26,26,46,0.08)",
+  base: "rgba(26,26,46,0.10)",
+  strong: "rgba(26,26,46,0.14)",
 } as const;
 
 export const type = {
@@ -57,14 +57,21 @@ export const r = {
 
 export const ease = "cubic-bezier(0.4,0,0.2,1)";
 
+/**
+ * Brand-only status palette. We never reach for ad-hoc greens / reds / blues —
+ * the whole product is told in BRAND.ink + BRAND.yellow + neutral tones.
+ *   - "positive" states (active / published / verified) get the BRAND.yellow dot
+ *   - "negative" states (rejected) get an inked dot
+ *   - everything else is neutral
+ */
 export const status = {
-  active:   { bg: "#ecfdf5", fg: "#059669" },
-  draft:    { bg: "#fffbeb", fg: "#b45309" },
-  archived: { bg: "#f4f4f5", fg: "#71717a" },
-  pending:  { bg: "#eff6ff", fg: "#2563eb" },
-  published:{ bg: "#ecfdf5", fg: "#059669" },
-  rejected: { bg: "#fef2f2", fg: "#dc2626" },
-};
+  active:    { bg: tone[100], fg: BRAND.ink, dot: BRAND.yellow },
+  published: { bg: tone[100], fg: BRAND.ink, dot: BRAND.yellow },
+  draft:     { bg: tone[100], fg: tone[600], dot: tone[400] },
+  pending:   { bg: tone[100], fg: tone[600], dot: tone[400] },
+  archived:  { bg: tone[100], fg: tone[500], dot: tone[300] },
+  rejected:  { bg: tone[100], fg: tone[600], dot: BRAND.ink },
+} as const;
 
 // ── Style objects ────────────────────────────────────────────────────────────
 
@@ -72,7 +79,7 @@ export const cardStyle: React.CSSProperties = {
   background: BRAND.surface,
   border: `1px solid ${line.faint}`,
   borderRadius: r.xl,
-  boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+  boxShadow: "0 1px 2px rgba(26,26,46,0.03)",
 };
 
 export const inputStyle: React.CSSProperties = {
@@ -134,10 +141,16 @@ export const ghostBtnStyle: React.CSSProperties = {
   color: tone[700],
 };
 
+/**
+ * Destructive actions read as "intentionally heavy" via an outlined ink
+ * treatment — never bright red. Distinct from primary (filled) and secondary
+ * (lighter outline) without leaving the brand palette.
+ */
 export const dangerBtnStyle: React.CSSProperties = {
   ...btnBase,
-  background: "#fef2f2",
-  color: "#dc2626",
+  background: "transparent",
+  color: BRAND.ink,
+  border: `1.5px solid ${BRAND.ink}`,
 };
 
 // ── Components ───────────────────────────────────────────────────────────────
@@ -364,19 +377,8 @@ export function EmptyState({
       }}
     >
       {Icon ? (
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            background: tone[50],
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            margin: "0 auto 16px",
-          }}
-        >
-          <Icon style={{ width: 20, height: 20, color: tone[400] }} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          <IconTile icon={Icon} variant="soft" size={52} />
         </div>
       ) : null}
       <p style={{ fontSize: type.md, fontWeight: 600, color: BRAND.ink, marginBottom: description ? 6 : 0 }}>
@@ -401,18 +403,19 @@ export function Pill({
   variant?: keyof typeof status | "neutral";
   style?: React.CSSProperties;
 }) {
-  const palette = variant === "neutral"
-    ? { bg: tone[100], fg: tone[600] }
-    : { bg: status[variant].bg, fg: status[variant].fg };
+  const palette =
+    variant === "neutral"
+      ? { bg: tone[100], fg: tone[600], dot: null as string | null }
+      : { ...status[variant] };
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 4,
+        gap: 6,
         fontSize: type.xs,
         fontWeight: 500,
-        padding: "3px 9px",
+        padding: "3px 10px",
         borderRadius: r.pill,
         background: palette.bg,
         color: palette.fg,
@@ -422,7 +425,110 @@ export function Pill({
         ...style,
       }}
     >
+      {palette.dot ? (
+        <span
+          aria-hidden
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: palette.dot,
+            flexShrink: 0,
+          }}
+        />
+      ) : null}
       {children}
+    </span>
+  );
+}
+
+// ── IconTile ─────────────────────────────────────────────────────────────────
+// A small "Apple-builder"-style icon container: rounded squircle (~22% radius),
+// brand-only fills with a subtle gradient for depth, single glyph centered.
+// Use this everywhere an icon needs visual weight: sidebar nav, list-row
+// leading icons, empty states, dashboard stat cards, status banners.
+
+export type IconTileVariant = "ink" | "soft" | "accent" | "outline";
+
+// All gradients here use only BRAND-palette colors. The "highlight" lift on
+// ink/accent is achieved via a translucent BRAND.surface (white) overlay rather
+// than introducing a new off-palette hex.
+const tileFill: Record<IconTileVariant, { bg: string; fg: string; ring?: string }> = {
+  // Default — strong brand presence: dark navy with subtle top highlight.
+  ink: {
+    bg: `linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${BRAND.ink}`,
+    fg: BRAND.paper,
+    ring: "inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(26,26,46,0.18)",
+  },
+  // Quiet — used for tertiary / inactive states.
+  soft: {
+    bg: `linear-gradient(180deg, ${BRAND.surface} 0%, ${tone[50]} 100%)`,
+    fg: BRAND.ink,
+    ring: `inset 0 0 0 1px ${line.base}`,
+  },
+  // Accent — brand yellow, reserved for emphasis (positive, highlighted).
+  accent: {
+    bg: `linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 60%), ${BRAND.yellow}`,
+    fg: BRAND.ink,
+    ring: "inset 0 1px 0 rgba(255,255,255,0.45), 0 1px 2px rgba(26,26,46,0.10)",
+  },
+  // Outline — flat cream with a hairline border, lightest possible.
+  outline: {
+    bg: BRAND.surface,
+    fg: BRAND.ink,
+    ring: `inset 0 0 0 1px ${line.base}`,
+  },
+};
+
+export function IconTile({
+  icon: Icon,
+  variant = "soft",
+  size = 36,
+  style,
+  label,
+}: {
+  icon: React.ElementType;
+  variant?: IconTileVariant;
+  size?: number;
+  style?: React.CSSProperties;
+  /**
+   * Optional accessible label. When omitted, the tile is treated as
+   * decorative (`aria-hidden`) — which is the right default since IconTile
+   * is almost always paired with a visible text label next to it.
+   */
+  label?: string;
+}) {
+  const palette = tileFill[variant];
+  const radius = Math.round(size * 0.26);
+  const glyph = Math.round(size * 0.46);
+  const decorative = !label;
+  return (
+    <span
+      role={decorative ? undefined : "img"}
+      aria-label={label}
+      aria-hidden={decorative ? true : undefined}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        background: palette.bg,
+        boxShadow: palette.ring,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        ...style,
+      }}
+    >
+      <Icon
+        aria-hidden
+        style={{
+          width: glyph,
+          height: glyph,
+          color: palette.fg,
+          strokeWidth: 1.75,
+        }}
+      />
     </span>
   );
 }

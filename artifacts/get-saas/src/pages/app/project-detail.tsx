@@ -195,7 +195,7 @@ export default function ProjectDetail() {
                     gap: 7,
                     fontWeight: 500,
                   }}
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1a2e] text-[rgba(26,26,46,0.55)] whitespace-nowrap"
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1a2e] whitespace-nowrap text-[color:var(--tone-tab,rgba(26,26,46,0.55))]"
                 >
                   <tab.icon style={{ width: 14, height: 14 }} />
                   {tab.label}
@@ -363,8 +363,8 @@ function ContentMapTab({ projectId }: { projectId: string }) {
                     borderRadius: 8,
                     cursor: "pointer",
                     border: "none",
-                    background: field.isLocked ? "#fffbeb" : tone[100],
-                    color: field.isLocked ? "#b45309" : tone[600],
+                    background: field.isLocked ? BRAND.ink : tone[100],
+                    color: field.isLocked ? BRAND.paper : tone[600],
                     transition: `background 0.18s ${ease}`,
                   }}
                 >
@@ -1169,17 +1169,17 @@ function KeysTab({ projectId }: { projectId: string }) {
           padded
           style={{
             padding: 22,
-            border: "1px solid rgba(16,185,129,0.25)",
-            background: "#f0fdf4",
+            border: `1px solid ${BRAND.ink}`,
+            background: tone[50],
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <ShieldCheck style={{ width: 16, height: 16, color: "#059669" }} />
-            <p style={{ fontSize: type.base, fontWeight: 600, color: "#059669" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <ShieldCheck style={{ width: 16, height: 16, color: BRAND.ink }} />
+            <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
               Key generated — copy it now
             </p>
           </div>
-          <p style={{ fontSize: type.sm, color: "rgba(26,46,26,0.65)", marginBottom: 14, lineHeight: 1.55 }}>
+          <p style={{ fontSize: type.sm, color: tone[600], marginBottom: 14, lineHeight: 1.55 }}>
             This key is shown only once. Store it as a server environment variable.
           </p>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -1199,12 +1199,7 @@ function KeysTab({ projectId }: { projectId: string }) {
             >
               {generatedKey}
             </div>
-            <PrimaryButton
-              onClick={handleCopy}
-              style={{
-                background: copied ? "#059669" : BRAND.ink,
-              }}
-            >
+            <PrimaryButton onClick={handleCopy}>
               {copied ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
               {copied ? "Copied" : "Copy"}
             </PrimaryButton>
@@ -1348,7 +1343,7 @@ function KeysTab({ projectId }: { projectId: string }) {
             fontSize: 12.5,
             lineHeight: 1.6,
             background: BRAND.ink,
-            color: "#f5f5f7",
+            color: BRAND.paper,
             padding: "14px 16px",
             borderRadius: 10,
             overflowX: "auto",
@@ -1391,8 +1386,8 @@ function IconDeleteButton({ onClick }: { onClick: () => void }) {
         transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.background = "#fef2f2";
-        (e.currentTarget as HTMLElement).style.color = "#dc2626";
+        (e.currentTarget as HTMLElement).style.background = tone[100];
+        (e.currentTarget as HTMLElement).style.color = BRAND.ink;
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.background = "transparent";

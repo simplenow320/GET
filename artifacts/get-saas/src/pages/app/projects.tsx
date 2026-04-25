@@ -18,7 +18,7 @@ import { Plus, FolderOpen, Users, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   BRAND, tone, line, type, ease, r,
-  PageHeader, EmptyState, Card, PrimaryButton, Pill,
+  PageHeader, EmptyState, Card, PrimaryButton, Pill, IconTile,
   inputStyle, labelStyle,
 } from "@/lib/ui";
 
@@ -195,12 +195,12 @@ export default function Projects() {
                   <div
                     onMouseEnter={(e) => {
                       (e.currentTarget.parentElement as HTMLElement).style.boxShadow =
-                        "0 6px 20px rgba(0,0,0,0.05)";
+                        "0 6px 20px rgba(26,26,46,0.06)";
                       (e.currentTarget.parentElement as HTMLElement).style.borderColor = tone[200];
                     }}
                     onMouseLeave={(e) => {
                       (e.currentTarget.parentElement as HTMLElement).style.boxShadow =
-                        "0 1px 2px rgba(0,0,0,0.02)";
+                        "0 1px 2px rgba(26,26,46,0.03)";
                       (e.currentTarget.parentElement as HTMLElement).style.borderColor = line.faint;
                     }}
                     style={{ display: "flex", flexDirection: "column", height: "100%" }}
@@ -253,12 +253,12 @@ export default function Projects() {
                         fontSize: type.xs,
                       }}
                     >
-                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <Database style={{ width: 12, height: 12 }} />
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                        <IconTile icon={Database} variant="soft" size={20} />
                         {project.fieldCount}
                       </span>
-                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <Users style={{ width: 12, height: 12 }} />
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                        <IconTile icon={Users} variant="soft" size={20} />
                         {project.clientCount}
                       </span>
                       <span style={{ marginLeft: "auto" }}>

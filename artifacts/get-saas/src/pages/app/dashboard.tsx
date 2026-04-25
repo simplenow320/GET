@@ -3,10 +3,13 @@ import { format } from "date-fns";
 import { useGetProjectStats, useListProjects } from "@workspace/api-client-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ArrowRight, FolderOpen } from "lucide-react";
+import {
+  Plus, ArrowRight, FolderOpen,
+  LayoutGrid, Users, Type as TypeIcon, Activity,
+} from "lucide-react";
 import {
   BRAND, tone, line, type, ease,
-  PageHeader, SectionTitle, Card, EmptyState, PrimaryButton,
+  PageHeader, SectionTitle, Card, EmptyState, PrimaryButton, IconTile,
 } from "@/lib/ui";
 
 export default function Dashboard() {
@@ -41,15 +44,18 @@ export default function Dashboard() {
           }}
         >
           {[
-            { label: "Projects", value: stats?.totalProjects },
-            { label: "Clients", value: stats?.totalClients },
-            { label: "Fields", value: stats?.totalFields },
-            { label: "Recent edits", value: stats?.recentEdits },
+            { label: "Projects",     value: stats?.totalProjects, icon: LayoutGrid },
+            { label: "Clients",      value: stats?.totalClients,  icon: Users },
+            { label: "Fields",       value: stats?.totalFields,   icon: TypeIcon },
+            { label: "Recent edits", value: stats?.recentEdits,   icon: Activity },
           ].map((s) => (
             <Card key={s.label} padded style={{ padding: "18px 20px" }}>
-              <p style={{ fontSize: type.xs, color: tone[500], marginBottom: 6, fontWeight: 500 }}>
-                {s.label}
-              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <IconTile icon={s.icon} variant="soft" size={28} />
+                <p style={{ fontSize: type.xs, color: tone[500], fontWeight: 500 }}>
+                  {s.label}
+                </p>
+              </div>
               {statsLoading ? (
                 <Skeleton style={{ height: 26, width: 56, borderRadius: 6, background: tone[100] }} />
               ) : (

@@ -17,6 +17,7 @@ import {
   GhostButton,
   BrandLogo,
   Pill,
+  IconTile,
 } from "@/lib/ui";
 
 type InviteInfo = {
@@ -169,20 +170,8 @@ export default function AcceptInvitePage() {
 function ErrorView({ message }: { message: string }) {
   return (
     <div style={{ textAlign: "center", padding: "8px 0" }}>
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: "50%",
-          background: "#FEF3F2",
-          color: "#B42318",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 16,
-        }}
-      >
-        <AlertCircle style={{ width: 24, height: 24 }} />
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+        <IconTile icon={AlertCircle} variant="soft" size={52} />
       </div>
       <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 8 }}>
         Invite unavailable
@@ -215,20 +204,8 @@ function ReadyView({
   if (invite.status === "accepted") {
     return (
       <div style={{ textAlign: "center", padding: "8px 0" }}>
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: "50%",
-            background: "#ECFDF3",
-            color: "#067647",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 16,
-          }}
-        >
-          <Check style={{ width: 24, height: 24 }} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          <IconTile icon={Check} variant="accent" size={52} />
         </div>
         <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 8 }}>
           Invite already used
@@ -311,9 +288,9 @@ function ReadyView({
           <p
             style={{
               fontSize: type.sm,
-              color: "#B42318",
-              background: "#FEF3F2",
-              border: "1px solid #FECDCA",
+              color: BRAND.ink,
+              background: tone[50],
+              border: `1px solid ${BRAND.ink}`,
               padding: 12,
               borderRadius: r.md,
               lineHeight: 1.55,
