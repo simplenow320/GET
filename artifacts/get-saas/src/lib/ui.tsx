@@ -1,7 +1,19 @@
 import React from "react";
 import { Link } from "wouter";
 import { Eye, EyeOff } from "lucide-react";
-import brandLogoPath from "@assets/IMG_6687_1777091776547.jpeg";
+// Three brand assets:
+//   brandLogoPath  — wordmark + mascot + tagline. Used at large size on the
+//                    landing hero; the tagline is legible only when the asset
+//                    is rendered ~400px+ wide.
+//   brandLogoCompactPath — wordmark + mascot, NO tagline. Used at small sizes
+//                    on auth surfaces (login, signup, accept-invite, 404,
+//                    forgot/reset password) where the tagline would be
+//                    unreadable.
+//   mascotPath     — just the mascot. Used as a friendly accent (landing
+//                    "How it works" sidekick, dashboard empty state).
+import brandLogoPath from "@assets/f6f59ad9-1839-4702-8c5c-7e6ef99b093c_1777135641011.png";
+import brandLogoCompactPath from "@assets/d00d5786-3774-42d2-b108-fa89f5e1cf9c_1777135641011.png";
+import mascotPath from "@assets/17d6aa3a-fd15-4ce1-9983-daa3d93d1001_1777135641011.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,6 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+export { mascotPath };
 
 export const BRAND = {
   ink: "#1a1a2e",
@@ -358,12 +372,17 @@ export function SectionTitle({
 
 export function EmptyState({
   icon: Icon,
+  image,
+  imageAlt,
   title,
   description,
   action,
   compact,
 }: {
   icon?: React.ElementType;
+  /** Optional image src that replaces the icon tile (e.g. brand mascot for friendly empty states). */
+  image?: string;
+  imageAlt?: string;
   title: React.ReactNode;
   description?: React.ReactNode;
   action?: React.ReactNode;
@@ -378,7 +397,16 @@ export function EmptyState({
         margin: "0 auto",
       }}
     >
-      {Icon ? (
+      {image ? (
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+          <img
+            src={image}
+            alt={imageAlt ?? ""}
+            style={{ width: 96, height: 96, objectFit: "contain", display: "block" }}
+            draggable={false}
+          />
+        </div>
+      ) : Icon ? (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
           <IconTile icon={Icon} variant="soft" size={52} />
         </div>
@@ -580,22 +608,26 @@ export function BrandLogo({
   alt = "get — Let clients edit your app without breaking it.",
   style,
   linkToHome = true,
+  variant = "compact",
 }: {
   width?: number | string;
   alt?: string;
   style?: React.CSSProperties;
   linkToHome?: boolean;
+  /** "full" includes the baked-in tagline (use only at ~400px+ wide).
+   *  "compact" is wordmark + mascot only — readable at any size and
+   *  preferred on small auth surfaces. */
+  variant?: "full" | "compact";
 }) {
   const img = (
     <img
-      src={brandLogoPath}
+      src={variant === "full" ? brandLogoPath : brandLogoCompactPath}
       alt={alt}
       style={{
         width,
         height: "auto",
         display: "block",
         userSelect: "none",
-        mixBlendMode: "multiply",
         ...style,
       }}
       draggable={false}

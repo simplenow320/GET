@@ -4,12 +4,13 @@ import { useGetProjectStats, useListProjects } from "@workspace/api-client-react
 import { AppLayout } from "@/components/layout/app-layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Plus, ArrowRight, FolderOpen,
+  Plus, ArrowRight,
   LayoutGrid, Users, Type as TypeIcon, Activity,
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease,
   PageHeader, SectionTitle, Card, EmptyState, PrimaryButton, IconTile,
+  mascotPath,
 } from "@/lib/ui";
 
 export default function Dashboard() {
@@ -106,7 +107,8 @@ export default function Dashboard() {
             </div>
           ) : recentProjects.length === 0 ? (
             <EmptyState
-              icon={FolderOpen}
+              image={mascotPath}
+              imageAlt=""
               title="No projects yet"
               description="Create your first project to start giving clients safe editing access."
               action={

@@ -205,6 +205,15 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
 }
 
+/* Hide the side mascot on narrow screens — it would force the steps to
+   shrink awkwardly. The grid column it lives in still collapses to 0 because
+   we set width:0 + overflow:hidden. */
+@media (max-width: 720px) {
+  .landing-mascot-side {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,33 +1,34 @@
 import { Link } from "wouter";
-import { BRAND, tone, type, ease, BrandLogo } from "@/lib/ui";
+import { BRAND, tone, type, ease, BrandLogo, mascotPath } from "@/lib/ui";
 
 export default function LandingPage() {
   return (
     <div style={{ backgroundColor: BRAND.paper, color: BRAND.ink, minHeight: "100dvh" }}>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      {/* Per brand rules: no top nav, no header links, no tiny logo in corners.
-          Just the uploaded brand asset as the hero. */}
+      {/* The brand asset already includes the wordmark, the mascot, and the
+          tagline — so the hero is just that one image plus the CTA. No
+          supporting paragraph here; the next section delivers the pitch. */}
       <section
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           textAlign: "center",
-          padding: "80px 24px 64px",
+          padding: "80px 24px 56px",
           maxWidth: 720,
           margin: "0 auto",
         }}
       >
         <BrandLogo
+          variant="full"
           width="100%"
           linkToHome={false}
-          style={{ maxWidth: 520, marginBottom: 24 }}
+          style={{ maxWidth: 540, marginBottom: 36 }}
         />
 
-        {/* Visually-hidden H1 with the exact tagline so it's available to
-            screen readers and search engines without re-rendering the
-            tagline that's already baked into the brand asset above. */}
+        {/* Visually-hidden H1 so screen readers / SEO get the tagline that's
+            baked into the brand asset above. */}
         <h1
           style={{
             position: "absolute",
@@ -44,20 +45,9 @@ export default function LandingPage() {
           Let clients edit your app without breaking it.
         </h1>
 
-        <p
-          style={{
-            fontSize: "clamp(16px, 2vw, 18px)",
-            lineHeight: 1.6,
-            color: tone[600],
-            maxWidth: 480,
-            margin: "0 auto 36px",
-          }}
-        >
-          The simplest way to give clients safe, visual editing in the apps you build.
-        </p>
-
         <Link
           href="/signup"
+          data-testid="button-hero-cta"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -81,32 +71,89 @@ export default function LandingPage() {
         </Link>
       </section>
 
-      {/* ── Benefits ─────────────────────────────────────────────────────── */}
-      <section style={{ padding: "0 24px 80px" }}>
+      {/* ── Pain → Relief ────────────────────────────────────────────────── */}
+      <section style={{ padding: "8px 24px 72px" }}>
+        <div style={{ maxWidth: 620, margin: "0 auto", textAlign: "center" }}>
+          <p
+            style={{
+              fontSize: "clamp(24px, 3.4vw, 32px)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              lineHeight: 1.2,
+              marginBottom: 16,
+            }}
+          >
+            You build fast. Then the tiny edits start.
+          </p>
+          <p
+            style={{
+              fontSize: type.md,
+              lineHeight: 1.6,
+              color: tone[600],
+              marginBottom: 28,
+            }}
+          >
+            Vibe coders end up making every text and image change by hand.
+            Clients end up waiting on edits they thought they could do themselves.
+          </p>
+
+          <div
+            style={{
+              display: "inline-block",
+              padding: "8px 16px",
+              borderRadius: 999,
+              background: BRAND.ink,
+              color: BRAND.paper,
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            get makes the handoff easy.
+          </div>
+
+          <p
+            style={{
+              fontSize: type.base,
+              lineHeight: 1.6,
+              color: tone[600],
+              marginTop: 24,
+              maxWidth: 520,
+              marginInline: "auto",
+            }}
+          >
+            You keep control of structure, permissions, and what goes live.
+            Your client gets a simple way to update approved content — no code.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Three pillars ────────────────────────────────────────────────── */}
+      <section style={{ padding: "0 24px 88px" }}>
         <div
           style={{
-            maxWidth: 880,
+            maxWidth: 920,
             margin: "0 auto",
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
             gap: 16,
           }}
         >
           {[
             {
-              title: "Visual editing for clients",
+              title: "Built for safe handoff",
               body:
-                "Clients see a clean, simple editor — just the areas you've allowed. No code, no confusion.",
+                "Clients edit the parts you approve. Layout, permissions, and what goes live stay yours.",
             },
             {
-              title: "Design stays protected",
+              title: "Built for Replit first",
               body:
-                "Layouts, styles, and logic stay locked. Only the content you choose can change.",
+                "Drop get into projects you already build on Replit. Other code-first apps work too.",
             },
             {
-              title: "Three-minute setup",
+              title: "Simple for clients",
               body:
-                "A few lines of code and you're connected. Works with any web app — Replit included.",
+                "No code. No confusing backend. Just a clean editor for the parts you let them touch.",
             },
           ].map((item) => (
             <div
@@ -137,8 +184,10 @@ export default function LandingPage() {
       </section>
 
       {/* ── How it works ─────────────────────────────────────────────────── */}
+      {/* Second mascot placement: nestled to the right of the steps as a
+          friendly accent. On narrow screens it stacks above the steps. */}
       <section style={{ padding: "0 24px 88px" }}>
-        <div style={{ maxWidth: 540, margin: "0 auto" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <p
             style={{
               fontSize: type.xs,
@@ -153,57 +202,94 @@ export default function LandingPage() {
             How it works
           </p>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {[
-              { n: "1", title: "Build your app", body: "Finish building in Replit or any framework." },
-              { n: "2", title: "Connect it", body: "Add your project key and one fetch call. Three minutes." },
-              { n: "3", title: "Invite clients", body: "Clients get a private editor. They change content. Nothing else." },
-            ].map((step, i, arr) => (
-              <div key={step.n} style={{ display: "flex", gap: 18 }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      background: BRAND.ink,
-                      color: BRAND.paper,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 13,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {step.n}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 32,
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {[
+                { n: "1", title: "Build your app", body: "Replit, or any code-first stack." },
+                { n: "2", title: "Connect get", body: "One key, one fetch. Minutes, not a migration." },
+                { n: "3", title: "Choose what's editable", body: "Approve the fields. Lock the rest." },
+                { n: "4", title: "Invite your client", body: "They get a private, no-code editor." },
+                { n: "5", title: "Review and publish", body: "Nothing goes live until you say so." },
+              ].map((step, i, arr) => (
+                <div key={step.n} style={{ display: "flex", gap: 18 }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        background: BRAND.ink,
+                        color: BRAND.paper,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {step.n}
+                    </div>
+                    {i < arr.length - 1 && (
+                      <div style={{ width: 1, flex: 1, background: tone[200], margin: "6px 0" }} />
+                    )}
                   </div>
-                  {i < arr.length - 1 && (
-                    <div style={{ width: 1, flex: 1, background: tone[200], margin: "6px 0" }} />
-                  )}
+                  <div style={{ paddingBottom: i < arr.length - 1 ? 22 : 0, paddingTop: 2 }}>
+                    <p
+                      style={{
+                        fontSize: type.md,
+                        fontWeight: 700,
+                        marginBottom: 4,
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      {step.title}
+                    </p>
+                    <p style={{ fontSize: type.base, lineHeight: 1.6, color: tone[600] }}>
+                      {step.body}
+                    </p>
+                  </div>
                 </div>
-                <div style={{ paddingBottom: i < arr.length - 1 ? 28 : 0, paddingTop: 4 }}>
-                  <p
-                    style={{
-                      fontSize: type.md,
-                      fontWeight: 700,
-                      marginBottom: 4,
-                      letterSpacing: "-0.01em",
-                    }}
-                  >
-                    {step.title}
-                  </p>
-                  <p style={{ fontSize: type.base, lineHeight: 1.6, color: tone[600] }}>
-                    {step.body}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Mascot accent — hidden on narrow viewports via inline media
+                rule (we render an empty container; visibility is controlled
+                with a CSS class defined in index.css). */}
+            <div
+              className="landing-mascot-side"
+              aria-hidden="true"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <img
+                src={mascotPath}
+                alt=""
+                style={{
+                  width: 140,
+                  height: 140,
+                  objectFit: "contain",
+                  display: "block",
+                  userSelect: "none",
+                }}
+                draggable={false}
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Security ─────────────────────────────────────────────────────── */}
+      {/* ── Control / safe ───────────────────────────────────────────────── */}
       <section style={{ padding: "0 24px 80px" }}>
         <div
           style={{
@@ -222,7 +308,7 @@ export default function LandingPage() {
               color: BRAND.paper,
               letterSpacing: "-0.02em",
               lineHeight: 1.35,
-              maxWidth: 480,
+              maxWidth: 520,
               margin: "0 auto",
             }}
           >
@@ -238,10 +324,22 @@ export default function LandingPage() {
             fontSize: "clamp(22px, 4vw, 32px)",
             fontWeight: 700,
             letterSpacing: "-0.025em",
+            marginBottom: 12,
+            lineHeight: 1.25,
+          }}
+        >
+          Build your app. Connect get.
+          <br />
+          Let clients edit safely.
+        </p>
+        <p
+          style={{
+            fontSize: type.sm,
+            color: tone[500],
             marginBottom: 24,
           }}
         >
-          Set up client editing in minutes.
+          Designed to feel like minutes, not a migration project.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Link

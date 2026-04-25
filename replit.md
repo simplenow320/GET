@@ -34,10 +34,14 @@ Full-stack SaaS called "get" — a hosted control plane that lets developers giv
 - `/app/editor/:projectId` — Client-facing content editor (white-label, no branding)
 
 ## Brand rules (strict)
-- **The ONLY "get" mark** is the uploaded asset `attached_assets/IMG_6687_1777091776547.jpeg`. Render it via `<BrandLogo />` from `src/lib/ui.tsx`. NEVER recreate the wordmark or mascot programmatically (no fake `<Wordmark>` text component, no SVG copies).
-- **Landing page**: hero uses BrandLogo, no top nav, no header links, no tiny corner logo, no secondary brand marks, no footer brand mark. Tagline lives baked into the asset and is mirrored as an sr-only H1: "Let clients edit your app without breaking it." (no em-dash).
-- **Auth pages (/login, /signup) and /not-found**: small BrandLogo (≤140px) is OK — these are landing-adjacent.
-- **Authenticated product UI (/app/\*)**: WHITE-LABEL. No BrandLogo, no get-branded copy, no mascot anywhere. Sidebar header shows uppercase "Workspace". Setup top bar shows "Set up project". Editor top bar shows "Editor". Each affected file has a comment marker enforcing this.
+- **Three brand assets** (transparent PNGs, all in `attached_assets/`):
+  1. `f6f59ad9-...png` — wordmark + mascot + tagline. The "full" hero asset. Tagline is only legible at ~400px+ wide.
+  2. `d00d5786-...png` — wordmark + mascot, no tagline. The "compact" auth/utility variant.
+  3. `17d6aa3a-...png` — just the mascot. Used as a friendly accent (exported as `mascotPath`).
+- Render the logo via `<BrandLogo variant="full" | "compact" />` from `src/lib/ui.tsx` (compact is the default). NEVER recreate the wordmark or mascot programmatically (no fake `<Wordmark>` text component, no SVG copies).
+- **Landing page**: hero uses `<BrandLogo variant="full" />`, no top nav, no header links, no tiny corner logo, no secondary brand marks, no footer brand mark. Tagline lives baked into the full asset and is mirrored as an sr-only H1: "Let clients edit your app without breaking it." (no em-dash). One additional mascot accent appears next to the "How it works" steps.
+- **Auth pages (/login, /signup) and /not-found**: compact BrandLogo (≤140px) — never the full asset, the tagline becomes unreadable.
+- **Authenticated product UI (/app/\*)**: WHITE-LABEL. No BrandLogo, no get-branded copy. The ONLY mascot exception inside /app is the dashboard "No projects yet" empty state, which uses `mascotPath` via `<EmptyState image={mascotPath} />` to make first-run feel friendly. Sidebar header still shows uppercase "Workspace". Setup top bar shows "Set up project". Editor top bar shows "Editor".
 - `GET_PROJECT_KEY` env var name is allowed in code snippets — it's the developer-facing API contract identifier (like `STRIPE_SECRET_KEY`), not branding.
 - **Landing palette**: Warm cream (#faf9f6), dark navy (#1a1a2e), yellow accent (#FFD747)
 - **App palette**: White-label, clean grayscale, navy primary buttons
