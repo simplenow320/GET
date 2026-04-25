@@ -129,17 +129,41 @@ router.patch(
     let sanitizedDraft: string | null = null;
     if (data.draftValue !== undefined) {
       sanitizedDraft = data.draftValue === null ? null : sanitizeContent(data.draftValue);
-      updatePayload.draftValue = sanitizedDraft;
+
+      const isOwnerOrAdmin = ["owner", "admin"].includes(role);
 
       if (sanitizedDraft !== null) {
-        await db.insert(draftsTable).values({
-          projectId,
-          fieldId,
-          fieldLabel: field.label,
-          value: sanitizedDraft,
-          authorName: req.userName!,
-          status: "pending",
-        });
+        if (isOwnerOrAdmin) {
+          // Owners and admins see their changes go live immediately — no
+          // approval queue needed. We still insert a draft record for the
+          // history log, but mark it published straight away.
+          updatePayload.value = sanitizedDraft;
+          updatePayload.draftValue = null;
+          await db.insert(draftsTable).values({
+            projectId,
+            fieldId,
+            fieldLabel: field.label,
+            value: sanitizedDraft,
+            authorName: req.userName!,
+            status: "published",
+            publishedAt: new Date(),
+          });
+        } else {
+          // Client editors (editor / viewer role) go through the review
+          // queue — the project owner approves before it goes live.
+          updatePayload.draftValue = sanitizedDraft;
+          await db.insert(draftsTable).values({
+            projectId,
+            fieldId,
+            fieldLabel: field.label,
+            value: sanitizedDraft,
+            authorName: req.userName!,
+            status: "pending",
+          });
+        }
+      } else {
+        // Explicit null clears the pending draft without changing the live value.
+        updatePayload.draftValue = null;
       }
     }
 

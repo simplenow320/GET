@@ -50,10 +50,15 @@ export default function ClientEditor() {
         data: { draftValue: localValues[fieldId] },
       },
       {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
+          // If the server auto-published (owner/admin), draftValue comes back
+          // null. If it's pending review (client editor), draftValue is set.
+          const isPending = data?.draftValue != null;
           toast({
-            title: "Saved as draft",
-            description: "Your change is pending review.",
+            title: isPending ? "Saved — pending review" : "Saved",
+            description: isPending
+              ? "The project owner will review before it goes live."
+              : "Your change is now live.",
           });
           refetch();
           setSavingField(null);
@@ -150,27 +155,32 @@ export default function ClientEditor() {
         >
           Editor
         </span>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: type.xs,
-            fontWeight: 500,
-            color: tone[500],
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: tone[300],
-              display: "inline-block",
-            }}
-          />
-          Saved as draft until reviewed
-        </span>
+        {(() => {
+          const anyPending = fields?.some((f) => f.draftValue != null);
+          return (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: type.xs,
+                fontWeight: 500,
+                color: tone[500],
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: anyPending ? BRAND.yellow : "#4ade80",
+                  display: "inline-block",
+                }}
+              />
+              {anyPending ? "Changes pending review" : "All changes live"}
+            </span>
+          );
+        })()}
       </div>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "44px clamp(20px, 4vw, 32px) 80px" }}>
@@ -187,7 +197,7 @@ export default function ClientEditor() {
             Your content
           </h1>
           <p style={{ fontSize: type.base, color: tone[500], lineHeight: 1.55 }}>
-            Update the fields below. Changes save as drafts.
+            Update the fields below and hit Save. Changes go live immediately.
           </p>
         </div>
 
