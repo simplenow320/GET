@@ -32,17 +32,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       className="flex flex-col h-full"
       style={{ background: "#f8f8f7", borderRight: "1px solid rgba(0,0,0,0.05)" }}
     >
-      <div style={{ height: 64, display: "flex", alignItems: "center", paddingLeft: 24 }}>
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "#1a1a2e",
-            opacity: 0.7,
-          }}
-        />
-      </div>
+      <div style={{ height: 72 }} />
 
       <nav style={{ flex: 1, padding: "0 12px" }}>
         {navItems.map((item) => {
@@ -129,7 +119,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Mobile header */}
       <div
-        className="md:hidden sticky top-0 z-40 flex items-center justify-between px-5"
+        className="md:hidden sticky top-0 z-40 flex items-center justify-end px-5"
         style={{
           height: 56,
           background: "rgba(250,249,246,0.92)",
@@ -137,15 +127,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           borderBottom: "1px solid rgba(0,0,0,0.05)",
         }}
       >
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "#1a1a2e",
-            opacity: 0.7,
-          }}
-        />
         <Sheet>
           <SheetTrigger asChild>
             <Button

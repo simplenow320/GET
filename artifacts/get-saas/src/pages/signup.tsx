@@ -4,25 +4,27 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSignup, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import mascotPath from "@assets/B56BFD2D-C1F8-4FD4-92D3-52BF5E977238_1777091776546.png";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
+
+const C = "#1a1a2e";
+const BG = "#faf9f6";
+
+const inputStyle: React.CSSProperties = {
+  height: 48, padding: "0 14px", borderRadius: 12,
+  border: `1px solid ${C}1a`, background: "#fff", fontSize: 15,
+};
+const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: `${C}b3` };
 
 export default function Signup() {
   const [, setLocation] = useLocation();
@@ -32,11 +34,7 @@ export default function Signup() {
 
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-    },
+    defaultValues: { name: "", email: "", password: "" },
   });
 
   function onSubmit(values: z.infer<typeof signupSchema>) {
@@ -60,32 +58,35 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#faf9f6] flex flex-col items-center justify-center p-4 selection:bg-[#FFD747] selection:text-[#1a1a2e]">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl shadow-black/5 border border-black/5 p-8 md:p-12">
-        <div className="flex flex-col items-center mb-10">
-          <Link href="/">
-            <img src={mascotPath} alt="get mascot" className="w-16 h-16 mb-6 cursor-pointer hover:scale-105 transition-transform" />
-          </Link>
-          <h1 className="text-3xl font-bold text-[#1a1a2e] mb-2">Create an account</h1>
-          <p className="text-[#1a1a2e]/60 text-center">Start giving your clients the keys, safely.</p>
+    <div style={{
+      minHeight: "100dvh", background: BG, color: C,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      padding: "32px 24px",
+    }}>
+      <div style={{ width: "100%", maxWidth: 360 }}>
+
+        <div style={{ marginBottom: 40 }}>
+          <h1 style={{
+            fontSize: 28, fontWeight: 700, letterSpacing: "-0.025em",
+            marginBottom: 8, lineHeight: 1.2,
+          }}>
+            Create account
+          </h1>
+          <p style={{ fontSize: 15, color: `${C}80`, lineHeight: 1.55 }}>
+            Set up safe client editing in minutes.
+          </p>
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#1a1a2e] font-medium">Full name</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="Jane Doe" 
-                      className="h-12 px-4 rounded-xl border-black/10 focus-visible:ring-[#FFD747] focus-visible:border-[#FFD747] bg-[#faf9f6]/50"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel style={labelStyle}>Name</FormLabel>
+                  <FormControl><Input placeholder="Jane Doe" autoComplete="name" style={inputStyle} {...field} /></FormControl>
+                  <FormMessage style={{ fontSize: 12.5 }} />
                 </FormItem>
               )}
             />
@@ -94,15 +95,9 @@ export default function Signup() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#1a1a2e] font-medium">Email address</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="you@example.com" 
-                      className="h-12 px-4 rounded-xl border-black/10 focus-visible:ring-[#FFD747] focus-visible:border-[#FFD747] bg-[#faf9f6]/50"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel style={labelStyle}>Email</FormLabel>
+                  <FormControl><Input placeholder="you@example.com" autoComplete="email" style={inputStyle} {...field} /></FormControl>
+                  <FormMessage style={{ fontSize: 12.5 }} />
                 </FormItem>
               )}
             />
@@ -111,39 +106,37 @@ export default function Signup() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#1a1a2e] font-medium">Password</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      className="h-12 px-4 rounded-xl border-black/10 focus-visible:ring-[#FFD747] focus-visible:border-[#FFD747] bg-[#faf9f6]/50"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel style={labelStyle}>Password</FormLabel>
+                  <FormControl><Input type="password" placeholder="••••••••" autoComplete="new-password" style={inputStyle} {...field} /></FormControl>
+                  <FormMessage style={{ fontSize: 12.5 }} />
                 </FormItem>
               )}
             />
-            <Button 
-              type="submit" 
-              className="w-full h-12 rounded-xl bg-[#1a1a2e] hover:bg-[#1a1a2e]/90 text-white font-medium text-lg mt-2"
+
+            <button
+              type="submit"
               disabled={signupMutation.isPending}
+              style={{
+                marginTop: 6, height: 48, borderRadius: 12,
+                background: C, color: BG, border: "none",
+                fontSize: 15, fontWeight: 600, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "opacity 0.25s cubic-bezier(0.4,0,0.2,1)",
+                opacity: signupMutation.isPending ? 0.7 : 1,
+              }}
             >
-              {signupMutation.isPending ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                "Create account"
-              )}
-            </Button>
+              {signupMutation.isPending ? <Loader2 style={{ width: 18, height: 18 }} className="animate-spin" /> : "Create account"}
+            </button>
           </form>
         </Form>
 
-        <p className="text-center mt-8 text-[#1a1a2e]/60">
+        <p style={{ textAlign: "center", marginTop: 32, fontSize: 14, color: `${C}80` }}>
           Already have an account?{" "}
-          <Link href="/login" className="text-[#1a1a2e] font-semibold hover:underline decoration-[#FFD747] decoration-2 underline-offset-2">
+          <Link href="/login" style={{ color: C, fontWeight: 600, textDecoration: "none" }}>
             Sign in
           </Link>
         </p>
+
       </div>
     </div>
   );

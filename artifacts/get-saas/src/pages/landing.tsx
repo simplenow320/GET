@@ -35,25 +35,35 @@ export default function LandingPage() {
         </p>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-          <Link href="/signup">
-            <button style={{
+          <Link
+            href="/signup"
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
               height: 52, padding: "0 32px", borderRadius: 999,
               background: C, color: BG,
-              border: "none", fontSize: 16, fontWeight: 600,
-              cursor: "pointer", letterSpacing: "-0.01em",
-            }}>
-              Start free
-            </button>
+              fontSize: 16, fontWeight: 600,
+              cursor: "pointer", letterSpacing: "-0.01em", textDecoration: "none",
+              transition: "opacity 0.35s cubic-bezier(0.4,0,0.2,1)",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+          >
+            Start free
           </Link>
-          <Link href="/login">
-            <button style={{
+          <Link
+            href="/login"
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
               height: 52, padding: "0 24px", borderRadius: 999,
               background: "transparent", color: C,
-              border: "none", fontSize: 16, fontWeight: 500,
-              cursor: "pointer", opacity: 0.45,
-            }}>
-              Sign in
-            </button>
+              fontSize: 16, fontWeight: 500,
+              cursor: "pointer", opacity: 0.5, textDecoration: "none",
+              transition: "opacity 0.35s cubic-bezier(0.4,0,0.2,1)",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
+          >
+            Sign in
           </Link>
         </div>
       </section>
@@ -107,8 +117,8 @@ export default function LandingPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {[
-              { n: "1", title: "Build your app", body: "Finish building in Replit or your framework of choice. Get runs alongside whatever you build." },
-              { n: "2", title: "Connect get", body: "Install the SDK, add your project key, and you're live. Takes about three minutes." },
+              { n: "1", title: "Build your app", body: "Finish building in Replit or your framework of choice. It runs alongside whatever you build." },
+              { n: "2", title: "Connect it", body: "Install the SDK, add your project key, and you're live. Takes about three minutes." },
               { n: "3", title: "Invite clients to edit safely", body: "Clients get a private link to their editor. They change content. Nothing else." },
             ].map((step, i, arr) => (
               <div key={step.n} style={{ display: "flex", gap: 20 }}>
@@ -160,15 +170,20 @@ export default function LandingPage() {
         }}>
           Set up client editing in minutes.
         </p>
-        <Link href="/signup">
-          <button style={{
+        <Link
+          href="/signup"
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
             height: 52, padding: "0 36px", borderRadius: 999,
             background: C, color: BG,
-            border: "none", fontSize: 16, fontWeight: 600,
-            cursor: "pointer", letterSpacing: "-0.01em",
-          }}>
-            Start free
-          </button>
+            fontSize: 16, fontWeight: 600,
+            cursor: "pointer", letterSpacing: "-0.01em", textDecoration: "none",
+            transition: "opacity 0.35s cubic-bezier(0.4,0,0.2,1)",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+        >
+          Start free
         </Link>
       </section>
 

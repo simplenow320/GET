@@ -358,16 +358,16 @@ export default function SetupWizard() {
                   <p style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(26,26,46,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Project created</p>
                   <h1 style={{ ...T.heading, fontSize: 30, textAlign: "center" }}>{project.name}</h1>
                   <p style={{ ...T.subheading, textAlign: "center", marginTop: 12, maxWidth: 380 }}>
-                    Your project is ready. Now let's connect it to your app so your clients can edit safely — without touching your code.
+                    Your project is ready. Let's connect it to your app so your clients can edit safely — without touching your code.
                   </p>
                 </div>
               </div>
 
               <div style={{ background: "#fff", borderRadius: 18, border: "1px solid rgba(0,0,0,0.07)", overflow: "hidden" }}>
                 {[
-                  { icon: "1", text: "Build your app first", sub: "Finish building in Replit, Next.js, or whatever you use." },
-                  { icon: "2", text: "Connect get second", sub: "We'll give you a key and a snippet. Takes about 3 minutes." },
-                  { icon: "3", text: "Let clients edit safely — third", sub: "Your clients get a simple editor. Your code stays untouched." },
+                  { icon: "1", text: "Build your app", sub: "Finish building in Replit, Next.js, or whatever you use." },
+                  { icon: "2", text: "Connect it", sub: "We'll give you a key and a snippet. Takes about 3 minutes." },
+                  { icon: "3", text: "Invite clients", sub: "Your clients get a simple editor. Your code stays untouched." },
                 ].map((item, i) => (
                   <div key={i} style={{ padding: "20px 24px", borderTop: i > 0 ? "1px solid rgba(0,0,0,0.05)" : "none", display: "flex", gap: 16, alignItems: "flex-start" }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(26,26,46,0.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
@@ -436,7 +436,7 @@ export default function SetupWizard() {
             <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
               <div>
                 <p style={T.label}>Step 3</p>
-                <h1 style={{ ...T.heading, marginTop: 8 }}>Install get</h1>
+                <h1 style={{ ...T.heading, marginTop: 8 }}>Install the SDK</h1>
                 <p style={T.subheading}>
                   Open your terminal in {state.appType === "replit" ? "Replit" : "your project"} and run this command. It only takes a second.
                 </p>
@@ -477,7 +477,7 @@ export default function SetupWizard() {
                 <p style={T.label}>Step 4</p>
                 <h1 style={{ ...T.heading, marginTop: 8 }}>Connect your app</h1>
                 <p style={T.subheading}>
-                  This key tells get which project your app belongs to. Add it to your environment variables and your app is connected.
+                  This key links your app to this project. Add it to your environment variables and your app is connected.
                 </p>
               </div>
 
