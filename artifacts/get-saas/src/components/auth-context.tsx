@@ -18,13 +18,19 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: user, isLoading, error } = useGetMe({
-    query: {
-      retry: false,
-    }
+    query: { retry: false },
   });
 
+  // If the stored token is rejected, clear it so we don't get stuck retrying
+  // a permanently-invalid session on every page load.
+  useEffect(() => {
+    if (error && typeof window !== "undefined") {
+      localStorage.removeItem("auth_token");
+    }
+  }, [error]);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, error }}>
+    <AuthContext.Provider value={{ user: user ?? null, isLoading, error }}>
       {children}
     </AuthContext.Provider>
   );
@@ -35,7 +41,7 @@ export function useAuth() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, isLoading, error } = useAuth();
+  const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -52,9 +58,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return <>{children}</>;
 }

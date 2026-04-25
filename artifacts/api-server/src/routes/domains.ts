@@ -3,8 +3,13 @@ import { db, domainsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { AddDomainBody } from "@workspace/api-zod";
+import { Hostname, parseIdParam } from "../lib/validation";
+import { logAudit } from "../lib/audit";
+import { z } from "zod";
 
 const router = Router({ mergeParams: true });
+
+const StrictAddDomain = z.object({ hostname: Hostname });
 
 function domainToResponse(d: typeof domainsTable.$inferSelect) {
   return {
@@ -16,34 +21,76 @@ function domainToResponse(d: typeof domainsTable.$inferSelect) {
   };
 }
 
-// GET / — any member can view domains
+// GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
   const domains = await db.select().from(domainsTable).where(eq(domainsTable.projectId, projectId));
   res.json(domains.map(domainToResponse));
 });
 
-// POST / — admin+ only
+// POST / — admin+
 router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
-  const parsed = AddDomainBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Validation failed" });
+  const shape = AddDomainBody.safeParse(req.body);
+  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  const parsed = StrictAddDomain.safeParse(shape.data);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid hostname" });
+  }
 
-  // Normalize hostname
-  let hostname = parsed.data.hostname.toLowerCase().trim().replace(/^https?:\/\//, "").split("/")[0];
+  const hostname = parsed.data.hostname;
 
-  const [domain] = await db.insert(domainsTable).values({ projectId, hostname }).returning();
+  // Prevent the same hostname being added to the same project twice.
+  const dupe = await db
+    .select()
+    .from(domainsTable)
+    .where(and(eq(domainsTable.projectId, projectId), eq(domainsTable.hostname, hostname)));
+  if (dupe.length > 0) {
+    return res.status(409).json({ error: "This domain is already linked to this project" });
+  }
+
+  const [domain] = await db
+    .insert(domainsTable)
+    .values({ projectId, hostname, verified: false })
+    .returning();
+
+  await logAudit({
+    projectId,
+    userId: req.userId!,
+    userName: req.userName!,
+    action: `added domain ${hostname}`,
+  });
+
   res.status(201).json(domainToResponse(domain));
 });
 
-// DELETE /:domainId — admin+ only
-router.delete("/:domainId", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
-  const domainId = parseInt(req.params.domainId);
-  const projectId = parseInt(req.params.projectId);
-  await db
-    .delete(domainsTable)
-    .where(and(eq(domainsTable.id, domainId), eq(domainsTable.projectId, projectId)));
-  res.status(204).send();
-});
+// DELETE /:domainId — admin+
+router.delete(
+  "/:domainId",
+  requireAuth,
+  requireProjectAccess("admin"),
+  async (req: AuthRequest, res) => {
+    const domainId = parseIdParam(req.params.domainId);
+    const projectId = parseInt(req.params.projectId);
+    if (!domainId) return res.status(400).json({ error: "Invalid domain ID" });
+
+    const target = await db
+      .select()
+      .from(domainsTable)
+      .where(and(eq(domainsTable.id, domainId), eq(domainsTable.projectId, projectId)));
+    if (!target[0]) return res.status(404).json({ error: "Domain not found" });
+
+    await db.delete(domainsTable).where(eq(domainsTable.id, domainId));
+
+    await logAudit({
+      projectId,
+      userId: req.userId!,
+      userName: req.userName!,
+      action: `removed domain ${target[0].hostname}`,
+    });
+
+    res.status(204).send();
+  },
+);
 
 export default router;

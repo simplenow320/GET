@@ -3,8 +3,13 @@ import { db, projectKeysTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import crypto from "crypto";
+import { KeyName, parseIdParam } from "../lib/validation";
+import { logAudit } from "../lib/audit";
+import { z } from "zod";
 
 const router = Router({ mergeParams: true });
+
+const StrictCreateKey = z.object({ name: KeyName.optional() });
 
 function hashKey(raw: string): string {
   return crypto.createHash("sha256").update(raw).digest("hex");
@@ -22,7 +27,7 @@ function keyToResponse(k: typeof projectKeysTable.$inferSelect) {
   };
 }
 
-// GET / — list active keys (never expose the full key)
+// GET / — admin+ (keys are sensitive, viewers don't need them)
 router.get("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
   const keys = await db
@@ -32,14 +37,15 @@ router.get("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequ
   res.json(keys.map(keyToResponse));
 });
 
-// POST / — generate a new key (admin+)
-// Returns the raw key ONCE — never stored
+// POST / — admin+. Returns the raw key exactly once.
 router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
-  const name: string = (req.body?.name ?? "Project key").toString().trim().slice(0, 64) || "Project key";
+
+  const parsed = StrictCreateKey.safeParse(req.body ?? {});
+  const name = parsed.success && parsed.data.name ? parsed.data.name : "Project key";
 
   const rawKey = `pk_${crypto.randomBytes(24).toString("hex")}`;
-  const keyPrefix = rawKey.slice(0, 10); // e.g. "pk_3a9f2b"
+  const keyPrefix = rawKey.slice(0, 10);
   const keyHash = hashKey(rawKey);
 
   const [key] = await db
@@ -47,30 +53,48 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
     .values({ projectId, name, keyPrefix, keyHash })
     .returning();
 
-  // Return the raw key exactly once — client must save it
-  res.status(201).json({
-    ...keyToResponse(key),
-    rawKey, // only present at creation
+  await logAudit({
+    projectId,
+    userId: req.userId!,
+    userName: req.userName!,
+    action: `generated project key (${keyPrefix}…)`,
   });
+
+  // rawKey is only present at creation; never persisted in cleartext.
+  res.status(201).json({ ...keyToResponse(key), rawKey });
 });
 
-// DELETE /:keyId — revoke a key (owner only)
-router.delete("/:keyId", requireAuth, requireProjectAccess("owner"), async (req: AuthRequest, res) => {
-  const keyId = parseInt(req.params.keyId);
-  const projectId = parseInt(req.params.projectId);
+// DELETE /:keyId — owner only
+router.delete(
+  "/:keyId",
+  requireAuth,
+  requireProjectAccess("owner"),
+  async (req: AuthRequest, res) => {
+    const keyId = parseIdParam(req.params.keyId);
+    const projectId = parseInt(req.params.projectId);
+    if (!keyId) return res.status(400).json({ error: "Invalid key ID" });
 
-  const keys = await db
-    .select()
-    .from(projectKeysTable)
-    .where(and(eq(projectKeysTable.id, keyId), eq(projectKeysTable.projectId, projectId)));
-  if (!keys.length) return res.status(404).json({ error: "Key not found" });
+    const keys = await db
+      .select()
+      .from(projectKeysTable)
+      .where(and(eq(projectKeysTable.id, keyId), eq(projectKeysTable.projectId, projectId)));
+    const key = keys[0];
+    if (!key) return res.status(404).json({ error: "Key not found" });
 
-  await db
-    .update(projectKeysTable)
-    .set({ revokedAt: new Date() })
-    .where(eq(projectKeysTable.id, keyId));
+    await db
+      .update(projectKeysTable)
+      .set({ revokedAt: new Date() })
+      .where(eq(projectKeysTable.id, keyId));
 
-  res.status(204).send();
-});
+    await logAudit({
+      projectId,
+      userId: req.userId!,
+      userName: req.userName!,
+      action: `revoked project key (${key.keyPrefix}…)`,
+    });
+
+    res.status(204).send();
+  },
+);
 
 export default router;

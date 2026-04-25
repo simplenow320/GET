@@ -1,11 +1,30 @@
 import { Router } from "express";
-import { db, contentFieldsTable, activityTable, draftsTable } from "@workspace/db";
+import { db, contentFieldsTable, draftsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateContentFieldBody, UpdateContentFieldBody } from "@workspace/api-zod";
 import { sanitizeContent } from "../lib/sanitize";
+import { logAudit } from "../lib/audit";
+import { FieldLabel, ContentValue, SelectorString, parseIdParam } from "../lib/validation";
+import { z } from "zod";
 
 const router = Router({ mergeParams: true });
+
+const FIELD_TYPES = ["text", "richtext", "image", "url", "number", "boolean"] as const;
+
+const StrictCreateField = z.object({
+  label: FieldLabel,
+  type: z.enum(FIELD_TYPES),
+  selector: SelectorString,
+  value: ContentValue.optional().nullable(),
+});
+
+const StrictUpdateField = z.object({
+  label: FieldLabel.optional(),
+  value: ContentValue.optional().nullable(),
+  draftValue: ContentValue.optional().nullable(),
+  isLocked: z.boolean().optional(),
+});
 
 function fieldToResponse(f: typeof contentFieldsTable.$inferSelect) {
   return {
@@ -21,132 +40,170 @@ function fieldToResponse(f: typeof contentFieldsTable.$inferSelect) {
   };
 }
 
-// GET / — any project member can view fields
+// GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
-  const fields = await db.select().from(contentFieldsTable).where(eq(contentFieldsTable.projectId, projectId));
+  const fields = await db
+    .select()
+    .from(contentFieldsTable)
+    .where(eq(contentFieldsTable.projectId, projectId));
   res.json(fields.map(fieldToResponse));
 });
 
-// POST / — admin+ can add new fields
+// POST / — admin+
 router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
-  const parsed = CreateContentFieldBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Validation failed" });
+  const shape = CreateContentFieldBody.safeParse(req.body);
+  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  const parsed = StrictCreateField.safeParse(shape.data);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
+  }
 
   const [field] = await db
     .insert(contentFieldsTable)
     .values({
       projectId,
-      label: parsed.data.label.trim(),
+      label: parsed.data.label,
       type: parsed.data.type,
-      selector: parsed.data.selector,
-      value: parsed.data.value ? sanitizeContent(parsed.data.value) : undefined,
+      selector: parsed.data.selector ?? null,
+      value: parsed.data.value ? sanitizeContent(parsed.data.value) : null,
     })
     .returning();
 
-  await db.insert(activityTable).values({
+  await logAudit({
     projectId,
     userId: req.userId!,
     userName: req.userName!,
     action: "added field",
     fieldLabel: field.label,
-    newValue: null,
   });
 
   res.status(201).json(fieldToResponse(field));
 });
 
-// PATCH /:fieldId — role-split:
-//   - isLocked toggle: admin+ only
-//   - value (publish value): admin+ only
-//   - draftValue: editor+, creates a Draft record, never writes directly to value
-router.patch("/:fieldId", requireAuth, requireProjectAccess("editor"), async (req: AuthRequest, res) => {
-  const fieldId = parseInt(req.params.fieldId);
-  const projectId = parseInt(req.params.projectId);
-  const role = req.projectRole!;
+// PATCH /:fieldId — role-split (see comments below)
+router.patch(
+  "/:fieldId",
+  requireAuth,
+  requireProjectAccess("editor"),
+  async (req: AuthRequest, res) => {
+    const fieldId = parseIdParam(req.params.fieldId);
+    const projectId = parseInt(req.params.projectId);
+    if (!fieldId) return res.status(400).json({ error: "Invalid field ID" });
 
-  const parsed = UpdateContentFieldBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Validation failed" });
+    const role = req.projectRole!;
+    const shape = UpdateContentFieldBody.safeParse(req.body);
+    if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+    const parsed = StrictUpdateField.safeParse(shape.data);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
+    }
+    const data = parsed.data;
 
-  const data = parsed.data;
+    // Admin+ only: lock toggle, live `value`, and label changes.
+    const adminOnlyChange =
+      data.isLocked !== undefined || data.value !== undefined || data.label !== undefined;
+    if (adminOnlyChange && !["owner", "admin"].includes(role)) {
+      return res
+        .status(403)
+        .json({ error: "Requires admin access to change lock state, label, or live value" });
+    }
 
-  // Only admin+ can lock/unlock or set the live value directly
-  if ((data.isLocked !== undefined || data.value !== undefined) && !["owner", "admin"].includes(role)) {
-    return res.status(403).json({ error: "Requires admin access to change lock state or live value" });
-  }
+    const existing = await db
+      .select()
+      .from(contentFieldsTable)
+      .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
+    const field = existing[0];
+    if (!field) return res.status(404).json({ error: "Field not found" });
 
-  // Check field exists in this project
-  const existing = await db
-    .select()
-    .from(contentFieldsTable)
-    .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
-  const field = existing[0];
-  if (!field) return res.status(404).json({ error: "Field not found" });
+    if (field.isLocked && data.draftValue !== undefined && !["owner", "admin"].includes(role)) {
+      return res.status(403).json({ error: "This field is locked" });
+    }
 
-  if (field.isLocked && data.draftValue !== undefined && !["owner", "admin"].includes(role)) {
-    return res.status(403).json({ error: "This field is locked" });
-  }
+    const updatePayload: Partial<typeof contentFieldsTable.$inferInsert> = {};
+    if (data.isLocked !== undefined) updatePayload.isLocked = data.isLocked;
+    if (data.label !== undefined) updatePayload.label = data.label;
+    if (data.value !== undefined) updatePayload.value = data.value === null ? null : sanitizeContent(data.value);
 
-  // Build update payload
-  const updatePayload: Partial<typeof contentFieldsTable.$inferInsert> = {};
+    let sanitizedDraft: string | null = null;
+    if (data.draftValue !== undefined) {
+      sanitizedDraft = data.draftValue === null ? null : sanitizeContent(data.draftValue);
+      updatePayload.draftValue = sanitizedDraft;
 
-  if (data.isLocked !== undefined) updatePayload.isLocked = data.isLocked;
-  if (data.label !== undefined) updatePayload.label = data.label.trim();
+      if (sanitizedDraft !== null) {
+        await db.insert(draftsTable).values({
+          projectId,
+          fieldId,
+          fieldLabel: field.label,
+          value: sanitizedDraft,
+          authorName: req.userName!,
+          status: "pending",
+        });
+      }
+    }
 
-  // Sanitize any incoming text values
-  if (data.value !== undefined) {
-    updatePayload.value = sanitizeContent(data.value);
-  }
+    const [updated] = await db
+      .update(contentFieldsTable)
+      .set(updatePayload)
+      .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)))
+      .returning();
 
-  if (data.draftValue !== undefined) {
-    const sanitized = sanitizeContent(data.draftValue);
-    updatePayload.draftValue = sanitized;
+    const action =
+      data.draftValue !== undefined
+        ? "submitted draft for"
+        : data.isLocked !== undefined
+          ? data.isLocked
+            ? "locked field"
+            : "unlocked field"
+          : data.value !== undefined
+            ? "updated live value"
+            : "updated field";
 
-    // Auto-create a Draft record so the owner can review and publish
-    await db.insert(draftsTable).values({
+    await logAudit({
       projectId,
-      fieldId,
-      fieldLabel: field.label,
-      value: sanitized,
-      authorName: req.userName!,
-      status: "pending",
+      userId: req.userId!,
+      userName: req.userName!,
+      action,
+      fieldLabel: updated.label,
+      newValue: data.value ?? sanitizedDraft ?? null,
     });
-  }
 
-  const [updated] = await db
-    .update(contentFieldsTable)
-    .set(updatePayload)
-    .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)))
-    .returning();
+    res.json(fieldToResponse(updated));
+  },
+);
 
-  // Log the activity
-  const action = data.draftValue !== undefined
-    ? "submitted draft for"
-    : data.isLocked !== undefined
-    ? (data.isLocked ? "locked field" : "unlocked field")
-    : "updated";
+// DELETE /:fieldId — admin+
+router.delete(
+  "/:fieldId",
+  requireAuth,
+  requireProjectAccess("admin"),
+  async (req: AuthRequest, res) => {
+    const fieldId = parseIdParam(req.params.fieldId);
+    const projectId = parseInt(req.params.projectId);
+    if (!fieldId) return res.status(400).json({ error: "Invalid field ID" });
 
-  await db.insert(activityTable).values({
-    projectId,
-    userId: req.userId!,
-    userName: req.userName!,
-    action,
-    fieldLabel: updated.label,
-    newValue: data.value ?? data.draftValue ?? null,
-  });
+    const existing = await db
+      .select()
+      .from(contentFieldsTable)
+      .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
+    const field = existing[0];
+    if (!field) return res.status(404).json({ error: "Field not found" });
 
-  res.json(fieldToResponse(updated));
-});
+    await db
+      .delete(contentFieldsTable)
+      .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
 
-// DELETE /:fieldId — admin+ only
-router.delete("/:fieldId", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
-  const fieldId = parseInt(req.params.fieldId);
-  const projectId = parseInt(req.params.projectId);
-  await db
-    .delete(contentFieldsTable)
-    .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
-  res.status(204).send();
-});
+    await logAudit({
+      projectId,
+      userId: req.userId!,
+      userName: req.userName!,
+      action: "deleted field",
+      fieldLabel: field.label,
+    });
+
+    res.status(204).send();
+  },
+);
 
 export default router;

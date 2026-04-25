@@ -1,8 +1,10 @@
 import { Router } from "express";
-import { db, draftsTable, contentFieldsTable, activityTable, projectUsersTable } from "@workspace/db";
+import { db, draftsTable, contentFieldsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { publishLimiter } from "../middlewares/rate-limit";
+import { logAudit } from "../lib/audit";
+import { parseIdParam } from "../lib/validation";
 
 const router = Router({ mergeParams: true });
 
@@ -20,22 +22,23 @@ function draftToResponse(d: typeof draftsTable.$inferSelect) {
   };
 }
 
-// GET / — any project member can view drafts
+// GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
   const projectId = parseInt(req.params.projectId);
   const drafts = await db.select().from(draftsTable).where(eq(draftsTable.projectId, projectId));
   res.json(drafts.map(draftToResponse));
 });
 
-// POST /:draftId/publish — admin+ only, rate limited
+// POST /:draftId/publish — admin+, rate limited
 router.post(
   "/:draftId/publish",
   requireAuth,
   requireProjectAccess("admin"),
   publishLimiter,
   async (req: AuthRequest, res) => {
-    const draftId = parseInt(req.params.draftId);
+    const draftId = parseIdParam(req.params.draftId);
     const projectId = parseInt(req.params.projectId);
+    if (!draftId) return res.status(400).json({ error: "Invalid draft ID" });
 
     const drafts = await db
       .select()
@@ -47,20 +50,55 @@ router.post(
       return res.status(409).json({ error: "Draft is not in pending state" });
     }
 
-    // Publish: copy draft value to content field's live value, clear draftValue
-    await db
-      .update(contentFieldsTable)
-      .set({ value: draft.value, draftValue: null })
-      .where(eq(contentFieldsTable.id, draft.fieldId));
+    // Wrap the live-content update and the draft state change in a single
+    // transaction so we never end up with the field updated but the draft
+    // still pending (or vice versa).
+    const published = await db.transaction(async (tx) => {
+      const fields = await tx
+        .select()
+        .from(contentFieldsTable)
+        .where(
+          and(
+            eq(contentFieldsTable.id, draft.fieldId),
+            eq(contentFieldsTable.projectId, projectId),
+          ),
+        );
+      if (!fields[0]) {
+        throw new Error("FIELD_GONE");
+      }
 
-    const [published] = await db
-      .update(draftsTable)
-      .set({ status: "published", publishedAt: new Date() })
-      .where(eq(draftsTable.id, draftId))
-      .returning();
+      await tx
+        .update(contentFieldsTable)
+        .set({ value: draft.value, draftValue: null })
+        .where(
+          and(
+            eq(contentFieldsTable.id, draft.fieldId),
+            eq(contentFieldsTable.projectId, projectId),
+          ),
+        );
 
-    // Log publish action
-    await db.insert(activityTable).values({
+      const [row] = await tx
+        .update(draftsTable)
+        .set({ status: "published", publishedAt: new Date() })
+        .where(and(eq(draftsTable.id, draftId), eq(draftsTable.status, "pending")))
+        .returning();
+
+      if (!row) {
+        // Another concurrent publish/reject won the race.
+        throw new Error("ALREADY_RESOLVED");
+      }
+      return row;
+    }).catch((err: Error) => {
+      if (err.message === "FIELD_GONE") return { __error: 404, message: "Source field no longer exists" } as const;
+      if (err.message === "ALREADY_RESOLVED") return { __error: 409, message: "Draft is no longer pending" } as const;
+      throw err;
+    });
+
+    if ("__error" in published) {
+      return res.status(published.__error).json({ error: published.message });
+    }
+
+    await logAudit({
       projectId,
       userId: req.userId!,
       userName: req.userName!,
@@ -70,17 +108,18 @@ router.post(
     });
 
     res.json(draftToResponse(published));
-  }
+  },
 );
 
-// POST /:draftId/reject — admin+ only
+// POST /:draftId/reject — admin+
 router.post(
   "/:draftId/reject",
   requireAuth,
   requireProjectAccess("admin"),
   async (req: AuthRequest, res) => {
-    const draftId = parseInt(req.params.draftId);
+    const draftId = parseIdParam(req.params.draftId);
     const projectId = parseInt(req.params.projectId);
+    if (!draftId) return res.status(400).json({ error: "Invalid draft ID" });
 
     const drafts = await db
       .select()
@@ -98,17 +137,16 @@ router.post(
       .where(eq(draftsTable.id, draftId))
       .returning();
 
-    await db.insert(activityTable).values({
+    await logAudit({
       projectId,
       userId: req.userId!,
       userName: req.userName!,
       action: "rejected draft for",
       fieldLabel: draft.fieldLabel,
-      newValue: null,
     });
 
     res.json(draftToResponse(rejected));
-  }
+  },
 );
 
 export default router;
