@@ -5,13 +5,14 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus, ArrowRight,
-  LayoutGrid, Users, Type as TypeIcon, Activity,
+  LayoutGrid, Users, Activity, Radio,
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease,
   PageHeader, SectionTitle, Card, EmptyState, PrimaryButton, IconTile,
   mascotPath,
 } from "@/lib/ui";
+import { LastSeenBadge } from "@/components/last-seen-badge";
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useGetProjectStats();
@@ -45,10 +46,10 @@ export default function Dashboard() {
           }}
         >
           {[
-            { label: "Projects",     value: stats?.totalProjects, icon: LayoutGrid, hint: "All projects you own or are a member of." },
-            { label: "Clients",      value: stats?.totalClients,  icon: Users,      hint: "People you've invited to edit your projects." },
-            { label: "Fields",       value: stats?.totalFields,   icon: TypeIcon,   hint: "Editable areas across all your projects." },
-            { label: "Recent edits", value: stats?.recentEdits,   icon: Activity,   hint: "Field updates and publishes in the last 7 days." },
+            { label: "Projects",      value: stats?.totalProjects, icon: LayoutGrid, hint: "Projects you own." },
+            { label: "Live sites",    value: stats?.liveSites,     icon: Radio,      hint: "Of your projects, how many sent us a ping in the last 24 hours." },
+            { label: "Active clients",value: stats?.totalClients,  icon: Users,      hint: "People you've invited to edit your projects." },
+            { label: "Edits (30d)",   value: stats?.recentEdits,   icon: Activity,   hint: "Field updates and publishes across your projects in the last 30 days." },
           ].map((s) => (
             <Card key={s.label} padded style={{ padding: "18px 20px" }} title={s.hint}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -147,9 +148,12 @@ export default function Dashboard() {
                     }}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ fontSize: type.base, fontWeight: 600, marginBottom: 2 }}>
-                        {project.name}
-                      </p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
+                        <p style={{ fontSize: type.base, fontWeight: 600 }}>
+                          {project.name}
+                        </p>
+                        <LastSeenBadge at={(project as any).lastSeenAt} compact />
+                      </div>
                       <p style={{ fontSize: type.xs, color: tone[500] }}>
                         {format(new Date(project.createdAt), "MMM d, yyyy")}
                         {nudge && (

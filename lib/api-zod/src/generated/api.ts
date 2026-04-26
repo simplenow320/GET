@@ -62,6 +62,16 @@ export const ListProjectsResponseItem = zod.object({
   fieldCount: zod.number(),
   clientCount: zod.number(),
   lastActivityAt: zod.coerce.date().optional(),
+  lastSeenAt: zod.coerce
+    .date()
+    .optional()
+    .describe(
+      'When the script tag on the customer\'s site last fetched content.\nDrives the dashboard \"Last seen\" badge.\n',
+    ),
+  lastSeenOrigin: zod
+    .string()
+    .optional()
+    .describe("Origin (or referer) recorded with the last ping."),
   createdAt: zod.coerce.date(),
   myRole: zod
     .enum(["owner", "admin", "editor", "viewer"])
@@ -95,6 +105,16 @@ export const GetProjectResponse = zod.object({
   fieldCount: zod.number(),
   clientCount: zod.number(),
   lastActivityAt: zod.coerce.date().optional(),
+  lastSeenAt: zod.coerce
+    .date()
+    .optional()
+    .describe(
+      'When the script tag on the customer\'s site last fetched content.\nDrives the dashboard \"Last seen\" badge.\n',
+    ),
+  lastSeenOrigin: zod
+    .string()
+    .optional()
+    .describe("Origin (or referer) recorded with the last ping."),
   createdAt: zod.coerce.date(),
   myRole: zod
     .enum(["owner", "admin", "editor", "viewer"])
@@ -125,6 +145,16 @@ export const UpdateProjectResponse = zod.object({
   fieldCount: zod.number(),
   clientCount: zod.number(),
   lastActivityAt: zod.coerce.date().optional(),
+  lastSeenAt: zod.coerce
+    .date()
+    .optional()
+    .describe(
+      'When the script tag on the customer\'s site last fetched content.\nDrives the dashboard \"Last seen\" badge.\n',
+    ),
+  lastSeenOrigin: zod
+    .string()
+    .optional()
+    .describe("Origin (or referer) recorded with the last ping."),
   createdAt: zod.coerce.date(),
   myRole: zod
     .enum(["owner", "admin", "editor", "viewer"])
@@ -149,7 +179,10 @@ export const GetProjectStatsResponse = zod.object({
   activeProjects: zod.number(),
   totalClients: zod.number(),
   totalFields: zod.number(),
-  recentEdits: zod.number(),
+  recentEdits: zod.number().describe("Activity entries in the last 30 days."),
+  liveSites: zod
+    .number()
+    .describe("Projects whose script tag pinged us in the last 24h."),
 });
 
 /**

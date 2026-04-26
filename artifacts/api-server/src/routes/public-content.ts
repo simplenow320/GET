@@ -1,5 +1,5 @@
-import { Router, type IRouter } from "express";
-import { db, contentFieldsTable, contentSnapshotsTable } from "@workspace/db";
+import { Router, type IRouter, type Request } from "express";
+import { db, contentFieldsTable, contentSnapshotsTable, projectsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireProjectKey, type ProjectKeyRequest } from "../middlewares/project-key-auth";
 
@@ -15,6 +15,37 @@ function buildContentMap(fields: typeof contentFieldsTable.$inferSelect[]) {
   return content;
 }
 
+/**
+ * Record that the customer's site (script tag) just contacted us. Powers the
+ * dashboard "Last seen" badge so an owner can tell at a glance whether the
+ * install is alive. Never throws — if the write fails we still serve the read.
+ *
+ * Privacy: we deliberately store ONLY the URL origin (scheme://host[:port]),
+ * never the full path or query string. The Referer header can leak path-level
+ * data such as session ids or filter params; clamping to origin avoids that.
+ */
+function safeOrigin(req: Request): string | null {
+  const raw = (req.headers.origin || req.headers.referer || "").toString().trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    // Only keep scheme + host + (non-default) port. Drop path, query, hash.
+    return u.origin.slice(0, 256);
+  } catch {
+    return null;
+  }
+}
+
+function recordPing(projectId: number, req: Request): void {
+  const origin = safeOrigin(req);
+  db.update(projectsTable)
+    .set({ lastSeenAt: new Date(), lastSeenOrigin: origin })
+    .where(eq(projectsTable.id, projectId))
+    .catch((err: unknown) => {
+      req.log.warn({ err, projectId }, "failed to record project ping");
+    });
+}
+
 // ── Content endpoints ─────────────────────────────────────────────────────────
 
 /**
@@ -27,6 +58,7 @@ router.get("/content", requireProjectKey, async (req: ProjectKeyRequest, res) =>
     .select()
     .from(contentFieldsTable)
     .where(eq(contentFieldsTable.projectId, projectId));
+  recordPing(projectId, req);
   res.json({ projectId: String(projectId), content: buildContentMap(fields) });
 });
 
@@ -72,6 +104,7 @@ router.post("/content", requireProjectKey, async (req: ProjectKeyRequest, res) =
     }
   }
 
+  recordPing(projectId, req);
   res.json({ projectId: String(projectId), content: buildContentMap(fields) });
 });
 
@@ -111,6 +144,7 @@ router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyReques
       },
     });
 
+  recordPing(projectId, req);
   return res.json({ ok: true });
 });
 

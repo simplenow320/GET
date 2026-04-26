@@ -774,6 +774,15 @@ components:
         lastActivityAt:
           type: string
           format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: |
+            When the script tag on the customer's site last fetched content.
+            Drives the dashboard "Last seen" badge.
+        lastSeenOrigin:
+          type: string
+          description: Origin (or referer) recorded with the last ping.
         createdAt:
           type: string
           format: date-time
@@ -818,7 +827,11 @@ components:
           type: integer
         recentEdits:
           type: integer
-      required: [totalProjects, activeProjects, totalClients, totalFields, recentEdits]
+          description: Activity entries in the last 30 days.
+        liveSites:
+          type: integer
+          description: Projects whose script tag pinged us in the last 24h.
+      required: [totalProjects, activeProjects, totalClients, totalFields, recentEdits, liveSites]
 
     ContentField:
       type: object

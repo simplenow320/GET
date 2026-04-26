@@ -81,6 +81,12 @@ export interface Project {
   fieldCount: number;
   clientCount: number;
   lastActivityAt?: string;
+  /** When the script tag on the customer's site last fetched content.
+Drives the dashboard "Last seen" badge.
+ */
+  lastSeenAt?: string;
+  /** Origin (or referer) recorded with the last ping. */
+  lastSeenOrigin?: string;
   createdAt: string;
   /** The caller's role on this project. Drives client-side RBAC
 (which destructive controls render, which tabs are visible).
@@ -113,7 +119,10 @@ export interface ProjectStats {
   activeProjects: number;
   totalClients: number;
   totalFields: number;
+  /** Activity entries in the last 30 days. */
   recentEdits: number;
+  /** Projects whose script tag pinged us in the last 24h. */
+  liveSites: number;
 }
 
 export type ContentFieldType =

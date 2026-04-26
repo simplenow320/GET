@@ -28,6 +28,8 @@ function projectToResponse(p: typeof projectsTable.$inferSelect, fieldCount = 0,
     fieldCount,
     clientCount,
     lastActivityAt: p.lastActivityAt?.toISOString(),
+    lastSeenAt: p.lastSeenAt?.toISOString(),
+    lastSeenOrigin: p.lastSeenOrigin ?? undefined,
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -39,10 +41,18 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
   const projectIds = owned.map((p) => p.id);
 
   if (projectIds.length === 0) {
-    return res.json({ totalProjects: 0, activeProjects: 0, totalClients: 0, totalFields: 0, recentEdits: 0 });
+    return res.json({
+      totalProjects: 0,
+      activeProjects: 0,
+      totalClients: 0,
+      totalFields: 0,
+      recentEdits: 0,
+      liveSites: 0,
+    });
   }
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const [clients, fields, recent] = await Promise.all([
     db
@@ -59,10 +69,16 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       .where(
         and(
           inArray(activityTable.projectId, projectIds),
-          gte(activityTable.createdAt, sevenDaysAgo),
+          gte(activityTable.createdAt, thirtyDaysAgo),
         ),
       ),
   ]);
+
+  // "Live" = the customer's site has fetched content in the last 24h. This is
+  // the user-visible signal that the install is actually working in the wild.
+  const liveSites = owned.filter(
+    (p) => p.lastSeenAt && new Date(p.lastSeenAt).getTime() >= oneDayAgo.getTime(),
+  ).length;
 
   res.json({
     totalProjects: owned.length,
@@ -70,6 +86,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     totalClients: clients[0]?.count ?? 0,
     totalFields: fields[0]?.count ?? 0,
     recentEdits: recent[0]?.count ?? 0,
+    liveSites,
   });
 });
 

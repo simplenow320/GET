@@ -34,7 +34,9 @@ import {
   Globe, Users, Database, FileEdit, Settings, Trash2,
   Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2,
   KeyRound, Copy, Check, ShieldCheck, RefreshCw, ArrowRight, Info,
+  Radio, X as XIcon,
 } from "lucide-react";
+import { LastSeenBadge } from "@/components/last-seen-badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   BRAND, tone, line, type, ease, r,
@@ -168,6 +170,7 @@ export default function ProjectDetail() {
                 {project.name}
               </h1>
               <Pill variant={(project.status as any) || "archived"}>{project.status}</Pill>
+              <LastSeenBadge at={(project as any).lastSeenAt} />
               {/* Read-only badge for non-managers so they understand why the
                   destructive controls are missing instead of thinking the UI
                   is broken. */}
@@ -254,6 +257,45 @@ type SiteSection = { name: string; fields: SiteField[] };
 
 interface ProjectKeyBasic { id: string; name: string; keyPrefix: string; }
 
+// Stacks shown in the install panel. We picked the four that cover ~95% of
+// the vibe-coder long tail today (raw HTML + the two SSR/SSG meta-frameworks
+// + WordPress because non-coders still pay people to build them in WP).
+type Stack = "html" | "vite" | "next" | "wordpress";
+
+const STACK_LABELS: Record<Stack, string> = {
+  html: "Vanilla HTML",
+  vite: "React / Vite",
+  next: "Next.js",
+  wordpress: "WordPress",
+};
+
+function buildStackSnippet(stack: Stack, scannerUrl: string, keyHint: string): string {
+  switch (stack) {
+    case "html":
+      return `<!-- Add just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
+    case "vite":
+      // Vite serves index.html as a literal template — same script tag, same place.
+      return `<!-- index.html, just before </body> -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
+    case "next":
+      return `// app/layout.tsx (App Router)\nimport Script from "next/script";\n\nexport default function RootLayout({ children }) {\n  return (\n    <html>\n      <body>\n        {children}\n        <Script\n          src="${scannerUrl}"\n          data-key="${keyHint}"\n          strategy="afterInteractive"\n        />\n      </body>\n    </html>\n  );\n}`;
+    case "wordpress":
+      return `<?php\n// In your active theme's footer.php, just before </body>.\n// Or use a plugin like "Insert Headers and Footers" → footer scripts.\n?>\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
+  }
+}
+
+const STACK_HINTS: Record<Stack, string> = {
+  html: "Drop this into your main HTML file, just before </body>.",
+  vite: "Vite serves index.html literally — paste this near the bottom of <body>.",
+  next: "Use next/script so it doesn't block hydration. App Router shown; Pages Router works the same.",
+  wordpress: "Edit your theme's footer.php, or use a header/footer scripts plugin.",
+};
+
+/**
+ * Install + verify panel. Replaces the older "agent prompt only" card.
+ * Honest scope: this is NOT a marketplace install — Replit's marketplace is
+ * platform-side and the user has to put the script tag in themselves. What
+ * we can do is make that as painless as possible and confirm it's working.
+ */
 function ScannerSetupCard({
   projectId,
   onDismiss,
@@ -261,7 +303,10 @@ function ScannerSetupCard({
   projectId: string;
   onDismiss: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [stack, setStack] = useState<Stack>("html");
+  const [copied, setCopied] = useState<"snippet" | "prompt" | null>(null);
+  const [showAgentPrompt, setShowAgentPrompt] = useState(false);
+
   const { data: keys = [], isLoading: keysLoading } = useQuery<ProjectKeyBasic[]>({
     queryKey: ["project-keys-scanner", projectId],
     queryFn: async () => apiFetch(`/api/projects/${projectId}/keys`),
@@ -269,86 +314,163 @@ function ScannerSetupCard({
 
   const firstKey = keys[0];
   const scannerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}${BASE}/api/public/scanner.js`;
+  const keyHint = firstKey ? `${firstKey.keyPrefix}…` : "YOUR_PROJECT_KEY";
+
+  const snippet = buildStackSnippet(stack, scannerUrl, keyHint);
 
   const agentPrompt = firstKey
     ? `Add this script tag to my app's main HTML file, just before the closing </body> tag. Use the value of my GET_PROJECT_KEY secret as the data-key:\n\n<script src="${scannerUrl}" data-key="YOUR_GET_PROJECT_KEY"></script>\n\nMy project key starts with "${firstKey.keyPrefix}". Find the full key in my Replit secrets (it's called GET_PROJECT_KEY). Don't change anything else in my app.`
     : null;
 
-  const handleCopy = async () => {
-    if (!agentPrompt) return;
-    await navigator.clipboard.writeText(agentPrompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const copy = async (which: "snippet" | "prompt", text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 2500);
+  };
+
+  // Verify install: poll the project's lastSeenAt, looking for it to advance
+  // past the baseline we captured when the user clicked Verify. We try for
+  // ~10s to keep the UI snappy and to keep accidental clicks cheap.
+  type VerifyState =
+    | { kind: "idle" }
+    | { kind: "polling"; baselineMs: number; attempts: number }
+    | { kind: "ok"; at: string }
+    | { kind: "fail"; lastSeen?: string | null };
+  const [verify, setVerify] = useState<VerifyState>({ kind: "idle" });
+
+  const handleVerify = async () => {
+    // Capture the current lastSeenAt as the baseline. If it advances we know
+    // the script just talked to us.
+    let baselineAt: string | null = null;
+    try {
+      const fresh = await apiFetch(`/api/projects/${projectId}`) as any;
+      baselineAt = fresh?.lastSeenAt ?? null;
+    } catch { /* network issue — just use 0 baseline */ }
+    const baselineMs = baselineAt ? new Date(baselineAt).getTime() : 0;
+    setVerify({ kind: "polling", baselineMs, attempts: 0 });
+
+    // Poll up to ~10s.
+    const startedAt = Date.now();
+    const tick = async () => {
+      try {
+        const proj = await apiFetch(`/api/projects/${projectId}`) as any;
+        const at = proj?.lastSeenAt as string | null | undefined;
+        const atMs = at ? new Date(at).getTime() : 0;
+        if (at && atMs > baselineMs) {
+          setVerify({ kind: "ok", at });
+          return;
+        }
+        if (Date.now() - startedAt >= 10_000) {
+          setVerify({ kind: "fail", lastSeen: at ?? null });
+          return;
+        }
+        setTimeout(tick, 1200);
+      } catch (err: any) {
+        setVerify({ kind: "fail", lastSeen: null });
+      }
+    };
+    setTimeout(tick, 1200);
   };
 
   return (
     <Card padded>
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
         {/* Header */}
-        <div>
-          <p style={{ fontSize: type.base, fontWeight: 700, marginBottom: 6 }}>
-            One step: ask your AI to connect the scanner
-          </p>
-          <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
-            Copy the prompt below and paste it into Replit Agent (or any AI assistant) in your other tab. The AI adds one line to your app — that's it. Once your app loads, come back and click <strong>Scan my site</strong>.
-          </p>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: type.base, fontWeight: 700, marginBottom: 6 }}>
+              Connect the scanner
+            </p>
+            <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
+              Pick your stack, paste the snippet, then come back and verify. The script is one line — it doesn't change your app's behaviour, only what we can read.
+            </p>
+          </div>
+          {onDismiss && (
+            <button
+              aria-label="Dismiss"
+              onClick={onDismiss}
+              style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: "transparent", border: `1px solid ${line.base}`,
+                cursor: "pointer", color: tone[500],
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <XIcon style={{ width: 14, height: 14 }} />
+            </button>
+          )}
         </div>
 
-        {/* Steps */}
-        {[
-          { n: "1", text: "Copy the prompt below" },
-          { n: "2", text: "Open Replit Agent in your app's tab and paste it" },
-          { n: "3", text: "Come back here and click Scan my site" },
-        ].map((step) => (
-          <div key={step.n} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{
-              width: 24, height: 24, borderRadius: "50%",
-              background: BRAND.ink, color: BRAND.paper,
-              fontSize: 11, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              {step.n}
-            </span>
-            <p style={{ fontSize: type.sm, color: tone[600] }}>{step.text}</p>
-          </div>
-        ))}
+        {/* Stack tabs */}
+        <div role="tablist" style={{ display: "flex", gap: 4, padding: 4, background: tone[100], borderRadius: 10, overflowX: "auto" }}>
+          {(Object.keys(STACK_LABELS) as Stack[]).map((s) => {
+            const active = s === stack;
+            return (
+              <button
+                key={s}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setStack(s)}
+                data-testid={`install-tab-${s}`}
+                style={{
+                  flex: 1,
+                  minWidth: "max-content",
+                  padding: "8px 14px",
+                  borderRadius: 7,
+                  border: "none",
+                  background: active ? BRAND.paper : "transparent",
+                  color: active ? BRAND.ink : tone[600],
+                  fontSize: type.sm,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: `background 0.15s ${ease}`,
+                }}
+              >
+                {STACK_LABELS[s]}
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Prompt box */}
+        {/* Per-stack hint */}
+        <p style={{ fontSize: type.xs, color: tone[500], margin: 0 }}>
+          {STACK_HINTS[stack]}
+        </p>
+
+        {/* Snippet box */}
         {keysLoading ? (
-          <div style={{ height: 80, background: tone[50], borderRadius: r.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ height: 120, background: tone[50], borderRadius: r.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Loader2 style={{ width: 16, height: 16, color: tone[400] }} className="animate-spin" />
           </div>
         ) : !firstKey ? (
           <div style={{ padding: "14px 16px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
             <p style={{ fontSize: type.sm, color: tone[600] }}>
-              You need a project key first. Go to the <strong>Keys tab</strong> and create one, then come back here.
+              You need a project key first. Go to the <strong>Site keys</strong> tab and create one, then come back here.
             </p>
           </div>
         ) : (
-          <div style={{ position: "relative" }}>
-            <div style={{
+          <div style={{ position: "relative" }} data-testid="install-snippet">
+            <pre style={{
+              margin: 0,
               padding: "16px 52px 16px 18px",
               borderRadius: r.lg,
-              background: tone[50],
-              border: `1.5px solid ${copied ? BRAND.ink : line.base}`,
-              transition: `border-color 0.2s ${ease}`,
+              background: "#0f1419",
+              color: "#e5e7eb",
+              fontSize: 12.5,
+              lineHeight: 1.65,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              overflow: "auto",
+              whiteSpace: "pre",
+              maxHeight: 280,
             }}>
-              <p style={{
-                fontSize: type.sm,
-                color: BRAND.ink,
-                lineHeight: 1.65,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontFamily: "inherit",
-                margin: 0,
-              }}>
-                {agentPrompt}
-              </p>
-            </div>
+              {snippet}
+            </pre>
             <button
-              onClick={handleCopy}
+              onClick={() => copy("snippet", snippet)}
+              data-testid="install-copy-snippet"
               style={{
                 position: "absolute",
                 top: 10,
@@ -358,27 +480,129 @@ function ScannerSetupCard({
                 gap: 5,
                 padding: "6px 10px",
                 borderRadius: 8,
-                background: copied ? BRAND.ink : tone[100],
-                border: "none",
+                background: copied === "snippet" ? "#10b981" : "rgba(255,255,255,0.10)",
+                border: "1px solid rgba(255,255,255,0.15)",
                 cursor: "pointer",
                 fontSize: type.xs,
                 fontWeight: 600,
-                color: copied ? BRAND.paper : tone[600],
-                transition: `background 0.15s ${ease}, color 0.15s ${ease}`,
+                color: "#f9fafb",
+                transition: `background 0.15s ${ease}`,
               }}
             >
-              {copied
+              {copied === "snippet"
                 ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
                 : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
             </button>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <SecondaryButton size="sm" onClick={onDismiss}>
-            Dismiss
-          </SecondaryButton>
+        {firstKey && (
+          <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
+            Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{keyHint}</code> with the full key value (find it in the Site keys tab). Treat it like a public API key — it's safe in the browser but rotate it if it leaks.
+          </p>
+        )}
+
+        {/* Verify install */}
+        <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 2 }}>
+                Verify install
+              </p>
+              <p style={{ fontSize: type.xs, color: tone[500] }}>
+                Click after loading your site once. We'll watch for the script to ping us.
+              </p>
+            </div>
+            <PrimaryButton
+              size="sm"
+              onClick={handleVerify}
+              loading={verify.kind === "polling"}
+              disabled={!firstKey || verify.kind === "polling"}
+              data-testid="verify-install-button"
+            >
+              <Radio style={{ width: 14, height: 14 }} />
+              {verify.kind === "polling" ? "Listening…" : "Verify install"}
+            </PrimaryButton>
+          </div>
+
+          {verify.kind === "ok" && (
+            <div data-testid="verify-result-ok" style={{
+              padding: "10px 14px", borderRadius: 10,
+              background: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+              color: "#047857",
+              fontSize: type.sm, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <Check style={{ width: 14, height: 14 }} />
+              We just saw your site at {format(new Date(verify.at), "h:mm:ss a")}.
+            </div>
+          )}
+          {verify.kind === "fail" && (
+            <div data-testid="verify-result-fail" style={{
+              padding: "10px 14px", borderRadius: 10,
+              background: "rgba(217, 119, 6, 0.08)",
+              border: "1px solid rgba(217, 119, 6, 0.25)",
+              color: "#92400e",
+              fontSize: type.sm, lineHeight: 1.5,
+            }}>
+              <strong>Still no ping.</strong> Reload your site in another tab and try again. If you just deployed, give the host 30s to roll the new HTML out. Common gotchas:
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                <li>The <code>data-key</code> value is the full key, not the prefix.</li>
+                <li>The script is in your live HTML (not just local).</li>
+                <li>Your CSP isn't blocking <code>{new URL(scannerUrl).origin}</code>.</li>
+              </ul>
+            </div>
+          )}
         </div>
+
+        {/* Fallback: agent prompt for users who'd rather have AI do it */}
+        {firstKey && (
+          <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 14 }}>
+            <button
+              type="button"
+              onClick={() => setShowAgentPrompt((s) => !s)}
+              style={{
+                background: "none", border: "none", padding: 0,
+                cursor: "pointer", fontSize: type.xs, color: tone[600],
+                fontWeight: 600, textDecoration: "underline",
+              }}
+            >
+              {showAgentPrompt ? "Hide AI agent prompt" : "Or have an AI agent do it for you"}
+            </button>
+            {showAgentPrompt && agentPrompt && (
+              <div style={{ position: "relative", marginTop: 10 }}>
+                <div style={{
+                  padding: "14px 48px 14px 16px",
+                  borderRadius: r.md,
+                  background: tone[50],
+                  border: `1px solid ${line.base}`,
+                  fontSize: type.sm,
+                  color: BRAND.ink,
+                  lineHeight: 1.6,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}>
+                  {agentPrompt}
+                </div>
+                <button
+                  onClick={() => copy("prompt", agentPrompt)}
+                  style={{
+                    position: "absolute", top: 8, right: 8,
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    padding: "5px 9px", borderRadius: 7,
+                    background: copied === "prompt" ? BRAND.ink : tone[100],
+                    color: copied === "prompt" ? BRAND.paper : tone[600],
+                    border: "none", cursor: "pointer",
+                    fontSize: 11, fontWeight: 600,
+                  }}
+                >
+                  {copied === "prompt" ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   );

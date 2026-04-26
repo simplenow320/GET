@@ -99,13 +99,24 @@ All FK columns now have explicit `references()` with documented delete behavior:
 ## DB Schema Tables
 - `users` — auth users
 - `sessions` — bearer token sessions
-- `projects` — user-owned projects
+- `projects` — user-owned projects (now with `lastSeenAt` + `lastSeenOrigin` for install diagnostics)
 - `content_fields` — editable content mapped to DOM selectors
 - `invites` — client invite emails
 - `project_users` — project membership + roles
 - `domains` — connected domains per project
 - `activity` — audit log entries
 - `drafts` — pending content changes from clients
+- `content_snapshots` — DOM scan results from the embedded scanner script
+- `project_keys` — hashed project API keys (full key shown only at creation as `rawKey`)
+
+## Product-maturity improvements (Apr 2026)
+Six shipped together to move the "vibe coder helpfulness" needle:
+- **Last-seen diagnostic** — `projects.last_seen_at` is bumped on every authenticated public-content GET/POST and snapshot. `lastSeenOrigin` stores ONLY the URL origin (scheme://host[:port]) — never path or query — to avoid Referer leakage of session ids or PII. `<LastSeenBadge />` renders 4 states on dashboard rows + project header: red "Never seen", green "Live" (≤10 min), neutral "Seen Xh ago" (≤24 h), amber "Last seen Xd ago".
+- **Autosave conflict prompt** — editor drafts in localStorage use a v2 envelope `{_v:2, value, capturedServerUpdatedAt}` (parser only accepts the format if the `_v` marker is present, falling back to plain-string for legacy drafts). On hydrate, if the server's `updatedAt` moved past the captured timestamp AND values differ, a per-field amber banner offers Keep mine / Use server.
+- **Client onboarding modal** — first editor visit per project per device shows a 2-step modal (welcome + role-aware "what happens when you save"). Gated by `localStorage["get:editor-intro-seen:${projectId}"]`. Re-openable via "?" in the editor header.
+- **Dashboard 4-up stats** — `/projects/stats` returns Projects / Live sites / Active clients / Edits (30d). Stats are scoped to projects you OWN (label copy reflects this).
+- **Image upload caption** — "Max 10 MB · JPG, PNG, WebP, GIF, SVG" under the upload button in the editor's image field.
+- **Stack-tabbed install panel** — replaces single-snippet card with tabs for Vanilla HTML / Vite / Next.js / WordPress, dark snippet box with copy, and a "Verify install" button that polls `lastSeenAt` for ~10 s and reports success or guidance.
 
 ## API Routes
 All under `/api`:

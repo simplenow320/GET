@@ -15,6 +15,11 @@ export const projectsTable = pgTable("projects", {
   status: text("status", { enum: ["draft", "active", "archived"] }).notNull().default("draft"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+  // Updated whenever the script tag on the customer's site fetches public
+  // content or posts a snapshot. Powers the dashboard "Last seen" badge so
+  // owners can tell whether their install actually loaded recently.
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  lastSeenOrigin: text("last_seen_origin"),
 });
 
 export const insertProjectSchema = createInsertSchema(projectsTable).omit({ id: true, createdAt: true });
