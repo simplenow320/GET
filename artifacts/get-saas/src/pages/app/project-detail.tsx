@@ -33,7 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Globe, Users, Database, FileEdit, Settings, Trash2,
   Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2,
-  KeyRound, Copy, Check, ShieldCheck, RefreshCw, ArrowRight,
+  KeyRound, Copy, Check, ShieldCheck, RefreshCw, ArrowRight, Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -532,6 +532,28 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
       >
         Content fields
       </SectionTitle>
+
+      {canManage && syncState === "idle" && (
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            padding: "10px 14px",
+            borderRadius: r.md,
+            background: tone[50],
+            border: `1px solid ${line.base}`,
+            fontSize: type.xs,
+            color: tone[600],
+            lineHeight: 1.55,
+          }}
+        >
+          <Info style={{ width: 14, height: 14, color: tone[400], flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <strong style={{ color: tone[700] }}>How scanning works.</strong>{" "}
+            The scanner captures every visible heading, paragraph, link, and image on each page your app loads — including pages your users navigate to. Content that appears only after a click, hover, or scroll (modals, tabs, lazy-loaded sections) won't be picked up automatically. If your site fetches data on load, the scanner runs again 3 seconds later to catch it. You can always click <strong>Scan my site</strong> again after any change.
+          </div>
+        </div>
+      )}
 
       {isAdding && (
         <Card padded style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>

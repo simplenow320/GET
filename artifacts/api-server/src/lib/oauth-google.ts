@@ -80,7 +80,58 @@ export function verifyState(secret: string, state: string): ParsedState | null {
   return { nonce, next };
 }
 
-export function buildAuthorizeUrl(cfg: GoogleOAuthConfig, state: string): string {
+// ── PKCE (RFC 7636) ───────────────────────────────────────────────────────
+// We use S256 PKCE in addition to the signed-state CSRF protection as
+// defense-in-depth. Even though we're a confidential client (we send
+// client_secret), PKCE binds the authorization code to *this specific browser
+// session* — an attacker who somehow captures the redirected `code` cannot
+// redeem it without the verifier, which never leaves the user's cookie.
+//
+// Wire-up:
+//   - At authorize-start: generate a verifier, send sha256(verifier) as
+//     code_challenge with method=S256. Store the verifier in the state cookie
+//     alongside the state value.
+//   - At callback: read verifier from the cookie, send it as code_verifier on
+//     the token exchange. Google rejects a mismatch with HTTP 400.
+
+/** Base64URL of sha256(verifier) — RFC 7636 §4.2. */
+function s256(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+/** Generate a high-entropy 43-character base64url verifier. */
+export function generatePkceVerifier(): string {
+  // 32 random bytes → 43 base64url chars (no padding). Within the 43–128
+  // range required by RFC 7636 §4.1.
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+/** Encode { state, verifier } into a single cookie value safely. */
+export function packStateCookie(state: string, verifier: string): string {
+  // The state already uses '.' as a delimiter; verifier is base64url-safe and
+  // contains no colon, so a single ':' works as a clean delimiter we can split
+  // on without risk of confusion with the state's payload.
+  return `${state}:${verifier}`;
+}
+
+/** Reverse of packStateCookie. Returns null if malformed. */
+export function unpackStateCookie(
+  cookie: string,
+): { state: string; verifier: string } | null {
+  const idx = cookie.lastIndexOf(":");
+  if (idx <= 0 || idx === cookie.length - 1) return null;
+  const state = cookie.slice(0, idx);
+  const verifier = cookie.slice(idx + 1);
+  // Verifier sanity: base64url, RFC-permitted length range.
+  if (!/^[A-Za-z0-9_-]{43,128}$/.test(verifier)) return null;
+  return { state, verifier };
+}
+
+export function buildAuthorizeUrl(
+  cfg: GoogleOAuthConfig,
+  state: string,
+  codeVerifier: string,
+): string {
   const params = new URLSearchParams({
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
@@ -90,6 +141,8 @@ export function buildAuthorizeUrl(cfg: GoogleOAuthConfig, state: string): string
     access_type: "online",
     prompt: "select_account",
     include_granted_scopes: "true",
+    code_challenge: s256(codeVerifier),
+    code_challenge_method: "S256",
   });
   return `${AUTHORIZE_URL}?${params.toString()}`;
 }
@@ -109,6 +162,7 @@ export interface GoogleProfile {
 export async function exchangeCodeForProfile(
   cfg: GoogleOAuthConfig,
   code: string,
+  codeVerifier: string,
 ): Promise<GoogleProfile> {
   const tokenRes = await fetch(TOKEN_URL, {
     method: "POST",
@@ -119,6 +173,10 @@ export async function exchangeCodeForProfile(
       client_secret: cfg.clientSecret,
       redirect_uri: cfg.redirectUri,
       grant_type: "authorization_code",
+      // PKCE: Google rejects the exchange (HTTP 400) if this verifier doesn't
+      // sha256 to the code_challenge sent at /authorize. That binds the code
+      // to this specific browser session, even if it's intercepted in transit.
+      code_verifier: codeVerifier,
     }).toString(),
   });
   if (!tokenRes.ok) {

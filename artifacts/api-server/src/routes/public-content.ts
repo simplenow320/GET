@@ -111,7 +111,7 @@ router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyReques
       },
     });
 
-  res.json({ ok: true });
+  return res.json({ ok: true });
 });
 
 /**
@@ -266,7 +266,7 @@ const SCANNER_SCRIPT = /* javascript */ `
                     : sectionName + ' Image ' + (imgIdx + 1);
       var altText = imgs[ii].getAttribute('alt') || '';
       var imgField = { label: imgLabel, type: 'image', value: absSrc };
-      if (altText) (imgField as any).alt = altText;
+      if (altText) imgField.alt = altText;
       fields.push(imgField);
       imgIdx++;
       if (imgIdx >= 6) break; // at most 6 images per section
@@ -466,11 +466,42 @@ const SCANNER_SCRIPT = /* javascript */ `
   }
 
   // ── Send ─────────────────────────────────────────────────────────────────
+  //
+  // Scanning strategy:
+  //   1) Initial scan as soon as the DOM is ready. Captures static / SSR'd content.
+  //   2) Delayed re-scan ~3s later. Captures content that arrives via async
+  //      data-fetch, hydration, or staggered animations on a typical SPA.
+  //   3) On SPA navigation (history.pushState / replaceState / popstate) re-scan
+  //      again ~1.5s after the URL changes. Captures route-specific content.
+  //
+  // We compute a content fingerprint (sections.length + total field count +
+  // first heading) and only POST when it differs from the last-sent fingerprint.
+  // The server stores one row per project (latest wins), so re-posting the same
+  // content is harmless but wastes a request — this short-circuit avoids that.
+
+  var lastFingerprint = '';
+
+  function fingerprintOf(sections) {
+    var fc = 0;
+    var firstHeading = '';
+    for (var i = 0; i < sections.length; i++) {
+      fc += (sections[i].fields || []).length;
+      if (!firstHeading && sections[i].fields && sections[i].fields.length) {
+        firstHeading = sections[i].fields[0].value || '';
+      }
+    }
+    return sections.length + ':' + fc + ':' + firstHeading.slice(0, 60);
+  }
 
   function sendSnapshot() {
     try {
+      // scan() resets its own dedup sets each call, so a re-scan re-collects
+      // any text/images that have appeared since the previous scan.
       var sections = scan();
       if (!sections.length) return;
+      var fp = fingerprintOf(sections);
+      if (fp === lastFingerprint) return;
+      lastFingerprint = fp;
       fetch(SNAPSHOT_URL, {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
@@ -481,11 +512,40 @@ const SCANNER_SCRIPT = /* javascript */ `
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', sendSnapshot);
-  } else {
+  // Run an initial scan, then a delayed second scan to catch async-loaded content.
+  function runInitialAndDelayed() {
     sendSnapshot();
+    setTimeout(sendSnapshot, 3000);
   }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runInitialAndDelayed);
+  } else {
+    runInitialAndDelayed();
+  }
+
+  // ── SPA navigation handling ──────────────────────────────────────────────
+  // Most SPAs use history.pushState / replaceState for client-side routing.
+  // We monkey-patch them so we can re-scan ~1.5s after the new route's content
+  // has had a chance to render.
+  var navTimer = null;
+  function scheduleNavScan() {
+    if (navTimer) clearTimeout(navTimer);
+    navTimer = setTimeout(function () {
+      // Reset fingerprint on a new URL so we always re-send for new routes.
+      lastFingerprint = '';
+      sendSnapshot();
+    }, 1500);
+  }
+
+  try {
+    var origPush = history.pushState;
+    var origReplace = history.replaceState;
+    history.pushState = function () { var r = origPush.apply(this, arguments); scheduleNavScan(); return r; };
+    history.replaceState = function () { var r = origReplace.apply(this, arguments); scheduleNavScan(); return r; };
+    window.addEventListener('popstate', scheduleNavScan);
+    window.addEventListener('hashchange', scheduleNavScan);
+  } catch(e) {}
 })();
 `;
 

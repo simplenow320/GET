@@ -25,6 +25,9 @@ import {
   verifyState,
   buildAuthorizeUrl,
   exchangeCodeForProfile,
+  generatePkceVerifier,
+  packStateCookie,
+  unpackStateCookie,
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_TTL_MS,
 } from "../lib/oauth-google";
@@ -108,8 +111,14 @@ router.get("/google", authLimiter, async (req, res) => {
   }
   const next = safeNextParam(req);
   const state = mintState(cfg.secret, next);
-  setStateCookie(res, state);
-  res.redirect(buildAuthorizeUrl(cfg, state));
+  // PKCE: generate a per-attempt verifier, send sha256(verifier) to Google,
+  // stash the verifier alongside the state in the cookie so the callback
+  // can submit it on the token exchange. The verifier never leaves this
+  // browser — even an attacker who somehow steals the redirect `code`
+  // can't redeem it without it.
+  const verifier = generatePkceVerifier();
+  setStateCookie(res, packStateCookie(state, verifier));
+  res.redirect(buildAuthorizeUrl(cfg, state, verifier));
 });
 
 /**
@@ -126,7 +135,7 @@ router.get("/google/callback", authLimiter, async (req, res) => {
     return res.redirect(buildAppUrl("/login?error=oauth_unavailable"));
   }
 
-  const cookieState = (req as any).cookies?.[OAUTH_STATE_COOKIE];
+  const cookieRaw = (req as any).cookies?.[OAUTH_STATE_COOKIE];
   const queryState = req.query.state;
   const code = req.query.code;
 
@@ -141,20 +150,21 @@ router.get("/google/callback", authLimiter, async (req, res) => {
     return res.redirect(buildAppUrl("/login?error=oauth_cancelled"));
   }
 
+  // Cookie payload is `<state>:<verifier>` (PKCE). Unpack and validate both.
+  const unpacked = typeof cookieRaw === "string" ? unpackStateCookie(cookieRaw) : null;
   if (
-    typeof cookieState !== "string" ||
+    !unpacked ||
     typeof queryState !== "string" ||
     typeof code !== "string" ||
-    cookieState.length === 0 ||
     queryState.length === 0 ||
     code.length === 0 ||
-    cookieState !== queryState
+    unpacked.state !== queryState
   ) {
     logger.warn("google oauth: state mismatch or missing code");
     return res.redirect(buildAppUrl("/login?error=oauth_state"));
   }
 
-  const parsed = verifyState(cfg.secret, cookieState);
+  const parsed = verifyState(cfg.secret, unpacked.state);
   if (!parsed) {
     logger.warn("google oauth: state hmac invalid");
     return res.redirect(buildAppUrl("/login?error=oauth_state"));
@@ -162,7 +172,7 @@ router.get("/google/callback", authLimiter, async (req, res) => {
 
   let profile;
   try {
-    profile = await exchangeCodeForProfile(cfg, code);
+    profile = await exchangeCodeForProfile(cfg, code, unpacked.verifier);
   } catch (err) {
     logger.error({ err }, "google oauth: code exchange failed");
     return res.redirect(buildAppUrl("/login?error=oauth_exchange"));

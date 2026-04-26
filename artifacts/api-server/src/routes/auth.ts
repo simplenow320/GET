@@ -178,54 +178,72 @@ const ResetPasswordBody = z.object({
  * Always returns 200 with a generic message — never leaks whether the email
  * exists in our DB. Behind the scenes, if a matching user is found, we mint
  * a single-use token and email them a reset link.
+ *
+ * No-enumeration guarantee comes from THREE layers:
+ *   1. Identical response status + body in every branch.
+ *   2. Identical error-handling — internal errors are swallowed and logged.
+ *   3. Identical wall-clock latency floor — we hold the response for at
+ *      least MIN_RESPONSE_MS regardless of branch, so an attacker timing
+ *      the endpoint can't distinguish "user exists, did 2 DB writes + queued
+ *      email" from "user does not exist, did 1 cheap DB read".
  */
+const MIN_FORGOT_PASSWORD_RESPONSE_MS = 350;
+
 router.post("/forgot-password", authLimiter, async (req, res) => {
+  // Floor the response time: even branches that finish in <50ms wait until
+  // MIN_FORGOT_PASSWORD_RESPONSE_MS has elapsed. This swamps the per-request
+  // variance between the existing-email branch (extra UPDATE + INSERT + queued
+  // SendGrid call) and the unknown-email branch (single SELECT).
+  const startedAt = Date.now();
   const parsed = ForgotPasswordBody.safeParse(req.body);
-  if (!parsed.success) {
-    // Same generic response — don't reveal whether the input shape was valid.
-    return res.json({ ok: true });
-  }
-  const { email } = parsed.data;
+  if (parsed.success) {
+    const { email } = parsed.data;
+    try {
+      const users = await db.select().from(usersTable).where(eq(usersTable.email, email));
+      const user = users[0];
 
-  try {
-    const users = await db.select().from(usersTable).where(eq(usersTable.email, email));
-    const user = users[0];
+      if (user) {
+        // Invalidate any earlier unused tokens for this user — only the latest
+        // link should ever work.
+        await db
+          .update(passwordResetTokensTable)
+          .set({ usedAt: new Date() })
+          .where(
+            and(
+              eq(passwordResetTokensTable.userId, user.id),
+              isNull(passwordResetTokensTable.usedAt),
+            ),
+          );
 
-    if (user) {
-      // Invalidate any earlier unused tokens for this user — only the latest
-      // link should ever work.
-      await db
-        .update(passwordResetTokensTable)
-        .set({ usedAt: new Date() })
-        .where(
-          and(
-            eq(passwordResetTokensTable.userId, user.id),
-            isNull(passwordResetTokensTable.usedAt),
-          ),
-        );
+        const rawToken = generateSessionToken();
+        await db.insert(passwordResetTokensTable).values({
+          userId: user.id,
+          token: hashSessionToken(rawToken),
+          expiresAt: new Date(Date.now() + RESET_TTL_MS),
+        });
 
-      const rawToken = generateSessionToken();
-      await db.insert(passwordResetTokensTable).values({
-        userId: user.id,
-        token: hashSessionToken(rawToken),
-        expiresAt: new Date(Date.now() + RESET_TTL_MS),
-      });
+        // Reset URL is built from the trusted, server-configured app base URL
+        // — NEVER from request headers, which an attacker can forge to make
+        // us email out attacker-controlled links carrying real tokens.
+        const resetUrl = buildAppUrl(`/reset-password/${rawToken}`);
 
-      // Reset URL is built from the trusted, server-configured app base URL —
-      // NEVER from request headers, which an attacker can forge to make us
-      // email out attacker-controlled links carrying real tokens.
-      const resetUrl = buildAppUrl(`/reset-password/${rawToken}`);
-
-      // Fire-and-forget — never block the response on email send. If SendGrid
-      // is misconfigured we still want a generic 200.
-      sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl }).catch((err) => {
-        logger.warn({ err, userId: user.id }, "password reset email failed");
-      });
-      logger.info({ audit: true, userId: user.id, action: "password_reset_requested" }, "audit");
+        // Fire-and-forget — never block the response on email send. If SendGrid
+        // is misconfigured we still want a generic 200.
+        sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl }).catch((err) => {
+          logger.warn({ err, userId: user.id }, "password reset email failed");
+        });
+        logger.info({ audit: true, userId: user.id, action: "password_reset_requested" }, "audit");
+      }
+    } catch (err) {
+      // Never let internal errors leak — but DO log them.
+      logger.error({ err }, "forgot-password handler error");
     }
-  } catch (err) {
-    // Never let internal errors leak — but DO log them.
-    logger.error({ err }, "forgot-password handler error");
+  }
+
+  const elapsed = Date.now() - startedAt;
+  const remaining = MIN_FORGOT_PASSWORD_RESPONSE_MS - elapsed;
+  if (remaining > 0) {
+    await new Promise((r) => setTimeout(r, remaining));
   }
 
   res.json({ ok: true });
