@@ -136,233 +136,349 @@ router.get("/scanner.js", (_req, res) => {
 
 const SCANNER_SCRIPT = /* javascript */ `
 (function () {
-  // Locate our script tag by src pattern so it works without defer/async.
   var scriptEl = document.querySelector('script[src*="scanner.js"][data-key]');
-  if (!scriptEl) {
-    console.warn('[get] Scanner script not found or missing data-key attribute.');
-    return;
-  }
+  if (!scriptEl) { console.warn('[get] Scanner: missing script tag or data-key.'); return; }
   var key = scriptEl.getAttribute('data-key');
-  if (!key || !key.startsWith('pk_')) {
-    console.warn('[get] Invalid data-key on scanner script.');
-    return;
-  }
-  // Derive the API endpoint from the script's own origin.
+  if (!key || !key.startsWith('pk_')) { console.warn('[get] Scanner: invalid data-key.'); return; }
+
   var origin = new URL(scriptEl.src).origin;
   var SNAPSHOT_URL = origin + '/api/public/content/snapshot';
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
-  function clean(s) {
-    return (s || '').replace(/\\s+/g, ' ').trim();
-  }
+  function clean(s) { return (s || '').replace(/\\s+/g, ' ').trim(); }
 
   function absUrl(href) {
     if (!href) return null;
-    if (href.startsWith('http://') || href.startsWith('https://')) return href;
-    if (href.startsWith('//')) return 'https:' + href;
-    if (href.startsWith('/')) return location.origin + href;
-    return location.origin + '/' + href;
+    try {
+      if (/^https?:\\/\\//.test(href)) return href;
+      if (href.startsWith('//')) return 'https:' + href;
+      if (href.startsWith('/')) return location.origin + href;
+      return new URL(href, location.href).href;
+    } catch(e) { return null; }
   }
 
-  var KEYWORDS = {
-    hero: 'Hero', banner: 'Hero', jumbotron: 'Hero',
-    about: 'About', story: 'About', mission: 'About',
-    services: 'Services', offerings: 'Services',
-    features: 'Features',
-    how: 'How It Works', process: 'How It Works', steps: 'How It Works',
-    team: 'Team', staff: 'Team', people: 'Team',
-    testimonial: 'Testimonials', reviews: 'Testimonials',
-    pricing: 'Pricing', plans: 'Pricing',
-    faq: 'FAQ', questions: 'FAQ',
-    contact: 'Contact',
-    footer: 'Footer',
-    cta: 'Call to Action'
-  };
+  // Skip these tags when collecting visible text — they're chrome, not content.
+  var SKIP_TAGS = new Set(['SCRIPT','STYLE','NOSCRIPT','HEAD','META','LINK','SVG','PATH',
+    'IFRAME','OBJECT','EMBED','INPUT','TEXTAREA','SELECT','OPTION','BUTTON','NAV','HEADER']);
 
-  function inferName(el) {
-    var id = (el.id || '').toLowerCase();
-    var cls = (el.className || '').toLowerCase();
-    var aria = el.getAttribute('aria-label');
-    if (aria) return aria;
-    for (var kw in KEYWORDS) {
-      if (id.indexOf(kw) >= 0 || cls.indexOf(kw) >= 0) return KEYWORDS[kw];
+  /**
+   * Recursively collect all visible text nodes, skipping chrome elements.
+   * Returns an array of clean strings — each non-empty leaf text run.
+   */
+  function collectText(el, out) {
+    if (!el) return;
+    var tag = (el.tagName || '').toUpperCase();
+    if (SKIP_TAGS.has(tag)) return;
+    // Skip hidden elements
+    try {
+      var cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return;
+    } catch(e) {}
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var node = el.childNodes[i];
+      if (node.nodeType === 3) { // TEXT_NODE
+        var t = clean(node.nodeValue);
+        if (t.length >= 2) out.push(t);
+      } else if (node.nodeType === 1) {
+        collectText(node, out);
+      }
     }
-    return null;
   }
 
-  // ── Section extractor ──────────────────────────────────────────────────────
-
-  var seenText, seenImages;
-
-  function extractSection(el, name) {
+  /**
+   * Given a container element, extract ALL editable-looking content:
+   *  - Every heading (h1-h6) as its own text field, in DOM order
+   *  - ALL visible body text (p, li, blockquote, figcaption, td, dd, span-like)
+   *    joined into one richtext field — deduped against already-seen text
+   *  - Every distinct link/button with short text as a CTA
+   *  - Every <img> (non-data-uri, non-tiny) as an image field
+   */
+  function extractSection(el, sectionName) {
     var fields = [];
 
-    // Primary heading
-    var headings = el.querySelectorAll('h1,h2,h3,h4');
-    var primaryH = null;
-    for (var i = 0; i < headings.length; i++) {
-      var ht = clean(headings[i].textContent);
-      if (ht && ht.length <= 200 && !seenText.has(ht)) {
-        seenText.add(ht);
-        fields.push({ label: name + ' Heading', type: 'text', value: ht });
-        primaryH = headings[i];
-        break;
-      }
+    // ── Headings — every h1-h6 in DOM order ──────────────────────────────
+    var hs = el.querySelectorAll('h1,h2,h3,h4,h5,h6');
+    var hIdx = 0;
+    for (var i = 0; i < hs.length; i++) {
+      var ht = clean(hs[i].textContent);
+      if (!ht || ht.length > 300 || seenText.has(ht)) continue;
+      seenText.add(ht);
+      var hLabel = hIdx === 0 ? sectionName + ' Heading'
+                  : hIdx === 1 ? sectionName + ' Sub-heading'
+                  : sectionName + ' Heading ' + (hIdx + 1);
+      fields.push({ label: hLabel, type: 'text', value: ht });
+      hIdx++;
     }
 
-    // Sub-heading (h3/h4, different from primary)
-    var subHs = el.querySelectorAll('h3,h4');
-    for (var si = 0; si < subHs.length; si++) {
-      if (subHs[si] === primaryH) continue;
-      var st = clean(subHs[si].textContent);
-      if (st && st.length <= 200 && !seenText.has(st)) {
-        seenText.add(st);
-        fields.push({ label: name + ' Sub-heading', type: 'text', value: st });
-        break;
-      }
+    // ── Body text — every visible paragraph-like element ─────────────────
+    // We grab text from p, li, blockquote, figcaption, td, th, dd individually
+    // so the order follows the DOM. Each unique run becomes a line.
+    var bodyEls = el.querySelectorAll(
+      'p, li, blockquote, figcaption, td, th, dd, [class*="desc"], [class*="text"], [class*="copy"], [class*="caption"]'
+    );
+    var bodyLines = [];
+    for (var bi = 0; bi < bodyEls.length; bi++) {
+      // Skip if it contains a heading (the heading already captured above)
+      if (bodyEls[bi].querySelector('h1,h2,h3,h4,h5,h6')) continue;
+      var bt = clean(bodyEls[bi].textContent);
+      if (bt.length < 3 || seenText.has(bt)) continue;
+      seenText.add(bt);
+      bodyLines.push(bt);
+    }
+    if (bodyLines.length) {
+      fields.push({ label: sectionName + ' Body', type: 'richtext', value: bodyLines.join('\\n') });
     }
 
-    // Body paragraphs
-    var paras = el.querySelectorAll('p');
-    var bodyParts = [];
-    for (var pi = 0; pi < paras.length; pi++) {
-      var pt = clean(paras[pi].textContent);
-      if (pt.length >= 20 && !seenText.has(pt)) {
-        seenText.add(pt);
-        bodyParts.push(pt);
-      }
-    }
-    if (bodyParts.length) {
-      fields.push({ label: name + ' Body', type: 'richtext', value: bodyParts.join('\\n\\n') });
-    }
-
-    // CTA — first button or link with short text
-    var links = el.querySelectorAll('a[href],button');
-    for (var li = 0; li < links.length; li++) {
-      var lt = clean(links[li].textContent);
-      if (lt.length >= 2 && lt.length <= 60) {
-        var href = links[li].getAttribute('href');
-        var abs = href ? absUrl(href) : null;
-        if (abs && abs.indexOf('#') < 0 && !seenText.has(abs)) {
-          seenText.add(abs);
-          fields.push({ label: name + ' CTA', type: 'url', value: abs });
-        }
-        break;
-      }
+    // ── CTAs — every distinct button / link with human-readable text ──────
+    var ctaEls = el.querySelectorAll('a[href], button[type="button"], button[type="submit"], button:not([type])');
+    var ctaIdx = 0;
+    for (var ci = 0; ci < ctaEls.length; ci++) {
+      var ct = clean(ctaEls[ci].textContent);
+      if (ct.length < 2 || ct.length > 80) continue;
+      var href = ctaEls[ci].getAttribute('href');
+      var abs = href ? absUrl(href) : null;
+      // For buttons without href, record the label text as the value
+      var val = abs || ct;
+      if (seenCtaText.has(ct)) continue;
+      seenCtaText.add(ct);
+      var ctaLabel = ctaIdx === 0 ? sectionName + ' CTA'
+                    : sectionName + ' CTA ' + (ctaIdx + 1);
+      var ctaType = abs ? 'url' : 'text';
+      fields.push({ label: ctaLabel, type: ctaType, value: val });
+      ctaIdx++;
+      if (ctaIdx >= 5) break; // at most 5 CTAs per section
     }
 
-    // First image in section
+    // ── Images — every visible <img> (skip icons / tiny / data-uris) ──────
     var imgs = el.querySelectorAll('img[src]');
+    var imgIdx = 0;
     for (var ii = 0; ii < imgs.length; ii++) {
       var src = imgs[ii].getAttribute('src');
       if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue;
+      // Skip tiny icons: naturalWidth/naturalHeight available after load
+      var nw = imgs[ii].naturalWidth, nh = imgs[ii].naturalHeight;
+      if (nw > 0 && nw < 40 && nh < 40) continue;
       var absSrc = absUrl(src);
-      if (absSrc && !seenImages.has(absSrc)) {
-        seenImages.add(absSrc);
-        fields.push({ label: name + ' Image', type: 'image', value: absSrc });
-        break;
-      }
+      if (!absSrc || seenImages.has(absSrc)) continue;
+      seenImages.add(absSrc);
+      var imgLabel = imgIdx === 0 ? sectionName + ' Image'
+                    : sectionName + ' Image ' + (imgIdx + 1);
+      var altText = imgs[ii].getAttribute('alt') || '';
+      var imgField = { label: imgLabel, type: 'image', value: absSrc };
+      if (altText) (imgField as any).alt = altText;
+      fields.push(imgField);
+      imgIdx++;
+      if (imgIdx >= 6) break; // at most 6 images per section
     }
 
     return fields;
   }
 
-  // ── Main scan ──────────────────────────────────────────────────────────────
+  // ── Section naming ────────────────────────────────────────────────────────
+
+  var KEYWORDS = {
+    hero: 'Hero', banner: 'Hero', jumbotron: 'Hero', splash: 'Hero',
+    about: 'About', story: 'About', mission: 'About', 'who-we': 'About',
+    service: 'Services', offering: 'Services', solution: 'Services',
+    feature: 'Features', benefit: 'Features', highlight: 'Features',
+    how: 'How It Works', process: 'How It Works', step: 'How It Works', workflow: 'How It Works',
+    team: 'Team', staff: 'Team', people: 'Team', founder: 'Team',
+    testimonial: 'Testimonials', review: 'Testimonials', client: 'Testimonials', quote: 'Testimonials',
+    pricing: 'Pricing', plan: 'Pricing', tier: 'Pricing',
+    faq: 'FAQ', question: 'FAQ', accordion: 'FAQ',
+    contact: 'Contact', 'get-in': 'Contact', reach: 'Contact',
+    footer: 'Footer',
+    nav: 'Navigation', menu: 'Navigation', header: 'Header',
+    cta: 'Call to Action', 'call-to': 'Call to Action',
+    gallery: 'Gallery', portfolio: 'Portfolio', work: 'Portfolio',
+    blog: 'Blog', post: 'Blog', article: 'Blog',
+    partner: 'Partners', logo: 'Partners', sponsor: 'Partners',
+    stat: 'Stats', number: 'Stats', metric: 'Stats',
+    award: 'Awards', trust: 'Trust'
+  };
+
+  function inferName(el) {
+    var aria = el.getAttribute('aria-label');
+    if (aria && aria.length <= 60) return aria;
+    var id = (el.id || '').toLowerCase();
+    var cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
+    var combined = id + ' ' + cls;
+    for (var kw in KEYWORDS) {
+      if (combined.indexOf(kw) >= 0) return KEYWORDS[kw];
+    }
+    return null;
+  }
+
+  // ── Main scan ─────────────────────────────────────────────────────────────
+
+  var seenText, seenImages, seenCtaText;
 
   function scan() {
     seenText = new Set();
     seenImages = new Set();
+    seenCtaText = new Set();
     var sections = [];
     var usedNames = {};
 
-    // Primary pass: semantic / named containers
-    var candidates = document.querySelectorAll(
-      'section, article, [class*="section"], [class*="block"], [id]'
-    );
+    function addSection(name, el) {
+      var count = usedNames[name] || 0;
+      usedNames[name] = count + 1;
+      var displayName = count === 0 ? name : name + ' ' + (count + 1);
+      var fields = extractSection(el, displayName);
+      if (fields.length > 0) sections.push({ name: displayName, fields: fields });
+    }
 
-    var cArr = Array.prototype.slice.call(candidates).filter(function (el) {
-      var depth = 0, p = el.parentElement;
-      while (p) {
-        var tag = (p.tagName || '').toUpperCase();
-        if (tag === 'SECTION' || tag === 'ARTICLE') depth++;
-        p = p.parentElement;
+    // ── Pass 1: semantic containers (section, article, main > direct children)
+    var semantics = Array.prototype.slice.call(
+      document.querySelectorAll('main > section, main > article, body > section, body > article')
+    );
+    // Also collect top-level divs in main that look like sections
+    var mainEl = document.querySelector('main') || document.body;
+    var directChildren = Array.prototype.slice.call(mainEl.children);
+    for (var di = 0; di < directChildren.length; di++) {
+      var dc = directChildren[di];
+      var dTag = (dc.tagName || '').toUpperCase();
+      if (dTag === 'SECTION' || dTag === 'ARTICLE') continue; // already in semantics
+      if (dTag === 'DIV' || dTag === 'ASIDE') {
+        var hasHeading = dc.querySelector('h1,h2,h3,h4');
+        if (hasHeading) semantics.push(dc);
       }
-      return depth <= 1;
+    }
+
+    // ── Pass 2: named containers anywhere in the page (id/class based)
+    var named = Array.prototype.slice.call(
+      document.querySelectorAll('[id], [class]')
+    ).filter(function(el) {
+      // Only keep elements that have a meaningful name AND contain a heading
+      var name = inferName(el);
+      if (!name) return false;
+      // Skip if it's nested inside a semantic element we already have
+      var par = el.parentElement;
+      while (par) {
+        var pt = (par.tagName || '').toUpperCase();
+        if (pt === 'SECTION' || pt === 'ARTICLE') return false;
+        par = par.parentElement;
+      }
+      return el.querySelector('h1,h2,h3,h4,h5,h6') != null;
     });
 
-    for (var i = 0; i < cArr.length && sections.length < 10; i++) {
-      var el = cArr[i];
+    // Merge: semantics first (in DOM order), then named ones not already covered
+    var covered = new Set();
+    var allCandidates = semantics.concat(named);
+
+    // Sort by DOM order
+    allCandidates.sort(function(a, b) {
+      var pos = a.compareDocumentPosition(b);
+      return pos & 4 ? -1 : pos & 2 ? 1 : 0;
+    });
+
+    // Deduplicate: skip if ancestor already in covered
+    for (var i = 0; i < allCandidates.length && sections.length < 25; i++) {
+      var el = allCandidates[i];
+      // Skip if it's a descendant of an element we already captured
+      var skip = false;
+      covered.forEach(function(anc) {
+        if (!skip && anc !== el && anc.contains(el)) skip = true;
+      });
+      if (skip) continue;
+
       var name = inferName(el);
       if (!name) {
         var fh = el.querySelector('h1,h2,h3');
         if (fh) {
           var ft = clean(fh.textContent);
-          if (ft && ft.length <= 60) name = ft;
+          if (ft && ft.length <= 80) name = ft;
         }
       }
       if (!name) continue;
 
-      var count = usedNames[name] || 0;
-      usedNames[name] = count + 1;
-      var displayName = count === 0 ? name : name + ' ' + (count + 1);
-
-      var fields = extractSection(el, displayName);
-      if (fields.length > 0) sections.push({ name: displayName, fields: fields });
+      covered.add(el);
+      addSection(name, el);
     }
 
-    // Fallback: group by headings
+    // ── Fallback A: heading-based grouping if nothing found ───────────────
     if (sections.length === 0) {
       var hEls = document.querySelectorAll('h1,h2,h3');
-      for (var hi = 0; hi < hEls.length && sections.length < 8; hi++) {
+      for (var hi = 0; hi < hEls.length && sections.length < 20; hi++) {
         var hText = clean(hEls[hi].textContent);
         if (!hText || hText.length > 200 || seenText.has(hText)) continue;
         seenText.add(hText);
-        var sname = hText.length <= 40 ? hText : hText.slice(0, 40) + '\\u2026';
+        var sname = hText.length <= 60 ? hText : hText.slice(0, 60) + '\\u2026';
         var sfields = [{ label: sname + ' Heading', type: 'text', value: hText }];
+
+        // Collect all text siblings until next heading
         var sib = hEls[hi].nextElementSibling;
-        var lim = 5, bodyP = [];
+        var lim = 20, bodyLines = [];
         while (sib && lim-- > 0) {
-          if (/^H[1-4]$/.test(sib.tagName)) break;
-          var sibT = clean(sib.textContent);
-          if (sibT.length >= 20 && !seenText.has(sibT)) {
-            seenText.add(sibT);
-            bodyP.push(sibT);
+          if (/^H[1-6]$/.test(sib.tagName)) break;
+          var textNodes = [];
+          collectText(sib, textNodes);
+          for (var ti = 0; ti < textNodes.length; ti++) {
+            var tv = textNodes[ti];
+            if (tv.length >= 2 && !seenText.has(tv)) {
+              seenText.add(tv);
+              bodyLines.push(tv);
+            }
+          }
+          // Grab images too
+          var sibImgs = sib.querySelectorAll('img[src]');
+          for (var sii = 0; sii < sibImgs.length; sii++) {
+            var ssrc = sibImgs[sii].getAttribute('src');
+            if (!ssrc || ssrc.startsWith('data:')) continue;
+            var sabsSrc = absUrl(ssrc);
+            if (sabsSrc && !seenImages.has(sabsSrc)) {
+              seenImages.add(sabsSrc);
+              sfields.push({ label: sname + ' Image', type: 'image', value: sabsSrc });
+            }
           }
           sib = sib.nextElementSibling;
         }
-        if (bodyP.length) sfields.push({ label: sname + ' Body', type: 'richtext', value: bodyP.join('\\n\\n') });
+        if (bodyLines.length) sfields.push({ label: sname + ' Body', type: 'richtext', value: bodyLines.join('\\n') });
         sections.push({ name: sname, fields: sfields });
       }
     }
 
-    // Last resort: title + meta description
+    // ── Fallback B: whole-page sweep — pull every unique text run ─────────
     if (sections.length === 0) {
+      var allTextNodes = [];
+      collectText(document.body, allTextNodes);
+      var uniqueLines = [];
+      var seenFallback = new Set();
+      for (var ai = 0; ai < allTextNodes.length; ai++) {
+        var atv = allTextNodes[ai];
+        if (atv.length >= 2 && !seenFallback.has(atv)) {
+          seenFallback.add(atv);
+          uniqueLines.push(atv);
+        }
+      }
       var title = clean(document.title);
       var metaEl = document.querySelector('meta[name="description"]');
-      var desc = metaEl ? clean(metaEl.getAttribute('content')) : '';
-      var lf = [];
-      if (title) lf.push({ label: 'Page Title', type: 'text', value: title });
-      if (desc) lf.push({ label: 'Page Description', type: 'richtext', value: desc });
-      if (lf.length) sections.push({ name: 'Page', fields: lf });
+      var desc = metaEl ? clean(metaEl.getAttribute('content') || '') : '';
+      var pgFields = [];
+      if (title) pgFields.push({ label: 'Page Title', type: 'text', value: title });
+      if (desc) pgFields.push({ label: 'Page Description', type: 'richtext', value: desc });
+      if (uniqueLines.length) pgFields.push({ label: 'Page Content', type: 'richtext', value: uniqueLines.join('\\n') });
+      if (pgFields.length) sections.push({ name: 'Page', fields: pgFields });
     }
 
     return sections;
   }
 
-  // ── Send ───────────────────────────────────────────────────────────────────
+  // ── Send ─────────────────────────────────────────────────────────────────
 
   function sendSnapshot() {
-    var sections = scan();
-    if (!sections.length) return;
-    fetch(SNAPSHOT_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + key,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ sections: sections, pageUrl: location.href })
-    }).catch(function () {});
+    try {
+      var sections = scan();
+      if (!sections.length) return;
+      fetch(SNAPSHOT_URL, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: sections, pageUrl: location.href })
+      }).catch(function () {});
+    } catch(e) {
+      console.warn('[get] Scanner error:', e);
+    }
   }
 
   if (document.readyState === 'loading') {
