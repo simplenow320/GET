@@ -93,7 +93,7 @@ export default function LandingPage() {
               marginBottom: 28,
             }}
           >
-            If you ship apps with AI tools like Replit, Cursor, or Lovable, you end up making every text and image change by hand. Your clients end up waiting on edits they thought they could do themselves.
+            Ship with Replit, Cursor, or Lovable — and every text or image tweak still lands on you.
           </p>
 
           <div
@@ -121,8 +121,7 @@ export default function LandingPage() {
               marginInline: "auto",
             }}
           >
-            You keep control of structure, permissions, and what goes live.
-            Your client gets a simple way to update approved content — no code.
+            You stay in control. Your client gets a no-code editor for the parts you approve.
           </p>
         </div>
       </section>
@@ -140,19 +139,16 @@ export default function LandingPage() {
         >
           {[
             {
-              title: "Built for safe handoff",
-              body:
-                "Clients edit the parts you approve. Layout, permissions, and what goes live stay yours.",
+              title: "Safe handoff",
+              body: "Clients edit only what you approve. Layout and publishing stay yours.",
             },
             {
-              title: "Drops into the app you already built",
-              body:
-                "Works great with Replit apps, and with anything else you can paste a snippet into — Next.js, plain HTML, you name it.",
+              title: "Drops into your app",
+              body: "Replit, Next.js, plain HTML — paste one snippet.",
             },
             {
               title: "Simple for clients",
-              body:
-                "No code. No confusing backend. Just a clean editor for the parts you let them touch.",
+              body: "No code. Just a clean editor.",
             },
           ].map((item) => (
             <div
@@ -211,11 +207,11 @@ export default function LandingPage() {
           >
             <div style={{ display: "flex", flexDirection: "column" }}>
               {[
-                { n: "1", title: "Build your app", body: "Replit, or any code-first stack." },
-                { n: "2", title: "Connect get", body: "One key, one fetch. Minutes, not a migration." },
-                { n: "3", title: "Choose what's editable", body: "Approve the fields. Lock the rest." },
-                { n: "4", title: "Invite your client", body: "They get a private, no-code editor." },
-                { n: "5", title: "Review and publish", body: "Nothing goes live until you say so." },
+                { n: "1", title: "Build your app", body: "Replit or any stack." },
+                { n: "2", title: "Connect get", body: "One key, one snippet." },
+                { n: "3", title: "Choose what's editable", body: "Approve fields. Lock the rest." },
+                { n: "4", title: "Invite your client", body: "Private, no-code editor." },
+                { n: "5", title: "Review and publish", body: "Nothing goes live until you approve." },
               ].map((step, i, arr) => (
                 <div key={step.n} style={{ display: "flex", gap: 18 }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -338,7 +334,7 @@ export default function LandingPage() {
             marginBottom: 24,
           }}
         >
-          Designed to feel like minutes, not a migration project.
+          Minutes, not a migration.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Link
