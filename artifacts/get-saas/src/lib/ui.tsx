@@ -260,14 +260,16 @@ export function Card({
   padded,
   style,
   as: As = "div",
+  title,
 }: {
   children: React.ReactNode;
   padded?: boolean;
   style?: React.CSSProperties;
   as?: any;
+  title?: string;
 }) {
   return (
-    <As style={{ ...cardStyle, padding: padded ? 24 : 0, ...style }}>
+    <As title={title} style={{ ...cardStyle, padding: padded ? 24 : 0, ...style }}>
       {children}
     </As>
   );

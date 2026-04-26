@@ -115,7 +115,7 @@ export default function ProjectDetail() {
     { value: "clients",  icon: Users,       label: "Clients"  },
     { value: "domains",  icon: Globe,       label: "Domains"  },
     { value: "drafts",   icon: FileEdit,    label: "Drafts"   },
-    { value: "keys",     icon: KeyRound,    label: "API keys" },
+    { value: "keys",     icon: KeyRound,    label: "Site keys" },
     { value: "activity", icon: ActivityIcon,label: "Activity" },
     // Settings holds rename + delete; owners only.
     ...(isOwner ? [{ value: "settings", icon: Settings, label: "Settings" }] : []),
@@ -685,6 +685,9 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                           { onSuccess: () => refetch() }
                         )
                       }
+                      title={field.isLocked
+                        ? "Locked — clients can't edit this. Click to unlock."
+                        : "Unlocked — clients can edit this. Click to lock."}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -705,10 +708,13 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                       ) : (
                         <Unlock style={{ width: 12, height: 12 }} />
                       )}
-                      {field.isLocked ? "Locked" : "Open"}
+                      {field.isLocked ? "Locked" : "Unlocked"}
                     </button>
                     ) : (
                       <span
+                        title={field.isLocked
+                          ? "Locked — clients can't edit this."
+                          : "Unlocked — clients can edit this."}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -726,7 +732,7 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                         ) : (
                           <Unlock style={{ width: 12, height: 12 }} />
                         )}
-                        {field.isLocked ? "Locked" : "Open"}
+                        {field.isLocked ? "Locked" : "Unlocked"}
                       </span>
                     )}
                     {canManage && (

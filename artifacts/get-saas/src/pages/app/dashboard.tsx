@@ -45,12 +45,12 @@ export default function Dashboard() {
           }}
         >
           {[
-            { label: "Projects",     value: stats?.totalProjects, icon: LayoutGrid },
-            { label: "Clients",      value: stats?.totalClients,  icon: Users },
-            { label: "Fields",       value: stats?.totalFields,   icon: TypeIcon },
-            { label: "Recent edits", value: stats?.recentEdits,   icon: Activity },
+            { label: "Projects",     value: stats?.totalProjects, icon: LayoutGrid, hint: "All projects you own or are a member of." },
+            { label: "Clients",      value: stats?.totalClients,  icon: Users,      hint: "People you've invited to edit your projects." },
+            { label: "Fields",       value: stats?.totalFields,   icon: TypeIcon,   hint: "Editable areas across all your projects." },
+            { label: "Recent edits", value: stats?.recentEdits,   icon: Activity,   hint: "Field updates and publishes in the last 7 days." },
           ].map((s) => (
-            <Card key={s.label} padded style={{ padding: "18px 20px" }}>
+            <Card key={s.label} padded style={{ padding: "18px 20px" }} title={s.hint}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                 <IconTile icon={s.icon} variant="soft" size={28} />
                 <p style={{ fontSize: type.xs, color: tone[500], fontWeight: 500 }}>
@@ -118,60 +118,75 @@ export default function Dashboard() {
               }
             />
           ) : (
-            recentProjects.map((project, idx) => (
-              <Link key={project.id} href={`/app/projects/${project.id}`}>
-                <div
-                  style={{
-                    padding: "18px 22px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderTop: idx > 0 ? `1px solid ${line.faint}` : "none",
-                    cursor: "pointer",
-                    transition: `background 0.15s ${ease}`,
-                    gap: 12,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = tone[50];
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                  }}
-                >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <p style={{ fontSize: type.base, fontWeight: 600, marginBottom: 2 }}>
-                      {project.name}
-                    </p>
-                    <p style={{ fontSize: type.xs, color: tone[500] }}>
-                      {format(new Date(project.createdAt), "MMM d, yyyy")}
-                    </p>
-                  </div>
+            recentProjects.map((project, idx) => {
+              const needsFields = (project.fieldCount ?? 0) === 0;
+              const needsClients = (project.clientCount ?? 0) === 0;
+              const nudge = needsFields
+                ? "→ Add fields"
+                : needsClients
+                ? "→ Invite a client"
+                : null;
+              return (
+                <Link key={project.id} href={`/app/projects/${project.id}`}>
                   <div
                     style={{
+                      padding: "18px 22px",
                       display: "flex",
                       alignItems: "center",
-                      gap: 22,
-                      color: tone[500],
-                      flexShrink: 0,
+                      justifyContent: "space-between",
+                      borderTop: idx > 0 ? `1px solid ${line.faint}` : "none",
+                      cursor: "pointer",
+                      transition: `background 0.15s ${ease}`,
+                      gap: 12,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = tone[50];
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = "transparent";
                     }}
                   >
-                    <div style={{ textAlign: "right", minWidth: 44 }}>
-                      <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
-                        {project.fieldCount}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ fontSize: type.base, fontWeight: 600, marginBottom: 2 }}>
+                        {project.name}
                       </p>
-                      <p style={{ fontSize: 11, color: tone[500] }}>fields</p>
-                    </div>
-                    <div style={{ textAlign: "right", minWidth: 44 }}>
-                      <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
-                        {project.clientCount}
+                      <p style={{ fontSize: type.xs, color: tone[500] }}>
+                        {format(new Date(project.createdAt), "MMM d, yyyy")}
+                        {nudge && (
+                          <>
+                            {"  ·  "}
+                            <span style={{ color: BRAND.ink, fontWeight: 600 }}>{nudge}</span>
+                          </>
+                        )}
                       </p>
-                      <p style={{ fontSize: 11, color: tone[500] }}>clients</p>
                     </div>
-                    <ArrowRight style={{ width: 14, height: 14, color: tone[300] }} />
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 22,
+                        color: tone[500],
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div style={{ textAlign: "right", minWidth: 44 }}>
+                        <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
+                          {project.fieldCount}
+                        </p>
+                        <p style={{ fontSize: 11, color: tone[500] }}>fields</p>
+                      </div>
+                      <div style={{ textAlign: "right", minWidth: 44 }}>
+                        <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
+                          {project.clientCount}
+                        </p>
+                        <p style={{ fontSize: 11, color: tone[500] }}>clients</p>
+                      </div>
+                      <ArrowRight style={{ width: 14, height: 14, color: tone[300] }} />
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))
+                </Link>
+              );
+            })
           )}
         </Card>
       </div>

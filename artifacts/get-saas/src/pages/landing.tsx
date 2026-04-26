@@ -93,8 +93,7 @@ export default function LandingPage() {
               marginBottom: 28,
             }}
           >
-            Vibe coders end up making every text and image change by hand.
-            Clients end up waiting on edits they thought they could do themselves.
+            If you ship apps with AI tools like Replit, Cursor, or Lovable, you end up making every text and image change by hand. Your clients end up waiting on edits they thought they could do themselves.
           </p>
 
           <div
@@ -146,9 +145,9 @@ export default function LandingPage() {
                 "Clients edit the parts you approve. Layout, permissions, and what goes live stay yours.",
             },
             {
-              title: "Built for Replit first",
+              title: "Drops into the app you already built",
               body:
-                "Drop get into projects you already build on Replit. Other code-first apps work too.",
+                "Works great with Replit apps, and with anything else you can paste a snippet into — Next.js, plain HTML, you name it.",
             },
             {
               title: "Simple for clients",

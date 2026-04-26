@@ -3,11 +3,14 @@ import { useParams } from "wouter";
 import {
   useListContentFields,
   useUpdateContentField,
+  useGetProject,
+  getGetProjectQueryKey,
 } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useUpload } from "@workspace/object-storage-web";
 import {
   Loader2, Save, FileEdit, Lock, Check, RefreshCw, Undo2, AlertTriangle, X,
 } from "lucide-react";
@@ -198,8 +201,14 @@ function SaveWarningDialog({
 export default function ClientEditor() {
   const { projectId } = useParams<{ projectId: string }>();
   const { data: fields, isLoading, refetch } = useListContentFields(projectId);
+  const { data: project } = useGetProject(projectId, {
+    query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) },
+  });
   const updateMutation = useUpdateContentField();
   const { toast } = useToast();
+
+  const myRole = (project?.myRole ?? "editor") as "owner" | "admin" | "editor" | "viewer";
+  const isManager = myRole === "owner" || myRole === "admin";
 
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -223,12 +232,21 @@ export default function ClientEditor() {
     }
   };
 
+  // localStorage autosave key per field — survives tab close / refresh
+  const draftKey = (fieldId: string) => `get:editor-draft:${projectId}:${fieldId}`;
+
   useEffect(() => {
     if (fields) {
       const newValues: Record<string, string> = {};
       fields.forEach((f) => {
         if (localValues[f.id] === undefined) {
-          newValues[f.id] = f.draftValue || f.value || "";
+          const serverVal = f.draftValue || f.value || "";
+          // If the user has unsaved local edits from a previous session, prefer them.
+          let stored: string | null = null;
+          try {
+            stored = localStorage.getItem(draftKey(f.id));
+          } catch {}
+          newValues[f.id] = stored !== null && stored !== serverVal ? stored : serverVal;
         }
       });
       if (Object.keys(newValues).length > 0) {
@@ -281,6 +299,8 @@ export default function ClientEditor() {
               ? "The project owner will review before it goes live."
               : "Your change is now live.",
           });
+          // Server now has the change — drop the local autosave for this field.
+          try { localStorage.removeItem(draftKey(fieldId)); } catch {}
           refetch();
           setSavingField(null);
         },
@@ -300,10 +320,21 @@ export default function ClientEditor() {
       ...prev,
       [fieldId]: field.draftValue || field.value || "",
     }));
+    try { localStorage.removeItem(draftKey(fieldId)); } catch {}
   };
 
   const handleValueChange = (fieldId: string, val: string) => {
     setLocalValues((prev) => ({ ...prev, [fieldId]: val }));
+    // Persist immediately so a tab close doesn't lose typing.
+    try {
+      const field = fields?.find((f) => f.id === fieldId);
+      const serverVal = field ? field.draftValue || field.value || "" : "";
+      if (val === serverVal) {
+        localStorage.removeItem(draftKey(fieldId));
+      } else {
+        localStorage.setItem(draftKey(fieldId), val);
+      }
+    } catch {}
   };
 
   const fieldInputStyle: React.CSSProperties = {
@@ -394,9 +425,13 @@ export default function ClientEditor() {
             fontWeight: 600,
             color: BRAND.ink,
             letterSpacing: "-0.01em",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
           }}
         >
-          Editor
+          {project?.name ?? "Editor"}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Refresh button */}
@@ -467,10 +502,12 @@ export default function ClientEditor() {
               lineHeight: 1.2,
             }}
           >
-            Your content
+            {project?.name ? `Editing ${project.name}` : "Your content"}
           </h1>
           <p style={{ fontSize: type.base, color: tone[500], lineHeight: 1.55 }}>
-            Update the fields below and hit Save. Changes go live within minutes.
+            {isManager
+              ? "Update the fields below and hit Save. Your changes go live as soon as you save."
+              : "Update the fields below and hit Save. Your changes are sent to the project owner for review before they go live."}
           </p>
         </div>
 
@@ -624,41 +661,12 @@ export default function ClientEditor() {
                 )}
 
                 {field.type === "image" && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
-                    {localValues[field.id] && (
-                      <div
-                        style={{
-                          width: 80,
-                          height: 80,
-                          borderRadius: 12,
-                          overflow: "hidden",
-                          border: `1px solid ${line.base}`,
-                          flexShrink: 0,
-                          background: tone[50],
-                        }}
-                      >
-                        <img
-                          src={localValues[field.id]}
-                          alt=""
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      </div>
-                    )}
-                    <Input
-                      type="url"
-                      value={localValues[field.id] || ""}
-                      onChange={(e) => handleValueChange(field.id, e.target.value)}
-                      disabled={field.isLocked}
-                      placeholder="Image URL"
-                      style={{
-                        ...fieldInputStyle,
-                        flex: "1 1 200px",
-                        minWidth: 0,
-                        fontFamily: "monospace",
-                        fontSize: type.sm,
-                      }}
-                    />
-                  </div>
+                  <ImageField
+                    value={localValues[field.id] || ""}
+                    disabled={!!field.isLocked}
+                    onChange={(v) => handleValueChange(field.id, v)}
+                    fieldInputStyle={fieldInputStyle}
+                  />
                 )}
 
                 {field.type === "number" && (
@@ -754,6 +762,136 @@ export default function ClientEditor() {
               className="data-[state=checked]:bg-[#1a1a2e]"
             />
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// ImageField — picker that uploads to object storage + URL paste fallback
+// ────────────────────────────────────────────────────────────────────────────
+function ImageField({
+  value,
+  disabled,
+  onChange,
+  fieldInputStyle,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (v: string) => void;
+  fieldInputStyle: React.CSSProperties;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const { toast } = useToast();
+  // Same-origin storage routes — proxied to the api-server.
+  const baseHref = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  const { uploadFile, isUploading, progress } = useUpload({
+    basePath: `${baseHref}/api/storage`,
+    onSuccess: (resp: { objectPath: string }) => {
+      // Build an absolute URL so client sites on other origins can render it.
+      const absolute =
+        typeof window !== "undefined"
+          ? `${window.location.origin}${baseHref}/api/storage${resp.objectPath}`
+          : `${baseHref}/api/storage${resp.objectPath}`;
+      onChange(absolute);
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Upload failed", description: err.message });
+    },
+  });
+
+  const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ variant: "destructive", title: "Pick an image file", description: "JPG, PNG, GIF, or WebP." });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "Image too large", description: "Max 10 MB." });
+      return;
+    }
+    uploadFile(file);
+    // Reset so picking the same file again still fires onChange
+    e.target.value = "";
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
+        {value && (
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 12,
+              overflow: "hidden",
+              border: `1px solid ${line.base}`,
+              flexShrink: 0,
+              background: tone[50],
+            }}
+          >
+            <img
+              src={value}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 1 200px", minWidth: 0 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePick}
+              disabled={disabled || isUploading}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={disabled || isUploading}
+              style={{
+                height: 38,
+                padding: "0 14px",
+                borderRadius: r.md,
+                border: `1px solid ${line.base}`,
+                background: BRAND.paper,
+                color: BRAND.ink,
+                fontSize: type.sm,
+                fontWeight: 600,
+                cursor: disabled || isUploading ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.55 : 1,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                  Uploading… {progress}%
+                </>
+              ) : (
+                <>Upload image</>
+              )}
+            </button>
+            <span style={{ fontSize: type.xs, color: tone[400] }}>or paste a URL ↓</span>
+          </div>
+          <Input
+            type="url"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled || isUploading}
+            placeholder="https://… or upload above"
+            style={{
+              ...fieldInputStyle,
+              fontFamily: "monospace",
+              fontSize: type.sm,
+            }}
+          />
         </div>
       </div>
     </div>

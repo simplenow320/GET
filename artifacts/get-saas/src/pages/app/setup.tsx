@@ -55,8 +55,9 @@ const TOTAL_STEPS = 7;
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function CodeBlock({ code }: { code: string }) {
+function CodeBlock({ code, collapsible = false }: { code: string; collapsible?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(!collapsible);
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code);
     setCopied(true);
@@ -74,10 +75,45 @@ function CodeBlock({ code }: { code: string }) {
           lineHeight: 1.7,
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
+          maxHeight: expanded ? "none" : 144,
+          overflow: "hidden",
         }}
       >
         {code}
       </pre>
+      {collapsible && !expanded && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 38,
+            height: 64,
+            background: `linear-gradient(to bottom, rgba(26,26,46,0) 0%, ${BRAND.ink} 100%)`,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {collapsible && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            width: "100%",
+            padding: "9px 16px",
+            border: "none",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.03)",
+            color: "rgba(255,255,255,0.8)",
+            fontSize: type.xs,
+            fontWeight: 600,
+            cursor: "pointer",
+            letterSpacing: "0.02em",
+          }}
+        >
+          {expanded ? "Hide prompt" : "Show full prompt"}
+        </button>
+      )}
       <button
         onClick={handleCopy}
         aria-label="Copy"
@@ -409,7 +445,7 @@ Then replace each hardcoded string with its dynamic value, for example:
             <p style={stepBodyStyle}>
               Copy this prompt and paste it into Cursor, Claude, or Replit AI. It tells the AI exactly what to add, what to leave alone, and how to verify nothing broke.
             </p>
-            <CodeBlock code={aiPrompt} />
+            <CodeBlock code={aiPrompt} collapsible />
           </>
         ) : (
           <>
@@ -675,7 +711,7 @@ Then replace each hardcoded string with its dynamic value, for example:
             <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.6, marginBottom: 10 }}>
               Copy this prompt and paste it into Cursor, Claude, or your AI of choice. It includes the guardrails so nothing else gets changed.
             </p>
-            <CodeBlock code={aiPrompt} />
+            <CodeBlock code={aiPrompt} collapsible />
           </>
         ) : (
           <>
@@ -952,124 +988,48 @@ export default function SetupWizard() {
       >
         <div style={{ width: "100%", maxWidth: 540 }}>
 
-          {/* Step 1 */}
+          {/* Step 1 — short orientation, then straight into the work */}
           {step === 1 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-              <div
-                style={{
-                  textAlign: "center",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 18,
-                }}
-              >
-                <div
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <p
                   style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 18,
-                    background: BRAND.ink,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    fontSize: type.xs,
+                    fontWeight: 600,
+                    color: tone[500],
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em",
+                    marginBottom: 10,
                   }}
                 >
-                  <CheckCircle2 style={{ width: 28, height: 28, color: "#fff" }} />
-                </div>
-                <div>
-                  <p
-                    style={{
-                      fontSize: type.xs,
-                      fontWeight: 600,
-                      color: tone[500],
-                      textTransform: "uppercase",
-                      letterSpacing: "0.07em",
-                      marginBottom: 8,
-                    }}
-                  >
-                    Project created
-                  </p>
-                  <h1
-                    style={{
-                      fontSize: 30,
-                      fontWeight: 600,
-                      color: BRAND.ink,
-                      letterSpacing: "-0.025em",
-                      lineHeight: 1.15,
-                      margin: 0,
-                    }}
-                  >
-                    {project.name}
-                  </h1>
-                  <p
-                    style={{
-                      fontSize: type.md,
-                      color: tone[500],
-                      marginTop: 12,
-                      maxWidth: 380,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Let's connect it to your app so clients can edit safely — without touching your code.
-                  </p>
-                </div>
+                  Setting up {project.name}
+                </p>
+                <h1
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 600,
+                    color: BRAND.ink,
+                    letterSpacing: "-0.025em",
+                    lineHeight: 1.2,
+                    margin: 0,
+                  }}
+                >
+                  Three quick things, then your client can edit.
+                </h1>
+                <p
+                  style={{
+                    fontSize: type.md,
+                    color: tone[500],
+                    marginTop: 12,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Connect your app, decide what's editable, then send the invite. About three minutes.
+                </p>
               </div>
 
-              <Card>
-                {[
-                  { n: "1", text: "Build your app", sub: "In Replit, Next.js, or anywhere." },
-                  { n: "2", text: "Connect it",      sub: "Add a key and a snippet — three minutes." },
-                  { n: "3", text: "Invite clients",  sub: "They get a simple editor. You stay in control." },
-                ].map((item, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: "18px 22px",
-                      borderTop: i > 0 ? `1px solid ${line.faint}` : "none",
-                      display: "flex",
-                      gap: 14,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 8,
-                        background: tone[100],
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                        marginTop: 2,
-                      }}
-                    >
-                      <span style={{ fontSize: type.xs, fontWeight: 700, color: BRAND.ink }}>
-                        {item.n}
-                      </span>
-                    </div>
-                    <div>
-                      <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
-                        {item.text}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: type.sm,
-                          color: tone[500],
-                          marginTop: 3,
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        {item.sub}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </Card>
-
               <PrimaryButton onClick={goNext} size="lg" block>
-                Let's connect it <ArrowRight style={{ width: 16, height: 16 }} />
+                Let's go <ArrowRight style={{ width: 16, height: 16 }} />
               </PrimaryButton>
             </div>
           )}
@@ -1158,6 +1118,9 @@ export default function SetupWizard() {
               ) : state.generatedKey ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
                   <KeyReveal keyValue={state.generatedKey} />
+                  <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.55, marginTop: -10 }}>
+                    Lost it? You can make a new key any time from the project's Keys tab — your old key stops working when you do.
+                  </p>
 
                   {state.appType === "replit" ? (
                     <ReplitConnectGuide
@@ -1394,7 +1357,7 @@ export default function SetupWizard() {
               <StepHeader
                 step={6}
                 title="Who's editing this site?"
-                intro="They'll get an email with a link to their private editor — no code in sight. You can invite people any time from the project page."
+                intro="We'll email them a private editor link — and copy the link to your clipboard so you can share it directly too. You can invite more people any time from the project page."
                 optional
               />
 
@@ -1431,7 +1394,7 @@ export default function SetupWizard() {
                         fontWeight: 600,
                       }}
                     >
-                      Share this private link with {email}
+                      Emailed to {email} — here's the link too
                     </p>
                     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                       <code
@@ -1460,7 +1423,7 @@ export default function SetupWizard() {
                       </SecondaryButton>
                     </div>
                     <p style={{ fontSize: type.xs, color: tone[500], marginTop: 10, lineHeight: 1.5 }}>
-                      The link expires in 7 days. Send it to your client however you like — email, Slack, Messages.
+                      The link expires in 7 days. The email is on its way — share this link too if you want to send it via Slack or Messages.
                     </p>
                   </div>
                 )}

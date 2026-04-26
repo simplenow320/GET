@@ -57,6 +57,15 @@ app.use("/api/public", (_req, res, next) => {
   next();
 });
 
+// Stored object reads (uploaded images served via signed-URL proxy and assets
+// under PUBLIC_OBJECT_SEARCH_PATHS) are embedded as <img> by client sites on
+// completely different origins, so they need the same CORP override as the
+// public API. The upload-URL minting endpoint stays on the default CORP.
+app.use(["/api/storage/objects", "/api/storage/public-objects"], (_req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+});
+
 // Restrictive CORS for the admin dashboard. Because we now use cookie sessions
 // (`credentials: true`), the allowlist must be EXPLICIT — never a wildcard
 // over shared hosting domains. A wildcard like `*.replit.dev` would let any
