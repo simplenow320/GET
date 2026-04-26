@@ -33,6 +33,9 @@ Full-stack SaaS called "get" — a hosted control plane that lets developers giv
 - `/app/setup/:projectId` — Multi-step setup wizard
 - `/app/editor/:projectId` — Client-facing content editor (white-label, no branding)
 
+## Critical infrastructure notes
+- `/api/public/*` routes (scanner.js, content snapshot POST, public content reads) are intentionally embeddable from any origin. They use a permissive CORS config AND override helmet's default `Cross-Origin-Resource-Policy: same-site` to `cross-origin`. Without this override, third-party customer pages get `ERR_BLOCKED_BY_RESPONSE.NotSameSite` when loading `<script src=".../api/public/scanner.js">`. Do NOT add sensitive endpoints under `/api/public/*` — anything mounted there inherits the embeddable posture. Auth on those routes uses `Authorization: Bearer pk_*` (project key) via `requireProjectKey`.
+
 ## Brand rules (strict)
 - **Three brand assets** (transparent PNGs, all in `attached_assets/`):
   1. `f6f59ad9-...png` — wordmark + mascot + tagline. The "full" hero asset. Tagline is only legible at ~400px+ wide.

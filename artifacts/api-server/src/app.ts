@@ -47,6 +47,16 @@ const publicCors = cors({
 });
 app.use("/api/public", publicCors);
 
+// Public endpoints must be embeddable from any origin — they're called by
+// customer apps (the scanner script tag, snapshot POST, public content reads).
+// Override helmet's default `Cross-Origin-Resource-Policy: same-site`, which
+// would otherwise cause the browser to block <script src=".../scanner.js">
+// on a third-party site with ERR_BLOCKED_BY_RESPONSE.NotSameSite.
+app.use("/api/public", (_req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+});
+
 // Restrictive CORS for the admin dashboard. Because we now use cookie sessions
 // (`credentials: true`), the allowlist must be EXPLICIT — never a wildcard
 // over shared hosting domains. A wildcard like `*.replit.dev` would let any
