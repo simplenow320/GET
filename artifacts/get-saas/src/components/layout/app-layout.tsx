@@ -144,8 +144,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   const sectionLabel = currentSectionLabel(location);
 
   return (
+    // CRITICAL: stack vertically on mobile, switch to row at md+. Without
+    // `flex-col` the mobile header (a flex child of this row container) gets
+    // squeezed into a narrow vertical strip on the left and pushes the main
+    // content off-screen to the right. Bug repro: iPhone preview shows
+    // dashboard cards jammed against the right edge with empty white space
+    // on the left.
     <div
-      className="min-h-[100dvh] flex w-full font-sans"
+      className="min-h-[100dvh] flex flex-col md:flex-row w-full font-sans"
       style={{ background: BRAND.paper, color: BRAND.ink }}
     >
       {/* Desktop Sidebar */}
@@ -157,7 +163,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Mobile header */}
       <div
-        className="md:hidden sticky top-0 z-40 flex items-center justify-between px-5"
+        className="md:hidden sticky top-0 z-40 flex items-center justify-between px-5 w-full"
         style={{
           height: 56,
           background: "rgba(250,249,246,0.9)",
