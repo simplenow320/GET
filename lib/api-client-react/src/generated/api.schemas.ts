@@ -87,6 +87,11 @@ Drives the dashboard "Last seen" badge.
   lastSeenAt?: string;
   /** Origin (or referer) recorded with the last ping. */
   lastSeenOrigin?: string;
+  /** When true (default), client edits go live immediately on save.
+When false, client edits create pending drafts that the owner
+must publish. Owners and admins always auto-publish regardless.
+ */
+  autoPublish?: boolean;
   createdAt: string;
   /** The caller's role on this project. Drives client-side RBAC
 (which destructive controls render, which tabs are visible).
@@ -112,6 +117,10 @@ export interface UpdateProjectBody {
   name?: string;
   description?: string;
   status?: UpdateProjectBodyStatus;
+  /** When true, client edits go live immediately on save. When false,
+client edits create pending drafts that the owner must publish.
+ */
+  autoPublish?: boolean;
 }
 
 export interface ProjectStats {

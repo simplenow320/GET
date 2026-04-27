@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -20,6 +20,11 @@ export const projectsTable = pgTable("projects", {
   // owners can tell whether their install actually loaded recently.
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   lastSeenOrigin: text("last_seen_origin"),
+  // When TRUE (the default), client edits go live immediately on save — no
+  // owner approval required. The vibe coder can flip this off in Settings to
+  // get the older "submit draft → owner publishes" workflow back. Owners and
+  // admins always auto-publish regardless of this flag.
+  autoPublish: boolean("auto_publish").notNull().default(true),
 });
 
 export const insertProjectSchema = createInsertSchema(projectsTable).omit({ id: true, createdAt: true });

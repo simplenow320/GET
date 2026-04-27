@@ -783,6 +783,12 @@ components:
         lastSeenOrigin:
           type: string
           description: Origin (or referer) recorded with the last ping.
+        autoPublish:
+          type: boolean
+          description: |
+            When true (default), client edits go live immediately on save.
+            When false, client edits create pending drafts that the owner
+            must publish. Owners and admins always auto-publish regardless.
         createdAt:
           type: string
           format: date-time
@@ -813,6 +819,11 @@ components:
         status:
           type: string
           enum: [draft, active, archived]
+        autoPublish:
+          type: boolean
+          description: |
+            When true, client edits go live immediately on save. When false,
+            client edits create pending drafts that the owner must publish.
 
     ProjectStats:
       type: object

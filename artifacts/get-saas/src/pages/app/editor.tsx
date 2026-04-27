@@ -255,6 +255,10 @@ export default function ClientEditor() {
 
   const myRole = (project?.myRole ?? "editor") as "owner" | "admin" | "editor" | "viewer";
   const isManager = myRole === "owner" || myRole === "admin";
+  // Owners/admins always auto-publish; for editor-role clients we honor the
+  // project's autoPublish flag (default true) so the vibe coder can choose.
+  const projectAutoPublish: boolean = (project as any)?.autoPublish ?? true;
+  const editsGoLiveImmediately = isManager || projectAutoPublish;
 
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -553,6 +557,7 @@ export default function ClientEditor() {
           totalFields={fields.length}
           typeCounts={typeCounts}
           isManager={isManager}
+          editsGoLiveImmediately={editsGoLiveImmediately}
           ownerName={(project as any)?.ownerName ?? null}
           onDone={handleIntroDone}
         />
@@ -682,7 +687,7 @@ export default function ClientEditor() {
             {project?.name ? `Editing ${project.name}` : "Your content"}
           </h1>
           <p style={{ fontSize: type.base, color: tone[500], lineHeight: 1.55 }}>
-            {isManager
+            {editsGoLiveImmediately
               ? "Update the fields below and hit Save. Your changes go live as soon as you save."
               : "Update the fields below and hit Save. Your changes are sent to the project owner for review before they go live."}
           </p>
@@ -1138,12 +1143,16 @@ function ClientIntroModal({
   totalFields,
   typeCounts,
   isManager,
+  editsGoLiveImmediately,
   ownerName,
   onDone,
 }: {
   totalFields: number;
   typeCounts: Record<string, number>;
   isManager: boolean;
+  // Whether saves bypass the review queue. True for owners/admins always, and
+  // for editors when the project's autoPublish flag is on.
+  editsGoLiveImmediately: boolean;
   ownerName: string | null;
   onDone: () => void;
 }) {
@@ -1229,8 +1238,10 @@ function ClientIntroModal({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.6 }}>
-              {isManager
-                ? <>Because you're a project {ownerName ? "manager" : "manager"}, your changes <strong>go live as soon as you save</strong>. You'll see them on the site within a few minutes.</>
+              {editsGoLiveImmediately
+                ? isManager
+                  ? <>Because you're a project manager, your changes <strong>go live as soon as you save</strong>. You'll see them on the site within a few minutes.</>
+                  : <>Your changes <strong>go live as soon as you save</strong> — no review step. You'll see them on the site within a few minutes.</>
                 : <>Your changes are sent to {ownerName ? <strong>{ownerName}</strong> : "the project owner"} for review. They'll go live once approved — you'll see a <em>"Draft pending approval"</em> note below the field until then.</>}
             </p>
             <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.55 }}>

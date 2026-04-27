@@ -72,6 +72,12 @@ export const ListProjectsResponseItem = zod.object({
     .string()
     .optional()
     .describe("Origin (or referer) recorded with the last ping."),
+  autoPublish: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true (default), client edits go live immediately on save.\nWhen false, client edits create pending drafts that the owner\nmust publish. Owners and admins always auto-publish regardless.\n",
+    ),
   createdAt: zod.coerce.date(),
   myRole: zod
     .enum(["owner", "admin", "editor", "viewer"])
@@ -115,6 +121,12 @@ export const GetProjectResponse = zod.object({
     .string()
     .optional()
     .describe("Origin (or referer) recorded with the last ping."),
+  autoPublish: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true (default), client edits go live immediately on save.\nWhen false, client edits create pending drafts that the owner\nmust publish. Owners and admins always auto-publish regardless.\n",
+    ),
   createdAt: zod.coerce.date(),
   myRole: zod
     .enum(["owner", "admin", "editor", "viewer"])
@@ -135,6 +147,12 @@ export const UpdateProjectBody = zod.object({
   name: zod.string().optional(),
   description: zod.string().optional(),
   status: zod.enum(["draft", "active", "archived"]).optional(),
+  autoPublish: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, client edits go live immediately on save. When false,\nclient edits create pending drafts that the owner must publish.\n",
+    ),
 });
 
 export const UpdateProjectResponse = zod.object({
@@ -155,6 +173,12 @@ export const UpdateProjectResponse = zod.object({
     .string()
     .optional()
     .describe("Origin (or referer) recorded with the last ping."),
+  autoPublish: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true (default), client edits go live immediately on save.\nWhen false, client edits create pending drafts that the owner\nmust publish. Owners and admins always auto-publish regardless.\n",
+    ),
   createdAt: zod.coerce.date(),
   myRole: zod
     .enum(["owner", "admin", "editor", "viewer"])

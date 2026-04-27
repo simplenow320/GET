@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, contentFieldsTable, draftsTable, contentSnapshotsTable } from "@workspace/db";
+import { db, contentFieldsTable, draftsTable, contentSnapshotsTable, projectsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateContentFieldBody, UpdateContentFieldBody } from "@workspace/api-zod";
@@ -128,49 +128,69 @@ router.patch(
       updatePayload.value = data.value === null ? null : sanitizeContent(data.value);
 
     let sanitizedDraft: string | null = null;
+    // Track whether this save bypassed the review queue so the audit log and
+    // response copy can reflect what really happened.
+    let didAutoPublish = false;
     if (data.draftValue !== undefined) {
       sanitizedDraft = data.draftValue === null ? null : sanitizeContent(data.draftValue);
 
       const isOwnerOrAdmin = ["owner", "admin"].includes(role);
 
+      // Look up the project's autoPublish flag. Owners/admins always
+      // auto-publish; for editors we honor the project setting (default true).
+      let projectAutoPublish = true;
+      if (!isOwnerOrAdmin) {
+        const proj = await db
+          .select({ autoPublish: projectsTable.autoPublish })
+          .from(projectsTable)
+          .where(eq(projectsTable.id, projectId));
+        projectAutoPublish = proj[0]?.autoPublish ?? true;
+      }
+      const shouldAutoPublish = isOwnerOrAdmin || projectAutoPublish;
+
       if (sanitizedDraft !== null) {
-        if (isOwnerOrAdmin) {
+        if (shouldAutoPublish) {
+          didAutoPublish = true;
           updatePayload.value = sanitizedDraft;
           updatePayload.draftValue = null;
-          await db.insert(draftsTable).values({
-            projectId,
-            fieldId,
-            fieldLabel: field.label,
-            value: sanitizedDraft,
-            authorName: req.userName!,
-            status: "published",
-            publishedAt: new Date(),
-          });
         } else {
           updatePayload.draftValue = sanitizedDraft;
-          await db.insert(draftsTable).values({
-            projectId,
-            fieldId,
-            fieldLabel: field.label,
-            value: sanitizedDraft,
-            authorName: req.userName!,
-            status: "pending",
-          });
         }
       } else {
         updatePayload.draftValue = null;
       }
     }
 
-    const [updated] = await db
-      .update(contentFieldsTable)
-      .set(updatePayload)
-      .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)))
-      .returning();
+    // Wrap the field update and the draft-row insert in a single transaction
+    // so we can never end up with the field updated but no draft history (or
+    // a draft row written but the field never changed).
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(contentFieldsTable)
+        .set(updatePayload)
+        .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)))
+        .returning();
+
+      if (sanitizedDraft !== null) {
+        await tx.insert(draftsTable).values({
+          projectId,
+          fieldId,
+          fieldLabel: field.label,
+          value: sanitizedDraft,
+          authorName: req.userName!,
+          status: didAutoPublish ? "published" : "pending",
+          publishedAt: didAutoPublish ? new Date() : null,
+        });
+      }
+
+      return row;
+    });
 
     const action =
       data.draftValue !== undefined
-        ? "submitted draft for"
+        ? didAutoPublish
+          ? "updated live value"
+          : "submitted draft for"
         : data.isLocked !== undefined
           ? data.isLocked
             ? "locked field"

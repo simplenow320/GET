@@ -237,7 +237,7 @@ export default function ProjectDetail() {
             <TabsContent value="content"><ContentMapTab projectId={project.id} canManage={isAdmin} /></TabsContent>
             <TabsContent value="clients"><ClientsTab projectId={project.id} canManage={isAdmin} /></TabsContent>
             <TabsContent value="domains"><DomainsTab projectId={project.id} canManage={isAdmin} /></TabsContent>
-            <TabsContent value="drafts"><DraftsTab projectId={project.id} canManage={isAdmin} /></TabsContent>
+            <TabsContent value="drafts"><DraftsTab projectId={project.id} canManage={isAdmin} autoPublish={(project as any).autoPublish ?? true} /></TabsContent>
             <TabsContent value="keys"><KeysTab projectId={project.id} canManage={isAdmin} /></TabsContent>
             <TabsContent value="activity"><ActivityTab projectId={project.id} /></TabsContent>
             {isOwner && (
@@ -1601,7 +1601,15 @@ function DomainsTab({ projectId, canManage }: { projectId: string; canManage: bo
 
 // ── Drafts ───────────────────────────────────────────────────────────────────
 
-function DraftsTab({ projectId, canManage }: { projectId: string; canManage: boolean }) {
+function DraftsTab({
+  projectId,
+  canManage,
+  autoPublish,
+}: {
+  projectId: string;
+  canManage: boolean;
+  autoPublish: boolean;
+}) {
   const { data: drafts, refetch } = useListDrafts(projectId);
   const publishMutation = usePublishDraft();
   const { toast } = useToast();
@@ -1625,6 +1633,26 @@ function DraftsTab({ projectId, canManage }: { projectId: string; canManage: boo
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      {autoPublish && (
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: 12,
+            background: tone[50],
+            border: `1px solid ${line.faint}`,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+          }}
+        >
+          <span style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.55 }}>
+            <strong style={{ color: BRAND.ink }}>Auto-publish is on.</strong>{" "}
+            Client edits go live immediately, so the pending queue stays empty. The
+            history below still records every change. Switch this off in{" "}
+            <em>Settings → Client publishing</em> if you'd rather review first.
+          </span>
+        </div>
+      )}
       <div>
         <SectionTitle description="Your client's edits land here. Publish to push them live — they appear in your app within seconds via the public content endpoint.">
           Pending review
@@ -1815,10 +1843,14 @@ function ActivityTab({ projectId }: { projectId: string }) {
 function SettingsTab({ project }: { project: any }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const qc = useQueryClient();
   const updateMutation = useUpdateProject();
   const deleteMutation = useDeleteProject();
   const [name, setName] = useState(project.name);
   const [desc, setDesc] = useState(project.description || "");
+  // The server defaults autoPublish to true; legacy projects without the
+  // column should also behave as autonomous, so we coerce undefined to true.
+  const [autoPublish, setAutoPublish] = useState<boolean>(project.autoPublish ?? true);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
@@ -1828,6 +1860,35 @@ function SettingsTab({ project }: { project: any }) {
         onSuccess: () => toast({ title: "Project updated" }),
         onError: (err) =>
           toast({ variant: "destructive", title: "Couldn't update", description: err.message }),
+      }
+    );
+  };
+
+  // Toggling the auto-publish flag is its own one-click action so the user
+  // sees the change take effect immediately without having to hit "Save".
+  const toggleAutoPublish = (next: boolean) => {
+    const previous = autoPublish;
+    setAutoPublish(next); // optimistic
+    updateMutation.mutate(
+      { projectId: project.id, data: { autoPublish: next } },
+      {
+        onSuccess: () => {
+          // The parent loads the project via useGetProject and passes
+          // autoPublish down to the Drafts tab. Without this invalidation,
+          // the cached project object would still claim the old value and
+          // the Drafts banner would show the wrong state.
+          qc.invalidateQueries({ queryKey: getGetProjectQueryKey(String(project.id)) });
+          toast({
+            title: next ? "Auto-publish on" : "Review required",
+            description: next
+              ? "Client edits go live the moment they save."
+              : "Client edits now wait for your approval.",
+          });
+        },
+        onError: (err) => {
+          setAutoPublish(previous); // revert
+          toast({ variant: "destructive", title: "Couldn't update", description: err.message });
+        },
       }
     );
   };
@@ -1883,6 +1944,68 @@ function SettingsTab({ project }: { project: any }) {
             {updateMutation.isPending ? "Saving…" : "Save changes"}
           </PrimaryButton>
         </div>
+      </Card>
+
+      <Card padded>
+        <SectionTitle description="Decide what happens when a client hits Save in their editor.">
+          Client publishing
+        </SectionTitle>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 18,
+            padding: "4px 0",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink, marginBottom: 4 }}>
+              {autoPublish ? "Auto-publish client edits" : "Require my approval"}
+            </p>
+            <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55 }}>
+              {autoPublish
+                ? "Clients hit Save and their changes go live immediately. No babysitting required."
+                : "Client edits land in your Drafts tab and only go live after you publish them."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoPublish}
+            onClick={() => toggleAutoPublish(!autoPublish)}
+            disabled={updateMutation.isPending}
+            data-testid="toggle-auto-publish"
+            style={{
+              flexShrink: 0,
+              width: 44,
+              height: 26,
+              borderRadius: 999,
+              border: "none",
+              padding: 3,
+              cursor: updateMutation.isPending ? "wait" : "pointer",
+              background: autoPublish ? BRAND.ink : tone[300],
+              transition: "background 160ms ease",
+              position: "relative",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                width: 20,
+                height: 20,
+                borderRadius: 999,
+                background: BRAND.paper,
+                transform: autoPublish ? "translateX(18px)" : "translateX(0)",
+                transition: "transform 160ms ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }}
+            />
+          </button>
+        </div>
+        <p style={{ fontSize: type.xs, color: tone[400], marginTop: 14, lineHeight: 1.55 }}>
+          Owners and admins always publish instantly — this setting only affects editor-role clients.
+        </p>
       </Card>
 
       <Card padded>

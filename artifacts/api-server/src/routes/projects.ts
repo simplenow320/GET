@@ -17,6 +17,7 @@ const StrictUpdateProject = z.object({
   name: ProjectName.optional(),
   description: ProjectDescription,
   status: z.enum(["draft", "active", "archived"]).optional(),
+  autoPublish: z.boolean().optional(),
 });
 
 function projectToResponse(p: typeof projectsTable.$inferSelect, fieldCount = 0, clientCount = 0) {
@@ -30,6 +31,7 @@ function projectToResponse(p: typeof projectsTable.$inferSelect, fieldCount = 0,
     lastActivityAt: p.lastActivityAt?.toISOString(),
     lastSeenAt: p.lastSeenAt?.toISOString(),
     lastSeenOrigin: p.lastSeenOrigin ?? undefined,
+    autoPublish: p.autoPublish,
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -195,6 +197,13 @@ router.patch(
     const parsed = StrictUpdateProject.safeParse(shape.data);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
+    }
+
+    // The autoPublish toggle changes the trust model for client edits, so it
+    // should match the UI gating (owner-only). Other fields can still be
+    // edited by admins.
+    if (parsed.data.autoPublish !== undefined && req.projectRole !== "owner") {
+      return res.status(403).json({ error: "Only the project owner can change client publishing" });
     }
 
     const [updated] = await db
