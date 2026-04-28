@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "hpo_rEiKgofHTp7izbQxZ"
+uri = "file://get-guide.md"
+type = "text"
+title = "get — User Guide"
