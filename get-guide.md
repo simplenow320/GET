@@ -29,21 +29,31 @@ Add as many fields as you want. You can add more later without touching the scri
 
 ### 3. Add the script to your Replit project
 
-Open the **Install** tab on your project page. Copy the code snippet and paste it before the closing `</body>` tag in your Replit app's HTML.
+Open the **Install** tab on your project page. Copy the script snippet and paste it before the closing `</body>` tag in your Replit app's HTML. Snippets are provided for Vanilla HTML, React/Vite, Next.js, and WordPress.
 
-The snippet is a one-line `<script>` call that pulls your latest content automatically whenever the page loads. **You only do this once.**
+The script does two things automatically every time the page loads:
+- **Reads** the DOM and sends a snapshot back to get-saas (so you can see what's on the page)
+- **Writes** saved field values into any element you've tagged (see step 4)
 
-### 4. Bind fields to your HTML
+**You only add this script once.**
 
-Wherever you want managed content to appear, add a `data-get-key` attribute:
+### 4. Tag the elements clients can control
+
+Add a `data-get-key` attribute to any HTML element you want clients to edit. The value must exactly match the field label you created in the Fields tab (case-sensitive).
 
 ```html
-<h1 data-get-key="hero.headline">Default text here</h1>
-<img data-get-key="hero.image" src="default.jpg" />
-<a data-get-key="cta.link" href="#">Get started</a>
+<!-- text / long text field -->
+<h1 data-get-key="Hero Heading">Default headline</h1>
+<p  data-get-key="Hero Body">Default paragraph text.</p>
+
+<!-- image field -->
+<img data-get-key="Hero Image" src="default.jpg" alt="" />
+
+<!-- link / URL field -->
+<a data-get-key="CTA Link" href="/default">Get started</a>
 ```
 
-The script swaps in the live value automatically. The default text/src shows while loading.
+When the page loads, the script fetches the latest saved values from get-saas and swaps them in automatically. The default content in your HTML shows first (while the fetch runs), then updates — typically within one network round-trip.
 
 ### 5. Invite your client
 
@@ -106,8 +116,8 @@ The **Activity** tab shows every edit, who made it, and when. Useful for auditin
 
 ## Tips
 
-- **Keep field keys short and consistent** — once set, changing a key breaks the binding on your live site until you update the HTML attribute too.
-- **Set sensible defaults in your HTML** — they show if the script hasn't loaded yet or on first install before content is entered.
+- **Field labels are your binding keys** — the `data-get-key` value must match the field label exactly as it appears in the Fields tab, including capitalisation and spaces. If you rename a field, update the HTML attribute too.
+- **Set sensible defaults in your HTML** — they show while the script fetches, on first install before content is entered, and as a fallback if the request fails.
 - **Multiple clients, one project** — you can invite a whole team. Everyone edits the same fields; the activity log tracks who changed what.
 - **Test installs locally first** — open your Replit dev URL, check the browser console for any `get:` errors before you share the project with a client.
 

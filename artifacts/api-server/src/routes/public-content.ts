@@ -177,6 +177,56 @@ const SCANNER_SCRIPT = /* javascript */ `
 
   var origin = new URL(scriptEl.src).origin;
   var SNAPSHOT_URL = origin + '/api/public/content/snapshot';
+  var CONTENT_URL  = origin + '/api/public/content';
+
+  // ── Content injection ─────────────────────────────────────────────────────
+  // Fetches the project's published field values and writes them into any
+  // element that carries a [data-get-key="Field Label"] attribute.
+  //
+  // Type rules:
+  //   image  → img.src; background-image on non-img elements
+  //   url    → element.href (works on <a>)
+  //   text / richtext / number / anything else → element.textContent
+  //
+  // Fire-and-update: we never block the initial render. Default content in the
+  // HTML shows first, then swaps as soon as the fetch resolves (typically one
+  // network round-trip on the same origin).
+
+  function applyContent(content) {
+    for (var label in content) {
+      var field = content[label];
+      var value = field.value;
+      if (value == null || value === '') continue;
+      var type = field.type;
+      // Escape double-quotes in the label so it's safe inside the CSS attribute
+      // selector. All other characters are fine as-is for the labels we produce.
+      var sel = '[data-get-key="' + label.replace(/"/g, '\\"') + '"]';
+      var els = document.querySelectorAll(sel);
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (type === 'image') {
+          if (el.tagName === 'IMG') {
+            el.src = value;
+          } else {
+            el.style.backgroundImage = 'url("' + value.replace(/"/g, '\\"') + '")';
+          }
+        } else if (type === 'url') {
+          if ('href' in el) { el.href = value; } else { el.setAttribute('href', value); }
+        } else {
+          el.textContent = value;
+        }
+      }
+    }
+  }
+
+  function injectContent() {
+    fetch(CONTENT_URL, {
+      headers: { 'Authorization': 'Bearer ' + key }
+    })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) { if (data && data.content) applyContent(data.content); })
+    .catch(function() {});
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -546,8 +596,10 @@ const SCANNER_SCRIPT = /* javascript */ `
     }
   }
 
-  // Run an initial scan, then a delayed second scan to catch async-loaded content.
+  // Run content injection + initial scan, then a delayed re-scan to catch
+  // async-loaded content. Injection runs first so managed elements update ASAP.
   function runInitialAndDelayed() {
+    injectContent();
     sendSnapshot();
     setTimeout(sendSnapshot, 3000);
   }
@@ -566,6 +618,8 @@ const SCANNER_SCRIPT = /* javascript */ `
   function scheduleNavScan() {
     if (navTimer) clearTimeout(navTimer);
     navTimer = setTimeout(function () {
+      // Re-inject first so any elements that just rendered get their values.
+      injectContent();
       // Reset fingerprint on a new URL so we always re-send for new routes.
       lastFingerprint = '';
       sendSnapshot();

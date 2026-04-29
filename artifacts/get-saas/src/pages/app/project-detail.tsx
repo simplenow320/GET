@@ -380,10 +380,10 @@ function ScannerSetupCard({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: type.base, fontWeight: 700, marginBottom: 6 }}>
-              Connect the scanner
+              Connect your site
             </p>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
-              Pick your stack, paste the snippet, then come back and verify. The script is one line — it doesn't change your app's behaviour, only what we can read.
+              Two steps: drop in the script, then tag the elements you want clients to control. The script reads your page for discovery <em>and</em> writes content back when clients save.
             </p>
           </div>
           {onDismiss && (
@@ -501,6 +501,71 @@ function ScannerSetupCard({
             Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{keyHint}</code> with the full key value (find it in the Site keys tab). Treat it like a public API key — it's safe in the browser but rotate it if it leaks.
           </p>
         )}
+
+        {/* Step 2: tag your elements */}
+        <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
+            <p style={{ fontSize: type.sm, fontWeight: 700, marginBottom: 4 }}>
+              Step 2 — tag your elements
+            </p>
+            <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
+              Add a <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-key</code> attribute to any HTML element you want clients to control. Use the exact field label from your Fields tab as the value. The script swaps in the saved content automatically every time the page loads.
+            </p>
+            <div style={{ position: "relative" }} data-testid="step2-example">
+              <pre style={{
+                margin: 0,
+                padding: "14px 52px 14px 16px",
+                borderRadius: r.lg,
+                background: "#0f1419",
+                color: "#e5e7eb",
+                fontSize: 12,
+                lineHeight: 1.65,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                overflow: "auto",
+                whiteSpace: "pre",
+              }}>
+{`<!-- text / long text field -->
+<h1 data-get-key="Hero Heading">Default headline</h1>
+<p  data-get-key="Hero Body">Default paragraph text.</p>
+
+<!-- image field -->
+<img data-get-key="Hero Image" src="default.jpg" alt="" />
+
+<!-- link / URL field -->
+<a data-get-key="CTA Link" href="/default">Get started</a>`}
+              </pre>
+              <button
+                onClick={() => copy("prompt",
+                  `<!-- text / long text field -->\n<h1 data-get-key="Hero Heading">Default headline</h1>\n<p  data-get-key="Hero Body">Default paragraph text.</p>\n\n<!-- image field -->\n<img data-get-key="Hero Image" src="default.jpg" alt="" />\n\n<!-- link / URL field -->\n<a data-get-key="CTA Link" href="/default">Get started</a>`
+                )}
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  background: copied === "prompt" ? "#10b981" : "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  cursor: "pointer",
+                  fontSize: type.xs,
+                  fontWeight: 600,
+                  color: "#f9fafb",
+                  transition: `background 0.15s ${ease}`,
+                }}
+              >
+                {copied === "prompt"
+                  ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
+                  : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
+              </button>
+            </div>
+            <p style={{ fontSize: 11.5, color: tone[500], margin: "8px 0 0", lineHeight: 1.55 }}>
+              The label is case-sensitive and must match exactly. One attribute, anywhere in the DOM — the script finds it.
+            </p>
+          </div>
+        </div>
 
         {/* Verify install */}
         <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
