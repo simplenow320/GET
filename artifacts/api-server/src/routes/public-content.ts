@@ -394,11 +394,88 @@ const SCANNER_SCRIPT = /* javascript */ `
     return null;
   }
 
+  // ── Tagged-element scan (preferred path) ─────────────────────────────────
+  //
+  // If the developer has already placed [data-get-key] attributes on their
+  // page, those are the canonical list of editable fields. We report them
+  // directly instead of running the heuristic DOM scan, giving a precise,
+  // zero-false-positive result.
+  //
+  // Section grouping: we use the first word(s) of the label up to the last
+  // space as the section name (e.g. "Hero Heading" → "Hero",
+  // "CTA Link" → "CTA", "FAQ Question 1" → "FAQ"). Single-word labels get
+  // grouped under "Content".
+  //
+  // Type inference:
+  //   <img>           → image  (value = src)
+  //   <a>             → url    (value = href)
+  //   long text (>80) → richtext
+  //   everything else → text
+
+  function scanTagged() {
+    var tagged = document.querySelectorAll('[data-get-key]');
+    if (!tagged.length) return null; // no tagged elements → use heuristic scan
+
+    var sectionMap = {};
+    var sectionOrder = [];
+
+    for (var i = 0; i < tagged.length; i++) {
+      var el = tagged[i];
+      var label = (el.getAttribute('data-get-key') || '').trim();
+      if (!label) continue;
+
+      // Infer type from element tag
+      var tag = (el.tagName || '').toUpperCase();
+      var ftype;
+      if (tag === 'IMG') {
+        ftype = 'image';
+      } else if (tag === 'A') {
+        ftype = 'url';
+      } else {
+        var txt = clean(el.textContent);
+        ftype = txt.length > 80 ? 'richtext' : 'text';
+      }
+
+      // Extract current DOM value
+      var fvalue;
+      if (ftype === 'image') {
+        fvalue = absUrl(el.getAttribute('src') || el.getAttribute('data-src') || '') || '';
+      } else if (ftype === 'url') {
+        fvalue = absUrl(el.getAttribute('href') || '') || '';
+      } else {
+        fvalue = clean(el.textContent) || '';
+      }
+
+      // Section name = everything except the last word of the label.
+      // "Hero Heading" → "Hero", "CTA Link" → "CTA", "FAQ" → "Content".
+      var words = label.split(/\s+/);
+      var sectionName = words.length > 1 ? words.slice(0, -1).join(' ') : 'Content';
+
+      if (!sectionMap[sectionName]) {
+        sectionMap[sectionName] = [];
+        sectionOrder.push(sectionName);
+      }
+      sectionMap[sectionName].push({ label: label, type: ftype, value: fvalue });
+    }
+
+    var sections = [];
+    for (var j = 0; j < sectionOrder.length; j++) {
+      var sname = sectionOrder[j];
+      sections.push({ name: sname, fields: sectionMap[sname] });
+    }
+    return sections.length ? sections : null;
+  }
+
   // ── Main scan ─────────────────────────────────────────────────────────────
 
   var seenText, seenImages, seenCtaText;
 
   function scan() {
+    // Prefer explicit data-get-key elements when the developer has tagged them.
+    var tagged = scanTagged();
+    if (tagged) return tagged;
+
+    // Fallback: heuristic DOM scan for untagged pages.
     seenText = new Set();
     seenImages = new Set();
     seenCtaText = new Set();
