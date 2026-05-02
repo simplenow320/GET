@@ -610,7 +610,6 @@ function ScannerSetupCard({
               </pre>
             </div>
           </div>
-          </div>
         </div>
 
         {/* Verify install */}
