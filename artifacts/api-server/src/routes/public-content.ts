@@ -220,12 +220,28 @@ const SCANNER_SCRIPT = /* javascript */ `
   }
 
   function injectContent() {
+    // Mark the page as loading so vibe coders can style the transition.
+    // CSS hook: [data-get-loading] [data-get-key] { opacity: 0; }
+    // A 3s safety timer removes the attribute if the fetch stalls, so the
+    // page never gets stuck in a permanent loading state.
+    var html = document.documentElement;
+    html.setAttribute('data-get-loading', '');
+    var loadingTimer = setTimeout(function() {
+      html.removeAttribute('data-get-loading');
+    }, 3000);
+
     fetch(CONTENT_URL, {
       headers: { 'Authorization': 'Bearer ' + key }
     })
     .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) { if (data && data.content) applyContent(data.content); })
-    .catch(function() {});
+    .then(function(data) {
+      if (data && data.content) applyContent(data.content);
+    })
+    .catch(function() {})
+    .finally(function() {
+      clearTimeout(loadingTimer);
+      html.removeAttribute('data-get-loading');
+    });
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

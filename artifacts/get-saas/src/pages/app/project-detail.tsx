@@ -565,6 +565,52 @@ function ScannerSetupCard({
               The label is case-sensitive and must match exactly. One attribute, anywhere in the DOM — the script finds it.
             </p>
           </div>
+
+          {/* Loading state tip */}
+          <div style={{ marginTop: 4 }}>
+            <p style={{ fontSize: type.sm, fontWeight: 700, marginBottom: 4 }}>
+              Optional — loading state
+            </p>
+            <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
+              While the script fetches content, <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-loading</code> is set on <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>&lt;html&gt;</code>. Use it in your CSS to fade, dim, or skeleton your tagged elements so visitors never see a flash of default text.
+            </p>
+            <div style={{ position: "relative" }}>
+              <pre style={{
+                margin: 0,
+                padding: "14px 16px",
+                borderRadius: r.lg,
+                background: "#0f1419",
+                color: "#e5e7eb",
+                fontSize: 12,
+                lineHeight: 1.65,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                overflow: "auto",
+                whiteSpace: "pre",
+              }}>
+{`/* Simple fade — add to your stylesheet */
+[data-get-loading] [data-get-key] {
+  opacity: 0;
+}
+[data-get-key] {
+  transition: opacity 0.2s ease;
+}
+
+/* Or a skeleton shimmer */
+[data-get-loading] [data-get-key] {
+  color: transparent;
+  border-radius: 4px;
+  background: linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 50%,#e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: get-shimmer 1.2s infinite;
+}
+@keyframes get-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}`}
+              </pre>
+            </div>
+          </div>
+          </div>
         </div>
 
         {/* Verify install */}
