@@ -260,9 +260,10 @@ interface ProjectKeyBasic { id: string; name: string; keyPrefix: string; }
 // Stacks shown in the install panel. We picked the four that cover ~95% of
 // the vibe-coder long tail today (raw HTML + the two SSR/SSG meta-frameworks
 // + WordPress because non-coders still pay people to build them in WP).
-type Stack = "html" | "vite" | "next" | "wordpress";
+type Stack = "replit" | "html" | "vite" | "next" | "wordpress";
 
 const STACK_LABELS: Record<Stack, string> = {
+  replit: "Replit",
   html: "Vanilla HTML",
   vite: "React / Vite",
   next: "Next.js",
@@ -271,6 +272,8 @@ const STACK_LABELS: Record<Stack, string> = {
 
 function buildStackSnippet(stack: Stack, scannerUrl: string, keyHint: string): string {
   switch (stack) {
+    case "replit":
+      return `<!-- In your main HTML file, just before </body> -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
     case "html":
       return `<!-- Add just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
     case "vite":
@@ -284,6 +287,7 @@ function buildStackSnippet(stack: Stack, scannerUrl: string, keyHint: string): s
 }
 
 const STACK_HINTS: Record<Stack, string> = {
+  replit: "Copy the AI prompt below and paste it into Replit AI — it will find your HTML file and add the tag.",
   html: "Paste this just before the closing </body> tag in your main HTML file.",
   vite: "Paste this near the bottom of your index.html file, just before </body>.",
   next: "Paste this into your root layout file. App Router shown — Pages Router works the same way.",
@@ -303,9 +307,10 @@ function ScannerSetupCard({
   projectId: string;
   onDismiss: () => void;
 }) {
-  const [stack, setStack] = useState<Stack>("html");
+  const [stack, setStack] = useState<Stack>("replit");
   const [copied, setCopied] = useState<"snippet" | "prompt" | null>(null);
   const [showAgentPrompt, setShowAgentPrompt] = useState(false);
+  const [showReplitSnippet, setShowReplitSnippet] = useState(false);
 
   const { data: keys = [], isLoading: keysLoading } = useQuery<ProjectKeyBasic[]>({
     queryKey: ["project-keys-scanner", projectId],
@@ -318,8 +323,12 @@ function ScannerSetupCard({
 
   const snippet = buildStackSnippet(stack, scannerUrl, keyHint);
 
+  const replitPrompt = firstKey
+    ? `Add the get CMS scanner script to my Replit app. Make ONLY the change described — do not rename, delete, or modify anything else.\n\nI've already added GET_PROJECT_KEY to my Replit Secrets. Find my main HTML file (usually index.html, or the template file that wraps every page). Just before the closing </body> tag, add this script tag:\n\n<script\n  src="${scannerUrl}"\n  data-key="INSERT_GET_PROJECT_KEY_VALUE_HERE"\n  defer\n></script>\n\nHow to get the data-key value:\n- If this is a server-rendered app (Express + EJS, Handlebars, etc.), read it from process.env.GET_PROJECT_KEY and inject it into the template.\n- If it's a static HTML file, open Replit Secrets, copy GET_PROJECT_KEY, and paste the value directly. The key starts with "${firstKey.keyPrefix}".\n\nRules:\n- Only add this one script tag. Change nothing else.\n- Do not rename or delete any files.\n- Do not touch styles, routes, or other logic.\n- After making the change, show me the exact line you added so I can confirm it looks right.`
+    : null;
+
   const agentPrompt = firstKey
-    ? `Add this script tag to my app's main HTML file, just before the closing </body> tag. Use the value of my GET_PROJECT_KEY secret as the data-key:\n\n<script src="${scannerUrl}" data-key="YOUR_GET_PROJECT_KEY"></script>\n\nMy project key starts with "${firstKey.keyPrefix}". Find the full key in my Replit secrets (it's called GET_PROJECT_KEY). Don't change anything else in my app.`
+    ? `Add this script tag to my HTML file, just before the closing </body> tag:\n\n<script\n  src="${scannerUrl}"\n  data-key="YOUR_FULL_PROJECT_KEY"\n  defer\n></script>\n\nWhere to find YOUR_FULL_PROJECT_KEY: in the get dashboard, click "Site keys" on this project and copy the full key — it starts with "${firstKey.keyPrefix}". Only add the script tag. Change nothing else.`
     : null;
 
   const copy = async (which: "snippet" | "prompt", text: string) => {
@@ -450,6 +459,109 @@ function ScannerSetupCard({
             <p style={{ fontSize: type.sm, color: tone[600] }}>
               You need a project key before you can install. Go to the <strong>Site keys</strong> tab and make one, then come back here.
             </p>
+          </div>
+        ) : stack === "replit" && replitPrompt ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ fontSize: type.xs, fontWeight: 700, color: tone[500], textTransform: "uppercase" as const, letterSpacing: "0.07em", margin: 0 }}>
+              Paste into Replit AI
+            </p>
+            <div style={{ position: "relative" }} data-testid="install-snippet">
+              <pre style={{
+                margin: 0,
+                padding: "16px 52px 16px 18px",
+                borderRadius: r.lg,
+                background: "#0f1419",
+                color: "#e5e7eb",
+                fontSize: 12.5,
+                lineHeight: 1.65,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                overflow: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                maxHeight: 340,
+              }}>
+                {replitPrompt}
+              </pre>
+              <button
+                onClick={() => copy("prompt", replitPrompt)}
+                data-testid="install-copy-snippet"
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  background: copied === "prompt" ? "#10b981" : "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  cursor: "pointer",
+                  fontSize: type.xs,
+                  fontWeight: 600,
+                  color: "#f9fafb",
+                  transition: `background 0.15s ${ease}`,
+                }}
+              >
+                {copied === "prompt"
+                  ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
+                  : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowReplitSnippet((s) => !s)}
+              style={{
+                background: "none", border: "none", padding: 0,
+                cursor: "pointer", fontSize: type.xs, color: tone[500],
+                fontWeight: 500, textDecoration: "underline", textAlign: "left" as const,
+              }}
+            >
+              {showReplitSnippet ? "Hide raw snippet" : "Or add the tag yourself →"}
+            </button>
+            {showReplitSnippet && (
+              <div style={{ position: "relative" }}>
+                <pre style={{
+                  margin: 0,
+                  padding: "16px 52px 16px 18px",
+                  borderRadius: r.lg,
+                  background: "#0f1419",
+                  color: "#e5e7eb",
+                  fontSize: 12.5,
+                  lineHeight: 1.65,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                  overflow: "auto",
+                  whiteSpace: "pre",
+                  maxHeight: 280,
+                }}>
+                  {snippet}
+                </pre>
+                <button
+                  onClick={() => copy("snippet", snippet)}
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    background: copied === "snippet" ? "#10b981" : "rgba(255,255,255,0.10)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    cursor: "pointer",
+                    fontSize: type.xs,
+                    fontWeight: 600,
+                    color: "#f9fafb",
+                    transition: `background 0.15s ${ease}`,
+                  }}
+                >
+                  {copied === "snippet"
+                    ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
+                    : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ position: "relative" }} data-testid="install-snippet">
@@ -666,8 +778,8 @@ function ScannerSetupCard({
           )}
         </div>
 
-        {/* Fallback: agent prompt for users who'd rather have AI do it */}
-        {firstKey && (
+        {/* Fallback: agent prompt for non-Replit tabs (Replit tab already shows the prompt as primary) */}
+        {firstKey && stack !== "replit" && (
           <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 14 }}>
             <button
               type="button"
