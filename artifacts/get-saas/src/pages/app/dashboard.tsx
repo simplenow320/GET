@@ -47,9 +47,9 @@ export default function Dashboard() {
         >
           {[
             { label: "Projects",      value: stats?.totalProjects, icon: LayoutGrid, hint: "Projects you own." },
-            { label: "Live sites",    value: stats?.liveSites,     icon: Radio,      hint: "Of your projects, how many sent us a ping in the last 24 hours." },
-            { label: "Active clients",value: stats?.totalClients,  icon: Users,      hint: "People you've invited to edit your projects." },
-            { label: "Edits (30d)",   value: stats?.recentEdits,   icon: Activity,   hint: "Field updates and publishes across your projects in the last 30 days." },
+            { label: "Live sites",    value: stats?.liveSites,     icon: Radio,      hint: "Sites that checked in with us in the last 24 hours." },
+            { label: "Active clients",value: stats?.totalClients,  icon: Users,      hint: "People you've invited to make edits." },
+            { label: "Edits (30d)",   value: stats?.recentEdits,   icon: Activity,   hint: "Changes made across all your projects in the last 30 days." },
           ].map((s) => (
             <Card key={s.label} padded style={{ padding: "18px 20px" }} title={s.hint}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>

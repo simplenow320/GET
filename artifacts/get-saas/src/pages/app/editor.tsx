@@ -823,7 +823,7 @@ export default function ClientEditor() {
                   >
                     <AlertTriangle style={{ width: 16, height: 16, color: "#b45309", flexShrink: 0 }} />
                     <p style={{ flex: 1, fontSize: type.xs, color: "#92400e", lineHeight: 1.45, minWidth: 200 }}>
-                      <strong>This field changed since you started editing.</strong> Someone else updated it on the server. Keep your version or load theirs?
+                      <strong>This was changed while you were editing.</strong> Someone else saved a new version. Keep what you typed, or load the latest?
                     </p>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
@@ -850,7 +850,7 @@ export default function ClientEditor() {
                           background: BRAND.ink, cursor: "pointer", color: BRAND.paper,
                         }}
                       >
-                        Use server
+                        Load latest
                       </button>
                     </div>
                   </div>
@@ -1240,12 +1240,12 @@ function ClientIntroModal({
             <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.6 }}>
               {editsGoLiveImmediately
                 ? isManager
-                  ? <>Because you're a project manager, your changes <strong>go live as soon as you save</strong>. You'll see them on the site within a few minutes.</>
-                  : <>Your changes <strong>go live as soon as you save</strong> — no review step. You'll see them on the site within a few minutes.</>
-                : <>Your changes are sent to {ownerName ? <strong>{ownerName}</strong> : "the project owner"} for review. They'll go live once approved — you'll see a <em>"Draft pending approval"</em> note below the field until then.</>}
+                  ? <>Since you're a manager, your changes <strong>go live the moment you hit Save</strong>. You should see them on the site in a minute or two.</>
+                  : <>Your changes <strong>go live the moment you hit Save</strong>. You should see them on the site in a minute or two.</>
+                : <>Your changes are sent to {ownerName ? <strong>{ownerName}</strong> : "the project owner"} to check first. Once they approve, the change goes live. You'll see a <em>"Draft pending"</em> note under the field until then.</>}
             </p>
             <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.55 }}>
-              You can come back and tap the <strong>?</strong> in the top bar any time to see this again.
+              You can always tap the <strong>?</strong> button at the top to see this again.
             </p>
           </div>
         )}

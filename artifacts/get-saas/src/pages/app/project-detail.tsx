@@ -284,10 +284,10 @@ function buildStackSnippet(stack: Stack, scannerUrl: string, keyHint: string): s
 }
 
 const STACK_HINTS: Record<Stack, string> = {
-  html: "Drop this into your main HTML file, just before </body>.",
-  vite: "Vite serves index.html literally — paste this near the bottom of <body>.",
-  next: "Use next/script so it doesn't block hydration. App Router shown; Pages Router works the same.",
-  wordpress: "Edit your theme's footer.php, or use a header/footer scripts plugin.",
+  html: "Paste this just before the closing </body> tag in your main HTML file.",
+  vite: "Paste this near the bottom of your index.html file, just before </body>.",
+  next: "Paste this into your root layout file. App Router shown — Pages Router works the same way.",
+  wordpress: "Add this to your theme's footer, or use a plugin like 'Insert Headers and Footers'.",
 };
 
 /**
@@ -383,7 +383,7 @@ function ScannerSetupCard({
               Connect your site
             </p>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
-              Two steps: drop in the script, then tag the elements you want clients to control. The script reads your page for discovery <em>and</em> writes content back when clients save.
+              Two steps: add a small script to your site, then mark anything you want clients to be able to change. When they save an edit, it shows up on your site automatically.
             </p>
           </div>
           {onDismiss && (
@@ -448,7 +448,7 @@ function ScannerSetupCard({
         ) : !firstKey ? (
           <div style={{ padding: "14px 16px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
             <p style={{ fontSize: type.sm, color: tone[600] }}>
-              You need a project key first. Go to the <strong>Site keys</strong> tab and create one, then come back here.
+              You need a project key before you can install. Go to the <strong>Site keys</strong> tab and make one, then come back here.
             </p>
           </div>
         ) : (
@@ -498,7 +498,7 @@ function ScannerSetupCard({
 
         {firstKey && (
           <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
-            Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{keyHint}</code> with the full key value (find it in the Site keys tab). Treat it like a public API key — it's safe in the browser but rotate it if it leaks.
+            Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{keyHint}</code> with your full key (found in the Site keys tab). If it ever leaks, just revoke it and make a new one.
           </p>
         )}
 
@@ -509,7 +509,7 @@ function ScannerSetupCard({
               Step 2 — tag your elements
             </p>
             <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
-              Add a <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-key</code> attribute to any HTML element you want clients to control. Use the exact field label from your Fields tab as the value. The script swaps in the saved content automatically every time the page loads.
+              Add <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-key</code> to any element on your page. Set it to the exact name of the field from your Fields tab. The script will swap in the saved content every time the page loads.
             </p>
             <div style={{ position: "relative" }} data-testid="step2-example">
               <pre style={{
@@ -562,7 +562,7 @@ function ScannerSetupCard({
               </button>
             </div>
             <p style={{ fontSize: 11.5, color: tone[500], margin: "8px 0 0", lineHeight: 1.55 }}>
-              The label is case-sensitive and must match exactly. One attribute, anywhere in the DOM — the script finds it.
+              The name must match exactly — capital letters matter. You can put it on any element, anywhere on the page.
             </p>
           </div>
 
@@ -572,7 +572,7 @@ function ScannerSetupCard({
               Optional — loading state
             </p>
             <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
-              While the script fetches content, <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-loading</code> is set on <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>&lt;html&gt;</code>. Use it in your CSS to fade, dim, or skeleton your tagged elements so visitors never see a flash of default text.
+              While the script is loading your content, it adds <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-loading</code> to the page. You can use that in your CSS to hide or dim your tagged elements so visitors don't see a flash of the old text.
             </p>
             <div style={{ position: "relative" }}>
               <pre style={{
@@ -620,7 +620,7 @@ function ScannerSetupCard({
                 Verify install
               </p>
               <p style={{ fontSize: type.xs, color: tone[500] }}>
-                Click after loading your site once. We'll watch for the script to ping us.
+                Open your site in another tab, then click this. We'll check if the script is working.
               </p>
             </div>
             <PrimaryButton
@@ -656,11 +656,11 @@ function ScannerSetupCard({
               color: "#92400e",
               fontSize: type.sm, lineHeight: 1.5,
             }}>
-              <strong>Still no ping.</strong> Reload your site in another tab and try again. If you just deployed, give the host 30s to roll the new HTML out. Common gotchas:
+              <strong>Still nothing.</strong> Try reloading your site in another tab, then click again. If you just published a new version, wait 30 seconds and try again. Things to check:
               <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                <li>The <code>data-key</code> value is the full key, not the prefix.</li>
-                <li>The script is in your live HTML (not just local).</li>
-                <li>Your CSP isn't blocking <code>{new URL(scannerUrl).origin}</code>.</li>
+                <li>You're using the full key, not just the beginning of it.</li>
+                <li>The script is in your published site, not just your local version.</li>
+                <li>Nothing is blocking scripts from <code>{new URL(scannerUrl).origin}</code>.</li>
               </ul>
             </div>
           )}
@@ -842,7 +842,7 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <SectionTitle
-        description={canManage ? "What your clients can edit." : "What clients can edit on this project."}
+        description={canManage ? "Everything clients are allowed to change." : "Everything clients are allowed to change on this project."}
         action={
           canManage && !isAdding ? (
             <div style={{ display: "flex", gap: 8 }}>
@@ -851,7 +851,7 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                 onClick={handleSyncFromSite}
                 loading={syncState === "loading"}
                 disabled={syncState === "loading"}
-                title="Import content detected by the scanner script"
+                title="Pull in content found on your site"
               >
                 <RefreshCw style={{ width: 13, height: 13 }} />
                 Scan my site
@@ -1020,8 +1020,8 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                         )
                       }
                       title={field.isLocked
-                        ? "Locked — clients can't edit this. Click to unlock."
-                        : "Unlocked — clients can edit this. Click to lock."}
+                        ? "Locked — clients can't change this. Click to unlock."
+                        : "Unlocked — clients can change this. Click to lock."}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -1047,8 +1047,8 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
                     ) : (
                       <span
                         title={field.isLocked
-                          ? "Locked — clients can't edit this."
-                          : "Unlocked — clients can edit this."}
+                          ? "Locked — clients can't change this."
+                          : "Unlocked — clients can change this."}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -1757,14 +1757,14 @@ function DraftsTab({
         >
           <span style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.55 }}>
             <strong style={{ color: BRAND.ink }}>Auto-publish is on.</strong>{" "}
-            Client edits go live immediately, so the pending queue stays empty. The
-            history below still records every change. Switch this off in{" "}
-            <em>Settings → Client publishing</em> if you'd rather review first.
+            Client edits go live right away, so nothing waits here. Every change is
+            still saved in the history below. To review before publishing, go to{" "}
+            <em>Settings → Client publishing</em>.
           </span>
         </div>
       )}
       <div>
-        <SectionTitle description="Your client's edits land here. Publish to push them live — they appear in your app within seconds via the public content endpoint.">
+        <SectionTitle description="Client edits wait here until you publish them. Once you publish, the change shows up on your site right away.">
           Pending review
         </SectionTitle>
         <Card>
@@ -2057,7 +2057,7 @@ function SettingsTab({ project }: { project: any }) {
       </Card>
 
       <Card padded>
-        <SectionTitle description="Decide what happens when a client hits Save in their editor.">
+        <SectionTitle description="Choose what happens when a client saves a change.">
           Client publishing
         </SectionTitle>
         <div
@@ -2075,7 +2075,7 @@ function SettingsTab({ project }: { project: any }) {
             </p>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55 }}>
               {autoPublish
-                ? "Clients hit Save and their changes go live immediately. No babysitting required."
+                ? "Clients hit Save and their changes go live right away. Nothing waits for approval."
                 : "Client edits land in your Drafts tab and only go live after you publish them."}
             </p>
           </div>
@@ -2114,7 +2114,7 @@ function SettingsTab({ project }: { project: any }) {
           </button>
         </div>
         <p style={{ fontSize: type.xs, color: tone[400], marginTop: 14, lineHeight: 1.55 }}>
-          Owners and admins always publish instantly — this setting only affects editor-role clients.
+          This only affects clients with the Editor role. Owners and admins always go live right away.
         </p>
       </Card>
 
@@ -2123,7 +2123,7 @@ function SettingsTab({ project }: { project: any }) {
           Delete this project
         </p>
         <p style={{ fontSize: type.sm, color: tone[500], marginBottom: 18, lineHeight: 1.55 }}>
-          This permanently removes the project, fields, drafts, and revokes all keys.
+          This will delete the project and everything in it — fields, drafts, and keys. It can't be undone.
         </p>
         <DangerButton onClick={() => setConfirmDelete(true)} disabled={deleteMutation.isPending}>
           <Trash2 style={{ width: 13, height: 13 }} />
@@ -2135,7 +2135,7 @@ function SettingsTab({ project }: { project: any }) {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this project?"
-        description="This permanently removes the project, content fields, drafts, and revokes all API keys. This action cannot be undone."
+        description="This will delete everything — the project, all fields, all drafts, and all keys. You can't get this back."
         confirmLabel="Delete project"
         cancelLabel="Keep it"
         destructive
@@ -2231,7 +2231,7 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
             </p>
           </div>
           <p style={{ fontSize: type.sm, color: tone[600], marginBottom: 14, lineHeight: 1.55 }}>
-            This key is shown only once. Store it as a server environment variable.
+            This is the only time you'll see the full key. Save it somewhere safe — like your Replit Secrets.
           </p>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div
@@ -2274,7 +2274,7 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
 
       {canManage && (
       <Card padded>
-        <SectionTitle description="A project key lets your app read live content from this project. Treat it like a password.">
+        <SectionTitle description="A key connects your site to this project. Keep it safe — if it ever leaks, revoke it and make a new one.">
           Generate a new key
         </SectionTitle>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -2313,7 +2313,7 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
               icon={KeyRound}
               compact
               title="No keys yet"
-              description="Generate one above to connect your app."
+              description="Make one above to connect your site."
             />
           ) : (
             keys.map((k, idx) => (
@@ -2377,7 +2377,7 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
         open={!!pendingRevokeId}
         onOpenChange={(open) => { if (!open) setPendingRevokeId(null); }}
         title="Revoke this key?"
-        description="Apps using it will stop receiving published content immediately. This can't be undone."
+        description="Any site using this key will stop getting content right away. This can't be undone."
         confirmLabel="Revoke key"
         cancelLabel="Keep it"
         destructive
@@ -2390,7 +2390,7 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
           How to use it in your app
         </p>
         <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65, marginBottom: 12 }}>
-          Save the key as a server-side environment variable, then fetch your published content from anywhere:
+          Save the key as a secret in your server, then use it to fetch your published content:
         </p>
         <pre
           style={{
@@ -2421,7 +2421,7 @@ const { content } = await res.json();
 // content["Hero Headline"]?.value ?? "Welcome to My App"`}
         </pre>
         <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.65, marginTop: 10 }}>
-          Server-side only — never paste this key into code that ships to browsers.
+          Server use only — never put this key in code that runs in the browser.
         </p>
       </Card>
     </div>
