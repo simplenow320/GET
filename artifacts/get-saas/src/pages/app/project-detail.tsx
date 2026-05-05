@@ -336,24 +336,51 @@ function ScannerSetupCard({
     : "  (No fields yet — add fields in the Fields tab first, then come back for the full prompt.)";
 
   const replitPrompt = firstKey
-    ? `Set up the get CMS in my Replit app. Make ONLY the changes described — do not rename, delete, or modify anything else.\n\n` +
-      `STEP 1 — Add the scanner script\n` +
-      `I've already added GET_PROJECT_KEY to Replit Secrets. Find my main HTML file (usually index.html, or the template that wraps every page). Just before the closing </body> tag, add:\n\n` +
-      `<script\n  src="${scannerUrl}"\n  data-key="INSERT_GET_PROJECT_KEY_VALUE_HERE"\n  defer\n></script>\n\n` +
-      `How to fill in data-key:\n` +
-      `- Server-rendered app (Express + EJS, Handlebars, etc.) → inject process.env.GET_PROJECT_KEY into the template\n` +
-      `- Static HTML file → open Replit Secrets, copy GET_PROJECT_KEY (it starts with "${firstKey.keyPrefix}"), paste the value directly\n\n` +
-      `STEP 2 — Tag the editable content areas\n` +
-      `For each item below, find the matching element on the page and add the data-get-key attribute. The value must match exactly — same spelling, same capitals.\n\n` +
+    ? `Set up the get CMS in my Replit app. Be surgical — only add exactly what is listed. Do not change anything else.\n\n` +
+
+      `STEP 1 — PLAN FIRST (do not touch any files yet)\n` +
+      `Find:\n` +
+      `  a) My main HTML file (usually index.html or a template that wraps every page)\n` +
+      `  b) The element for each content area listed in Step 3\n\n` +
+      `Show me your plan as a numbered list before making any changes:\n` +
+      `  1. File: [name], around line [n] — will insert script tag before </body>\n` +
+      `  2. File: [name], around line [n] — will add data-get-key="..." to <element>\n` +
+      `  (one line per change)\n\n` +
+      `Do not edit anything until the plan is shown.\n\n` +
+
+      `STEP 2 — Add the scanner script\n` +
+      `Insert this exact block on a new line just before </body>. Do not add extra blank lines. Do not reformat surrounding code.\n\n` +
+      `<script\n  src="${scannerUrl}"\n  data-key="INSERT_KEY_HERE"\n  defer\n></script>\n\n` +
+      `For INSERT_KEY_HERE:\n` +
+      `- Server-rendered app (Express + EJS, Handlebars, etc.) → use process.env.GET_PROJECT_KEY\n` +
+      `- Static HTML → paste the value of GET_PROJECT_KEY from Replit Secrets directly (it starts with "${firstKey.keyPrefix}")\n\n` +
+
+      `STEP 3 — Tag the content areas\n` +
+      `For each item below, add ONLY the data-get-key attribute to the matching element. Do not change the element's text, tag name, class, id, style, or any other existing attribute.\n\n` +
       fieldLines + `\n\n` +
-      `Rules:\n` +
-      `- Only add the script tag and data-get-key attributes. Change nothing else.\n` +
-      `- Do not rename or delete files, change styles, or touch any other logic.\n` +
-      `- After ALL changes are done, show me each modified line so I can confirm everything looks right.`
+      `The value must match exactly — same spelling, same capitals.\n` +
+      `If you are unsure which element matches, stop and ask. Do not guess.\n\n` +
+
+      `STEP 4 — Verify your own work\n` +
+      `After every single change:\n` +
+      `  a) Read back the changed line with 2 lines of context above and below it\n` +
+      `  b) Confirm the tag or attribute is present and spelled correctly\n\n` +
+      `When fully done, report exactly:\n` +
+      `  "Done. Changed [N] lines across [M] file(s): [list each file and what was added]"\n\n` +
+
+      `STRICT RULES — never break these:\n` +
+      `- Do not reformat, re-indent, or add whitespace anywhere outside the new lines\n` +
+      `- Do not rename, move, or delete any file\n` +
+      `- Do not modify any element's existing attributes, text, or styles\n` +
+      `- Do not install packages or run any commands\n` +
+      `- Do not change any logic, routes, or server code`
     : null;
 
   const agentPrompt = firstKey
-    ? `Add this script tag to my HTML file, just before the closing </body> tag:\n\n<script\n  src="${scannerUrl}"\n  data-key="YOUR_FULL_PROJECT_KEY"\n  defer\n></script>\n\nWhere to find YOUR_FULL_PROJECT_KEY: in the get dashboard, click "Site keys" on this project and copy the full key — it starts with "${firstKey.keyPrefix}". Only add the script tag. Change nothing else.`
+    ? `Add this script tag to my HTML file, just before the closing </body> tag. Do not change anything else — no reformatting, no extra lines, no other edits.\n\n` +
+      `<script\n  src="${scannerUrl}"\n  data-key="YOUR_FULL_PROJECT_KEY"\n  defer\n></script>\n\n` +
+      `Where to find YOUR_FULL_PROJECT_KEY: in the get dashboard, click "Site keys" on this project and copy the full key — it starts with "${firstKey.keyPrefix}".\n\n` +
+      `After adding it, read back that section of the file (2 lines before and after) to confirm it looks right.`
     : null;
 
   const copy = async (which: "snippet" | "prompt", text: string) => {
