@@ -817,10 +817,12 @@ const SCANNER_SCRIPT = /* javascript */ `
           'box-shadow:0 2px 10px rgba(0,0,0,0.28);letter-spacing:0.01em;');
         (document.body || document.documentElement).appendChild(tip);
 
-        // Walk up from the event target to the nearest [data-get-key] ancestor
+        // Walk up from the event target to the nearest [data-get-key] ancestor.
+        // Cap at 40 levels — React / framework component trees can be deeply
+        // nested and 10 was too conservative for real-world pages.
         function nearestKey(target) {
           var el = target;
-          for (var lim = 0; el && lim < 10; lim++, el = el.parentElement) {
+          for (var lim = 0; el && el !== document.body && lim < 40; lim++, el = el.parentElement) {
             if (el.hasAttribute && el.hasAttribute('data-get-key')) return el;
           }
           return null;

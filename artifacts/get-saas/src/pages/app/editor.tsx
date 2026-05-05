@@ -417,6 +417,10 @@ export default function ClientEditor() {
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       try {
+        // Only process messages originating from our preview iframe.
+        // This prevents unrelated postMessage senders (e.g. analytics scripts
+        // on the same page) from triggering UI jumps.
+        if (evt.source !== iframeRef.current?.contentWindow) return;
         const msg = evt.data as { type: string; label: string } | null;
         if (!msg || msg.type !== "get:field-click") return;
         const label = msg.label;
