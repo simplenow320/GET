@@ -370,6 +370,11 @@ export default function ClientEditor() {
   const fieldsRef = useRef(fields);
   useEffect(() => { fieldsRef.current = fields; }, [fields]);
 
+  // Stable ref for the user's role — kept in sync so the message handler can
+  // gate focus without needing to be re-created on every render.
+  const myRoleRef = useRef(myRole);
+  useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
+
   // Callback-ref map so we can imperatively scroll/focus any field container.
   const fieldContainerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -428,9 +433,11 @@ export default function ClientEditor() {
             () => setFlashedFieldId((prev) => (prev === field.id ? null : prev)),
             700,
           );
-          // Focus the input — skip locked fields and viewer-role (isLocked already
-          // covers the locked-by-owner case; read-only viewer fields have no input).
-          if (!field.isLocked) {
+          // Focus the input — skip if the field is locked by the owner OR if the
+          // current user is a viewer (viewer role can still see fields but must
+          // not be able to edit them even when the field itself is not locked).
+          const isViewerRole = myRoleRef.current === "viewer";
+          if (!field.isLocked && !isViewerRole) {
             const input = container.querySelector<HTMLElement>("input, textarea");
             if (input) setTimeout(() => input.focus(), 200);
           }
