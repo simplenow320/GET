@@ -784,6 +784,87 @@ const SCANNER_SCRIPT = /* javascript */ `
         }
       } catch (e2) {}
     });
+
+    // ── Click-to-edit (active only when embedded as editor preview) ──────
+    // Hovering a [data-get-key] element shows a blue ring + tooltip.
+    // Clicking posts { type: 'get:field-click', label } to the parent editor
+    // frame, which scrolls and focuses the matching field panel entry.
+    // Completely inert when the page is viewed stand-alone (not in an iframe).
+    if (window.self !== window.top) {
+      function setupClickToEdit() {
+        if (document.getElementById('get-click-style')) return; // already wired
+
+        // Hover ring — skip elements that already have the yellow active highlight
+        var cs = document.createElement('style');
+        cs.id = 'get-click-style';
+        cs.textContent =
+          '[data-get-key]{cursor:pointer!important;}' +
+          '[data-get-key]:not(.get-highlight):hover{' +
+            'outline:2px solid rgba(59,130,246,0.50)!important;' +
+            'outline-offset:2px;' +
+            'border-radius:2px;' +
+          '}';
+        (document.head || document.documentElement).appendChild(cs);
+
+        // Single shared tooltip — absolutely positioned, never in the flow
+        var tip = document.createElement('div');
+        tip.id = 'get-edit-tip';
+        tip.setAttribute('style',
+          'position:fixed;z-index:2147483647;pointer-events:none;' +
+          'background:rgba(26,26,46,0.90);color:#fff;' +
+          'font-size:12px;font-family:system-ui,-apple-system,sans-serif;' +
+          'padding:5px 10px;border-radius:7px;white-space:nowrap;display:none;' +
+          'box-shadow:0 2px 10px rgba(0,0,0,0.28);letter-spacing:0.01em;');
+        (document.body || document.documentElement).appendChild(tip);
+
+        // Walk up from the event target to the nearest [data-get-key] ancestor
+        function nearestKey(target) {
+          var el = target;
+          for (var lim = 0; el && lim < 10; lim++, el = el.parentElement) {
+            if (el.hasAttribute && el.hasAttribute('data-get-key')) return el;
+          }
+          return null;
+        }
+
+        // Show tooltip on hover
+        document.addEventListener('mouseover', function(e) {
+          var el = nearestKey(e.target);
+          if (!el) { tip.style.display = 'none'; return; }
+          var lbl = el.getAttribute('data-get-key') || '';
+          tip.textContent = 'Click to edit: ' + lbl;
+          var rect = el.getBoundingClientRect();
+          tip.style.display = 'block';
+          // Prefer showing above; fall back to below if too close to top edge
+          var tipTop = rect.top - 34;
+          if (tipTop < 6) tipTop = rect.bottom + 6;
+          tip.style.top = tipTop + 'px';
+          tip.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 220)) + 'px';
+        });
+
+        // Hide tooltip on mouseout
+        document.addEventListener('mouseout', function(e) {
+          if (nearestKey(e.target)) tip.style.display = 'none';
+        });
+
+        // Intercept click — use capture phase to run before any site handlers
+        // (important for tagged <a> elements that would otherwise navigate)
+        document.addEventListener('click', function(e) {
+          var el = nearestKey(e.target);
+          if (!el) return;
+          e.preventDefault();
+          e.stopPropagation();
+          tip.style.display = 'none';
+          var lbl = el.getAttribute('data-get-key') || '';
+          try { window.parent.postMessage({ type: 'get:field-click', label: lbl }, '*'); } catch(e4) {}
+        }, true);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupClickToEdit);
+      } else {
+        setupClickToEdit();
+      }
+    }
   })();
 
 })();

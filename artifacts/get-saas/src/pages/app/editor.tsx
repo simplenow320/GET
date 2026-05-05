@@ -358,13 +358,23 @@ export default function ClientEditor() {
     }
   };
 
-  // ── Field highlight overlay ───────────────────────────────────────────────
-  // Sends a postMessage to the iframe so the scanner script can ring the
-  // matching [data-get-key] element with a yellow highlight. Sites that
-  // haven't updated their scanner simply ignore the message — no errors.
+  // ── Field highlight overlay + click-to-edit ──────────────────────────────
+  // Phase 2: postMessage to iframe to ring the matching [data-get-key] element.
+  // Phase 3: receive get:field-click from iframe → scroll, flash, focus field.
 
   const highlightedLabelRef = useRef<string | null>(null);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stable ref so the message handler can read the latest fields without
+  // needing to be recreated every render.
+  const fieldsRef = useRef(fields);
+  useEffect(() => { fieldsRef.current = fields; }, [fields]);
+
+  // Callback-ref map so we can imperatively scroll/focus any field container.
+  const fieldContainerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Flash state: briefly ring a field row in yellow when it is jumped-to.
+  const [flashedFieldId, setFlashedFieldId] = useState<string | null>(null);
 
   const postHighlight = (label: string | null) => {
     try {
@@ -395,6 +405,41 @@ export default function ClientEditor() {
       blurTimerRef.current = null;
     }, 50);
   };
+
+  // ── Phase 3: receive get:field-click from the scanner in the preview iframe
+  // When the client clicks a [data-get-key] element in the preview, jump to
+  // and focus the matching field in the left panel.
+  useEffect(() => {
+    const handler = (evt: MessageEvent) => {
+      try {
+        const msg = evt.data as { type: string; label: string } | null;
+        if (!msg || msg.type !== "get:field-click") return;
+        const label = msg.label;
+        const field = fieldsRef.current?.find((f) => f.label === label);
+        if (!field) return;
+        // Phase 2 hook: ring the element in the iframe immediately.
+        postHighlight(label);
+        // Scroll the field panel to the matching row and flash it.
+        const container = fieldContainerRefs.current.get(field.id);
+        if (container) {
+          container.scrollIntoView({ behavior: "smooth", block: "center" });
+          setFlashedFieldId(field.id);
+          setTimeout(
+            () => setFlashedFieldId((prev) => (prev === field.id ? null : prev)),
+            700,
+          );
+          // Focus the input — skip locked fields and viewer-role (isLocked already
+          // covers the locked-by-owner case; read-only viewer fields have no input).
+          if (!field.isLocked) {
+            const input = container.querySelector<HTMLElement>("input, textarea");
+            if (input) setTimeout(() => input.focus(), 200);
+          }
+        }
+      } catch {}
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // First-visit intro modal — once per project per device. The "?" button in
   // the header re-opens it.
@@ -861,11 +906,20 @@ export default function ClientEditor() {
             return (
               <div
                 key={field.id}
+                ref={(el) => {
+                  if (el) fieldContainerRefs.current.set(field.id, el);
+                  else fieldContainerRefs.current.delete(field.id);
+                }}
+                data-field-label={field.label}
                 onFocus={() => handleFieldFocus(field.label)}
                 onBlur={handleFieldBlur}
                 style={{
                   opacity: field.isLocked ? 0.55 : 1,
-                  transition: `opacity 0.2s ${ease}`,
+                  borderRadius: 10,
+                  boxShadow: flashedFieldId === field.id
+                    ? "0 0 0 3px rgba(250,204,21,0.55), 0 0 0 7px rgba(250,204,21,0.18)"
+                    : "none",
+                  transition: `opacity 0.2s ${ease}, box-shadow 0.5s ${ease}`,
                 }}
               >
                 <div
