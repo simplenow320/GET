@@ -257,42 +257,6 @@ type SiteSection = { name: string; fields: SiteField[] };
 
 interface ProjectKeyBasic { id: string; name: string; keyPrefix: string; }
 
-// Stacks shown in the install panel. We picked the four that cover ~95% of
-// the vibe-coder long tail today (raw HTML + the two SSR/SSG meta-frameworks
-// + WordPress because non-coders still pay people to build them in WP).
-type Stack = "replit" | "html" | "vite" | "next" | "wordpress";
-
-const STACK_LABELS: Record<Stack, string> = {
-  replit: "Replit",
-  html: "Vanilla HTML",
-  vite: "React / Vite",
-  next: "Next.js",
-  wordpress: "WordPress",
-};
-
-function buildStackSnippet(stack: Stack, scannerUrl: string, keyHint: string): string {
-  switch (stack) {
-    case "replit":
-      return `<!-- In your main HTML file, just before </body> -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
-    case "html":
-      return `<!-- Add just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
-    case "vite":
-      // Vite serves index.html as a literal template — same script tag, same place.
-      return `<!-- index.html, just before </body> -->\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
-    case "next":
-      return `// app/layout.tsx (App Router)\nimport Script from "next/script";\n\nexport default function RootLayout({ children }) {\n  return (\n    <html>\n      <body>\n        {children}\n        <Script\n          src="${scannerUrl}"\n          data-key="${keyHint}"\n          strategy="afterInteractive"\n        />\n      </body>\n    </html>\n  );\n}`;
-    case "wordpress":
-      return `<?php\n// In your active theme's footer.php, just before </body>.\n// Or use a plugin like "Insert Headers and Footers" → footer scripts.\n?>\n<script\n  src="${scannerUrl}"\n  data-key="${keyHint}"\n  defer\n></script>`;
-  }
-}
-
-const STACK_HINTS: Record<Stack, string> = {
-  replit: "One paste does everything — adds the script and tags all your content areas automatically.",
-  html: "Paste this just before the closing </body> tag in your main HTML file.",
-  vite: "Paste this near the bottom of your index.html file, just before </body>.",
-  next: "Paste this into your root layout file. App Router shown — Pages Router works the same way.",
-  wordpress: "Add this to your theme's footer, or use a plugin like 'Insert Headers and Footers'.",
-};
 
 /**
  * Install + verify panel. Replaces the older "agent prompt only" card.
@@ -307,10 +271,8 @@ function ScannerSetupCard({
   projectId: string;
   onDismiss: () => void;
 }) {
-  const [stack, setStack] = useState<Stack>("replit");
+  const [openSection, setOpenSection] = useState<"ai" | "manual" | null>("ai");
   const [copied, setCopied] = useState<"snippet" | "prompt" | null>(null);
-  const [showAgentPrompt, setShowAgentPrompt] = useState(false);
-  const [showReplitSnippet, setShowReplitSnippet] = useState(false);
 
   const { data: keys = [], isLoading: keysLoading } = useQuery<ProjectKeyBasic[]>({
     queryKey: ["project-keys-scanner", projectId],
@@ -321,9 +283,9 @@ function ScannerSetupCard({
 
   const firstKey = keys[0];
   const scannerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}${BASE}/api/public/scanner.js`;
-  const keyHint = firstKey ? `${firstKey.keyPrefix}…` : "YOUR_PROJECT_KEY";
-
-  const snippet = buildStackSnippet(stack, scannerUrl, keyHint);
+  const snippet = firstKey
+    ? `<!-- Paste just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="${firstKey.keyPrefix}YOUR_FULL_KEY_HERE"\n  defer\n></script>`
+    : `<!-- Paste just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="YOUR_PROJECT_KEY"\n  defer\n></script>`;
 
   const fieldLines = fields.length > 0
     ? fields.map(f => {
@@ -374,13 +336,6 @@ function ScannerSetupCard({
       `- Do not modify any element's existing attributes, text, or styles\n` +
       `- Do not install packages or run any commands\n` +
       `- Do not change any logic, routes, or server code`
-    : null;
-
-  const agentPrompt = firstKey
-    ? `Add this script tag to my HTML file, just before the closing </body> tag. Do not change anything else — no reformatting, no extra lines, no other edits.\n\n` +
-      `<script\n  src="${scannerUrl}"\n  data-key="YOUR_FULL_PROJECT_KEY"\n  defer\n></script>\n\n` +
-      `Where to find YOUR_FULL_PROJECT_KEY: in the get dashboard, click "Site keys" on this project and copy the full key — it starts with "${firstKey.keyPrefix}".\n\n` +
-      `After adding it, read back that section of the file (2 lines before and after) to confirm it looks right.`
     : null;
 
   const copy = async (which: "snippet" | "prompt", text: string) => {
@@ -454,18 +409,111 @@ function ScannerSetupCard({
     setTimeout(tick, 1200);
   };
 
+  // Shared code block + copy button used in both accordions
+  const CodeBlock = ({ text, which }: { text: string; which: "snippet" | "prompt" }) => (
+    <div style={{ position: "relative" }} data-testid={which === "snippet" ? "install-snippet" : "install-prompt"}>
+      <pre style={{
+        margin: 0,
+        padding: "16px 52px 16px 18px",
+        borderRadius: r.lg,
+        background: "#0f1419",
+        color: "#e5e7eb",
+        fontSize: 12.5,
+        lineHeight: 1.65,
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+        overflow: "auto",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        maxHeight: 340,
+      }}>
+        {text}
+      </pre>
+      <button
+        onClick={() => copy(which, text)}
+        data-testid={`install-copy-${which}`}
+        style={{
+          position: "absolute", top: 10, right: 10,
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "6px 10px", borderRadius: 8,
+          background: copied === which ? "#10b981" : "rgba(255,255,255,0.10)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          cursor: "pointer", fontSize: type.xs, fontWeight: 600, color: "#f9fafb",
+          transition: `background 0.15s ${ease}`,
+        }}
+      >
+        {copied === which
+          ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
+          : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
+      </button>
+    </div>
+  );
+
+  const AccordionHeader = ({
+    id, label, badge, open, onToggle,
+  }: { id: "ai" | "manual"; label: string; badge?: string; open: boolean; onToggle: () => void }) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      style={{
+        width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 10, padding: "14px 16px",
+        background: open ? tone[50] : BRAND.paper,
+        border: `1px solid ${open ? line.base : line.faint}`,
+        borderRadius: open ? `${r.md}px ${r.md}px 0 0` : r.md,
+        cursor: "pointer", textAlign: "left" as const,
+        transition: `background 0.15s ${ease}`,
+      }}
+    >
+      <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: type.sm, fontWeight: 700, color: BRAND.ink }}>{label}</span>
+        {badge && <span style={{ fontSize: type.xs, color: tone[500] }}>{badge}</span>}
+      </span>
+      <span style={{
+        width: 22, height: 22, borderRadius: "50%",
+        background: tone[100], display: "inline-flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0, color: tone[500],
+        transform: open ? "rotate(180deg)" : "rotate(0deg)",
+        transition: `transform 0.2s ${ease}`,
+      }}>
+        ▾
+      </span>
+    </button>
+  );
+
+  const AccordionBody = ({ children, open }: { children: React.ReactNode; open: boolean }) => (
+    open ? (
+      <div style={{
+        padding: "18px 16px",
+        border: `1px solid ${line.base}`, borderTop: "none",
+        borderRadius: `0 0 ${r.md}px ${r.md}px`,
+        display: "flex", flexDirection: "column", gap: 16,
+      }}>
+        {children}
+      </div>
+    ) : null
+  );
+
+  const noKeyBanner = (
+    <div style={{ padding: "12px 14px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
+      <p style={{ fontSize: type.sm, color: tone[600], margin: 0 }}>
+        You need a project key first. Go to the <strong>Site keys</strong> tab, create one, then come back here.
+      </p>
+    </div>
+  );
+
   return (
     <Card padded>
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: type.base, fontWeight: 700, marginBottom: 6 }}>
+            <p style={{ fontSize: type.base, fontWeight: 700, marginBottom: 4 }}>
               Connect your site
             </p>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
-              Copy the prompt below and paste it into Replit AI. It will add the script <em>and</em> tag all your content areas in one go — nothing to do manually.
+              Choose how you want to set up the connection — AI or manual.
             </p>
           </div>
           {onDismiss && (
@@ -485,319 +533,198 @@ function ScannerSetupCard({
           )}
         </div>
 
-        {/* Stack tabs */}
-        <div role="tablist" style={{ display: "flex", gap: 4, padding: 4, background: tone[100], borderRadius: 10, overflowX: "auto" }}>
-          {(Object.keys(STACK_LABELS) as Stack[]).map((s) => {
-            const active = s === stack;
-            return (
-              <button
-                key={s}
-                role="tab"
-                aria-selected={active}
-                onClick={() => setStack(s)}
-                data-testid={`install-tab-${s}`}
-                style={{
-                  flex: 1,
-                  minWidth: "max-content",
-                  padding: "8px 14px",
-                  borderRadius: 7,
-                  border: "none",
-                  background: active ? BRAND.paper : "transparent",
-                  color: active ? BRAND.ink : tone[600],
-                  fontSize: type.sm,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                  transition: `background 0.15s ${ease}`,
-                }}
-              >
-                {STACK_LABELS[s]}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Per-stack hint */}
-        <p style={{ fontSize: type.xs, color: tone[500], margin: 0 }}>
-          {STACK_HINTS[stack]}
-        </p>
-
-        {/* Snippet box */}
-        {keysLoading ? (
-          <div style={{ height: 120, background: tone[50], borderRadius: r.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Loader2 style={{ width: 16, height: 16, color: tone[400] }} className="animate-spin" />
-          </div>
-        ) : !firstKey ? (
-          <div style={{ padding: "14px 16px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
-            <p style={{ fontSize: type.sm, color: tone[600] }}>
-              You need a project key before you can install. Go to the <strong>Site keys</strong> tab and make one, then come back here.
-            </p>
-          </div>
-        ) : stack === "replit" && replitPrompt ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ fontSize: type.xs, fontWeight: 700, color: tone[500], textTransform: "uppercase" as const, letterSpacing: "0.07em", margin: 0 }}>
-              Paste into Replit AI
-            </p>
-            <div style={{ position: "relative" }} data-testid="install-snippet">
-              <pre style={{
-                margin: 0,
-                padding: "16px 52px 16px 18px",
-                borderRadius: r.lg,
-                background: "#0f1419",
-                color: "#e5e7eb",
-                fontSize: 12.5,
-                lineHeight: 1.65,
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                overflow: "auto",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                maxHeight: 340,
-              }}>
-                {replitPrompt}
-              </pre>
-              <button
-                onClick={() => copy("prompt", replitPrompt)}
-                data-testid="install-copy-snippet"
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  background: copied === "prompt" ? "#10b981" : "rgba(255,255,255,0.10)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  cursor: "pointer",
-                  fontSize: type.xs,
-                  fontWeight: 600,
-                  color: "#f9fafb",
-                  transition: `background 0.15s ${ease}`,
-                }}
-              >
-                {copied === "prompt"
-                  ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
-                  : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowReplitSnippet((s) => !s)}
-              style={{
-                background: "none", border: "none", padding: 0,
-                cursor: "pointer", fontSize: type.xs, color: tone[500],
-                fontWeight: 500, textDecoration: "underline", textAlign: "left" as const,
-              }}
-            >
-              {showReplitSnippet ? "Hide raw snippet" : "Or add the tag yourself →"}
-            </button>
-            {showReplitSnippet && (
-              <div style={{ position: "relative" }}>
-                <pre style={{
-                  margin: 0,
-                  padding: "16px 52px 16px 18px",
-                  borderRadius: r.lg,
-                  background: "#0f1419",
-                  color: "#e5e7eb",
-                  fontSize: 12.5,
-                  lineHeight: 1.65,
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                  overflow: "auto",
-                  whiteSpace: "pre",
-                  maxHeight: 280,
-                }}>
-                  {snippet}
-                </pre>
-                <button
-                  onClick={() => copy("snippet", snippet)}
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    right: 10,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    background: copied === "snippet" ? "#10b981" : "rgba(255,255,255,0.10)",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    cursor: "pointer",
-                    fontSize: type.xs,
-                    fontWeight: 600,
-                    color: "#f9fafb",
-                    transition: `background 0.15s ${ease}`,
-                  }}
-                >
-                  {copied === "snippet"
-                    ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
-                    : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
-                </button>
+        {/* ── AI Connect accordion ─────────────────────────────────────── */}
+        <div>
+          <AccordionHeader
+            id="ai"
+            label="AI Connect"
+            badge="Paste one prompt — the AI handles the rest"
+            open={openSection === "ai"}
+            onToggle={() => setOpenSection(s => s === "ai" ? null : "ai")}
+          />
+          <AccordionBody open={openSection === "ai"}>
+            {keysLoading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Loader2 style={{ width: 14, height: 14, color: tone[400] }} className="animate-spin" />
+                <span style={{ fontSize: type.sm, color: tone[500] }}>Loading…</span>
               </div>
+            ) : !firstKey ? noKeyBanner : (
+              <>
+                {/* Where to paste */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <p style={{ fontSize: type.sm, fontWeight: 700, margin: 0 }}>
+                    Where to paste this
+                  </p>
+                  {([
+                    {
+                      name: "Replit",
+                      steps: "Open your project → click the AI chat tab on the left → paste and send.",
+                    },
+                    {
+                      name: "Lovable",
+                      steps: "Open your project → click the chat box at the bottom → paste and send.",
+                    },
+                    {
+                      name: "Claude Code",
+                      steps: "Open your terminal → type claude → paste and press Enter.",
+                    },
+                  ] as const).map(p => (
+                    <div key={p.name} style={{
+                      display: "flex", gap: 8, alignItems: "flex-start",
+                      padding: "8px 12px", borderRadius: r.md,
+                      background: tone[50], border: `1px solid ${line.faint}`,
+                    }}>
+                      <span style={{ fontSize: type.xs, fontWeight: 700, color: BRAND.ink, minWidth: 72, flexShrink: 0 }}>{p.name}</span>
+                      <span style={{ fontSize: type.xs, color: tone[600], lineHeight: 1.55 }}>{p.steps}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* The prompt */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ fontSize: type.xs, fontWeight: 700, color: tone[500], textTransform: "uppercase" as const, letterSpacing: "0.07em", margin: 0 }}>
+                    Copy this prompt
+                  </p>
+                  {replitPrompt ? <CodeBlock text={replitPrompt} which="prompt" /> : (
+                    <div style={{ padding: "12px 14px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
+                      <p style={{ fontSize: type.sm, color: tone[500], margin: 0 }}>
+                        Add fields in the <strong>Fields</strong> tab first — the prompt will list exactly what to tag.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Heads-up disclaimer */}
+                <div style={{
+                  padding: "10px 14px", borderRadius: r.md,
+                  background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.3)",
+                  display: "flex", gap: 8,
+                }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
+                  <p style={{ fontSize: type.xs, color: "#78350f", lineHeight: 1.6, margin: 0 }}>
+                    <strong>AI doesn't always get it right first try.</strong> After you paste the prompt, open your site and click <strong>Verify install</strong> below. If any fields show as missing, paste the prompt again and say: <em>"It didn't tag [field name] — please fix just that one."</em>
+                  </p>
+                </div>
+              </>
             )}
-          </div>
-        ) : (
-          <div style={{ position: "relative" }} data-testid="install-snippet">
-            <pre style={{
-              margin: 0,
-              padding: "16px 52px 16px 18px",
-              borderRadius: r.lg,
-              background: "#0f1419",
-              color: "#e5e7eb",
-              fontSize: 12.5,
-              lineHeight: 1.65,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-              overflow: "auto",
-              whiteSpace: "pre",
-              maxHeight: 280,
-            }}>
-              {snippet}
-            </pre>
-            <button
-              onClick={() => copy("snippet", snippet)}
-              data-testid="install-copy-snippet"
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 10,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "6px 10px",
-                borderRadius: 8,
-                background: copied === "snippet" ? "#10b981" : "rgba(255,255,255,0.10)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                cursor: "pointer",
-                fontSize: type.xs,
-                fontWeight: 600,
-                color: "#f9fafb",
-                transition: `background 0.15s ${ease}`,
-              }}
-            >
-              {copied === "snippet"
-                ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
-                : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
-            </button>
-          </div>
-        )}
-
-        {firstKey && (
-          <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
-            Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{keyHint}</code> with your full key (found in the Site keys tab). If it ever leaks, just revoke it and make a new one.
-          </p>
-        )}
-
-        {/* Step 2: tag your elements */}
-        <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div>
-            <p style={{ fontSize: type.sm, fontWeight: 700, marginBottom: 4 }}>
-              Step 2 — tag your elements
-            </p>
-            <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
-              Add <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-key</code> to any element on your page. Set it to the exact name of the field from your Fields tab. The script will swap in the saved content every time the page loads.
-            </p>
-            <div style={{ position: "relative" }} data-testid="step2-example">
-              <pre style={{
-                margin: 0,
-                padding: "14px 52px 14px 16px",
-                borderRadius: r.lg,
-                background: "#0f1419",
-                color: "#e5e7eb",
-                fontSize: 12,
-                lineHeight: 1.65,
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                overflow: "auto",
-                whiteSpace: "pre",
-              }}>
-{`<!-- text / long text field -->
-<h1 data-get-key="Hero Heading">Default headline</h1>
-<p  data-get-key="Hero Body">Default paragraph text.</p>
-
-<!-- image field -->
-<img data-get-key="Hero Image" src="default.jpg" alt="" />
-
-<!-- link / URL field -->
-<a data-get-key="CTA Link" href="/default">Get started</a>`}
-              </pre>
-              <button
-                onClick={() => copy("prompt",
-                  `<!-- text / long text field -->\n<h1 data-get-key="Hero Heading">Default headline</h1>\n<p  data-get-key="Hero Body">Default paragraph text.</p>\n\n<!-- image field -->\n<img data-get-key="Hero Image" src="default.jpg" alt="" />\n\n<!-- link / URL field -->\n<a data-get-key="CTA Link" href="/default">Get started</a>`
-                )}
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  background: copied === "prompt" ? "#10b981" : "rgba(255,255,255,0.10)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  cursor: "pointer",
-                  fontSize: type.xs,
-                  fontWeight: 600,
-                  color: "#f9fafb",
-                  transition: `background 0.15s ${ease}`,
-                }}
-              >
-                {copied === "prompt"
-                  ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
-                  : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
-              </button>
-            </div>
-            <p style={{ fontSize: 11.5, color: tone[500], margin: "8px 0 0", lineHeight: 1.55 }}>
-              The name must match exactly — capital letters matter. You can put it on any element, anywhere on the page.
-            </p>
-          </div>
-
-          {/* Loading state tip */}
-          <div style={{ marginTop: 4 }}>
-            <p style={{ fontSize: type.sm, fontWeight: 700, marginBottom: 4 }}>
-              Optional — loading state
-            </p>
-            <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
-              While the script is loading your content, it adds <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-loading</code> to the page. You can use that in your CSS to hide or dim your tagged elements so visitors don't see a flash of the old text.
-            </p>
-            <div style={{ position: "relative" }}>
-              <pre style={{
-                margin: 0,
-                padding: "14px 16px",
-                borderRadius: r.lg,
-                background: "#0f1419",
-                color: "#e5e7eb",
-                fontSize: 12,
-                lineHeight: 1.65,
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                overflow: "auto",
-                whiteSpace: "pre",
-              }}>
-{`/* Simple fade — add to your stylesheet */
-[data-get-loading] [data-get-key] {
-  opacity: 0;
-}
-[data-get-key] {
-  transition: opacity 0.2s ease;
-}
-
-/* Or a skeleton shimmer */
-[data-get-loading] [data-get-key] {
-  color: transparent;
-  border-radius: 4px;
-  background: linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 50%,#e5e7eb 75%);
-  background-size: 200% 100%;
-  animation: get-shimmer 1.2s infinite;
-}
-@keyframes get-shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}`}
-              </pre>
-            </div>
-          </div>
+          </AccordionBody>
         </div>
 
-        {/* Verify install */}
+        {/* ── Manual Connect accordion ─────────────────────────────────── */}
+        <div>
+          <AccordionHeader
+            id="manual"
+            label="Manual Connect"
+            badge="Add the code yourself — step by step"
+            open={openSection === "manual"}
+            onToggle={() => setOpenSection(s => s === "manual" ? null : "manual")}
+          />
+          <AccordionBody open={openSection === "manual"}>
+            {keysLoading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Loader2 style={{ width: 14, height: 14, color: tone[400] }} className="animate-spin" />
+                <span style={{ fontSize: type.sm, color: tone[500] }}>Loading…</span>
+              </div>
+            ) : !firstKey ? noKeyBanner : (
+              <>
+                {/* Step 1 */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <p style={{ fontSize: type.sm, fontWeight: 700, margin: 0 }}>
+                    Step 1 — Add this code to your site
+                  </p>
+                  <CodeBlock text={snippet} which="snippet" />
+                  <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
+                    Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>YOUR_FULL_KEY_HERE</code> with your full key from the <strong>Site keys</strong> tab.
+                  </p>
+
+                  {/* Where to put it — by platform */}
+                  <p style={{ fontSize: type.xs, fontWeight: 700, color: tone[600], margin: 0, marginTop: 4 }}>
+                    Where to paste it:
+                  </p>
+                  {([
+                    {
+                      name: "Replit",
+                      how: "In the file tree on the left, open your main HTML file (usually index.html). Scroll to the very bottom and find </body>. Paste the code just above that line.",
+                    },
+                    {
+                      name: "Lovable",
+                      how: 'Click the "</>" code button in the top toolbar → open index.html → find </body> near the bottom → paste just above it.',
+                    },
+                    {
+                      name: "Claude Code",
+                      how: 'Tell Claude: "Open my main HTML file and paste this code just before the closing </body> tag — don\'t change anything else." Then paste the code into the chat.',
+                    },
+                  ] as const).map(p => (
+                    <div key={p.name} style={{
+                      display: "flex", gap: 10, alignItems: "flex-start",
+                      padding: "10px 12px", borderRadius: r.md,
+                      background: tone[50], border: `1px solid ${line.faint}`,
+                    }}>
+                      <span style={{ fontSize: type.xs, fontWeight: 700, color: BRAND.ink, minWidth: 72, flexShrink: 0 }}>{p.name}</span>
+                      <span style={{ fontSize: type.xs, color: tone[600], lineHeight: 1.6 }}>{p.how}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Step 2 */}
+                <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div>
+                    <p style={{ fontSize: type.sm, fontWeight: 700, margin: 0, marginBottom: 4 }}>
+                      Step 2 — Mark each piece of content
+                    </p>
+                    <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.6, marginBottom: 10 }}>
+                      On each HTML element you want clients to be able to edit, add a <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>data-get-key</code> attribute. The value must exactly match the field name — including capital letters.
+                    </p>
+                    {fields.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {fields.map(f => {
+                          const ex =
+                            f.type === "image"
+                              ? `<img data-get-key="${f.label}" src="current-image.jpg" alt="" />`
+                              : f.type === "url"
+                              ? `<a data-get-key="${f.label}" href="/current-link">Link text</a>`
+                              : `<p data-get-key="${f.label}">Current text here</p>`;
+                          return (
+                            <div key={f.label} style={{
+                              padding: "8px 12px", borderRadius: r.md,
+                              background: "#0f1419", border: `1px solid rgba(255,255,255,0.06)`,
+                              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                            }}>
+                              <code style={{ fontSize: 11.5, fontFamily: "ui-monospace, Menlo, monospace", color: "#e5e7eb", flex: 1, wordBreak: "break-word" as const }}>
+                                {ex}
+                              </code>
+                              <button
+                                onClick={() => copy("snippet", ex)}
+                                style={{
+                                  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 6, padding: "4px 8px", cursor: "pointer",
+                                  fontSize: 11, color: "#f9fafb", fontWeight: 600, flexShrink: 0,
+                                }}
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          );
+                        })}
+                        <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
+                          Find each element on your page and add that exact attribute to it. Don't change anything else on the element.
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ padding: "10px 14px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
+                        <p style={{ fontSize: type.sm, color: tone[500], margin: 0 }}>
+                          No fields set up yet. Go to the <strong>Fields</strong> tab to define what clients can edit — then come back here.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </AccordionBody>
+        </div>
+
+        {/* ── Verify install — always visible ─────────────────────────── */}
         <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div style={{ minWidth: 0 }}>
@@ -904,53 +831,6 @@ function ScannerSetupCard({
           )}
         </div>
 
-        {/* Fallback: agent prompt for non-Replit tabs (Replit tab already shows the prompt as primary) */}
-        {firstKey && stack !== "replit" && (
-          <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 14 }}>
-            <button
-              type="button"
-              onClick={() => setShowAgentPrompt((s) => !s)}
-              style={{
-                background: "none", border: "none", padding: 0,
-                cursor: "pointer", fontSize: type.xs, color: tone[600],
-                fontWeight: 600, textDecoration: "underline",
-              }}
-            >
-              {showAgentPrompt ? "Hide AI agent prompt" : "Or have an AI agent do it for you"}
-            </button>
-            {showAgentPrompt && agentPrompt && (
-              <div style={{ position: "relative", marginTop: 10 }}>
-                <div style={{
-                  padding: "14px 48px 14px 16px",
-                  borderRadius: r.md,
-                  background: tone[50],
-                  border: `1px solid ${line.base}`,
-                  fontSize: type.sm,
-                  color: BRAND.ink,
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}>
-                  {agentPrompt}
-                </div>
-                <button
-                  onClick={() => copy("prompt", agentPrompt)}
-                  style={{
-                    position: "absolute", top: 8, right: 8,
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    padding: "5px 9px", borderRadius: 7,
-                    background: copied === "prompt" ? BRAND.ink : tone[100],
-                    color: copied === "prompt" ? BRAND.paper : tone[600],
-                    border: "none", cursor: "pointer",
-                    fontSize: 11, fontWeight: 600,
-                  }}
-                >
-                  {copied === "prompt" ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </Card>
   );
