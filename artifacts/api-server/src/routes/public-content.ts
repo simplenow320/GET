@@ -770,8 +770,15 @@ const SCANNER_SCRIPT = /* javascript */ `
         var prev = document.querySelectorAll('.get-highlight');
         for (var i = 0; i < prev.length; i++) prev[i].classList.remove('get-highlight');
         // Apply new highlight if a label was provided.
+        // CSS.escape handles any character that would break a selector (brackets,
+        // backslashes, colons, etc.). Falls back to a manual quote-escape for
+        // browsers without CSS.escape (IE11 and some older WebViews).
         if (msg.label) {
-          var sel = '[data-get-key="' + String(msg.label).replace(/"/g, '\\"') + '"]';
+          var label = String(msg.label);
+          var escaped = (typeof CSS !== 'undefined' && CSS.escape)
+            ? CSS.escape(label)
+            : label.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+          var sel = '[data-get-key="' + escaped + '"]';
           var el = document.querySelector(sel);
           if (el) el.classList.add('get-highlight');
         }
