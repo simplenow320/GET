@@ -828,19 +828,26 @@ const SCANNER_SCRIPT = /* javascript */ `
           return null;
         }
 
-        // Show tooltip on hover
-        document.addEventListener('mouseover', function(e) {
+        // Show tooltip near the cursor on mouseover; update position as the
+        // cursor moves within the same tagged element via mousemove.
+        function showTip(e) {
           var el = nearestKey(e.target);
           if (!el) { tip.style.display = 'none'; return; }
           var lbl = el.getAttribute('data-get-key') || '';
           tip.textContent = 'Click to edit: ' + lbl;
-          var rect = el.getBoundingClientRect();
+          // Position 16px below+right of cursor; clamp to stay within viewport.
+          var x = e.clientX + 14;
+          var y = e.clientY + 18;
+          if (x + 220 > window.innerWidth) x = e.clientX - 14 - 220;
+          if (y + 32 > window.innerHeight) y = e.clientY - 32;
           tip.style.display = 'block';
-          // Prefer showing above; fall back to below if too close to top edge
-          var tipTop = rect.top - 34;
-          if (tipTop < 6) tipTop = rect.bottom + 6;
-          tip.style.top = tipTop + 'px';
-          tip.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 220)) + 'px';
+          tip.style.left = Math.max(4, x) + 'px';
+          tip.style.top = Math.max(4, y) + 'px';
+        }
+        document.addEventListener('mouseover', showTip);
+        document.addEventListener('mousemove', function(e) {
+          if (tip.style.display === 'none') return;
+          showTip(e);
         });
 
         // Hide tooltip on mouseout — only when the mouse actually leaves the
