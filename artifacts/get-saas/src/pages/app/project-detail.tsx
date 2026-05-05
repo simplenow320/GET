@@ -857,6 +857,18 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [applyingSync, setApplyingSync] = useState(false);
 
+  // Setup card: visible at the top of the tab for admins/owners until explicitly dismissed.
+  // Stored per-project in localStorage so it stays gone after a page reload.
+  const setupDismissKey = `get:setup-dismissed:${projectId}`;
+  const [setupDismissed, setSetupDismissed] = useState(() => {
+    try { return !!localStorage.getItem(`get:setup-dismissed:${projectId}`); } catch { return false; }
+  });
+  const dismissSetup = () => {
+    try { localStorage.setItem(setupDismissKey, "1"); } catch {}
+    setSetupDismissed(true);
+  };
+  const showSetupCard = canManage && (syncState === "setup" || (!setupDismissed && syncState === "idle"));
+
   const handleAdd = () => {
     createMutation.mutate(
       { projectId, data: { label: newLabel, type: newType } },
@@ -959,11 +971,36 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Connect your site — always visible for admins until dismissed */}
+      {showSetupCard && (
+        <ScannerSetupCard
+          projectId={projectId}
+          onDismiss={dismissSetup}
+        />
+      )}
+
       <SectionTitle
         description={canManage ? "Everything clients are allowed to change." : "Everything clients are allowed to change on this project."}
         action={
           canManage && !isAdding ? (
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {/* Re-open setup when dismissed */}
+              {setupDismissed && syncState === "idle" && (
+                <button
+                  type="button"
+                  onClick={() => setSetupDismissed(false)}
+                  style={{
+                    fontSize: 12, fontWeight: 600, color: tone[500],
+                    background: "transparent", border: `1px solid ${line.base}`,
+                    borderRadius: 8, padding: "5px 10px", cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                  }}
+                >
+                  <ShieldCheck style={{ width: 12, height: 12 }} />
+                  Setup
+                </button>
+              )}
               <SecondaryButton
                 size="sm"
                 onClick={handleSyncFromSite}
@@ -1269,13 +1306,7 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
           })
         )}
       </Card>
-      {/* Setup instructions — shown when no snapshot exists yet */}
-      {syncState === "setup" && (
-        <ScannerSetupCard
-          projectId={projectId}
-          onDismiss={() => setSyncState("idle")}
-        />
-      )}
+      {/* Setup card is now rendered at the top of the tab — see showSetupCard */}
 
       {/* Scan results panel */}
       {syncState === "results" && sections.length > 0 && (

@@ -727,6 +727,58 @@ const SCANNER_SCRIPT = /* javascript */ `
     window.addEventListener('popstate', scheduleNavScan);
     window.addEventListener('hashchange', scheduleNavScan);
   } catch(e) {}
+
+  // ── Highlight overlay (live editor preview) ──────────────────────────────
+  // Accepts postMessage({ type: 'get:highlight', label: string | null }) from
+  // the get editor when it is showing this page in an iframe side-by-side.
+  // Adds/removes the .get-highlight class on the matching [data-get-key]
+  // element so clients can instantly see which element they are editing.
+  //
+  // Fully backward-compatible: pages that never receive a message are
+  // unaffected. No errors are thrown on older installs.
+  (function () {
+    function injectHighlightStyle() {
+      if (document.getElementById('get-hl-style')) return;
+      var s = document.createElement('style');
+      s.id = 'get-hl-style';
+      s.textContent =
+        '.get-highlight{' +
+          'outline:3px solid #facc15;' +
+          'outline-offset:2px;' +
+          'box-shadow:0 0 0 5px rgba(250,204,21,.25);' +
+          'border-radius:2px;' +
+          'animation:get-hl-pulse 1.5s ease-in-out infinite alternate;' +
+        '}' +
+        '@keyframes get-hl-pulse{' +
+          'from{box-shadow:0 0 0 3px rgba(250,204,21,.25)}' +
+          'to{box-shadow:0 0 0 7px rgba(250,204,21,.45)}' +
+        '}';
+      (document.head || document.documentElement).appendChild(s);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', injectHighlightStyle);
+    } else {
+      injectHighlightStyle();
+    }
+
+    window.addEventListener('message', function (evt) {
+      try {
+        var msg = evt.data;
+        if (!msg || msg.type !== 'get:highlight') return;
+        // Remove any existing highlights.
+        var prev = document.querySelectorAll('.get-highlight');
+        for (var i = 0; i < prev.length; i++) prev[i].classList.remove('get-highlight');
+        // Apply new highlight if a label was provided.
+        if (msg.label) {
+          var sel = '[data-get-key="' + String(msg.label).replace(/"/g, '\\"') + '"]';
+          var el = document.querySelector(sel);
+          if (el) el.classList.add('get-highlight');
+        }
+      } catch (e2) {}
+    });
+  })();
+
 })();
 `;
 

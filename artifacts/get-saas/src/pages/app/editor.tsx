@@ -320,6 +320,7 @@ export default function ClientEditor() {
       const doc = iframeRef.current?.contentDocument;
       if (doc !== null && doc !== undefined && (doc.body?.childElementCount ?? 0) === 0) {
         setIframeStatus("blocked");
+        return;
       } else {
         setIframeStatus("loaded");
       }
@@ -327,6 +328,19 @@ export default function ClientEditor() {
       // SecurityError → cross-origin frame loaded successfully; we just
       // can't read the document from here.
       setIframeStatus("loaded");
+    }
+    // Re-apply the current highlight after the page finishes loading.
+    // The 300 ms delay lets the scanner script initialise before we post.
+    const labelToRestore = highlightedLabelRef.current;
+    if (labelToRestore) {
+      setTimeout(() => {
+        try {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "get:highlight", label: labelToRestore },
+            "*",
+          );
+        } catch {}
+      }, 300);
     }
   };
 
@@ -342,6 +356,44 @@ export default function ClientEditor() {
       iframe.src = "";
       iframe.src = src;
     }
+  };
+
+  // ── Field highlight overlay ───────────────────────────────────────────────
+  // Sends a postMessage to the iframe so the scanner script can ring the
+  // matching [data-get-key] element with a yellow highlight. Sites that
+  // haven't updated their scanner simply ignore the message — no errors.
+
+  const highlightedLabelRef = useRef<string | null>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const postHighlight = (label: string | null) => {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "get:highlight", label },
+        "*",
+      );
+      highlightedLabelRef.current = label;
+    } catch {
+      // Iframe not mounted or cross-origin blocked — silently swallow.
+    }
+  };
+
+  const handleFieldFocus = (label: string) => {
+    // Cancel any pending clear so switching between fields doesn't flicker.
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    postHighlight(label);
+  };
+
+  const handleFieldBlur = () => {
+    // Short debounce: if focus moves to a sibling element within the same
+    // container the new onFocus fires and cancels this before it runs.
+    blurTimerRef.current = setTimeout(() => {
+      postHighlight(null);
+      blurTimerRef.current = null;
+    }, 50);
   };
 
   // First-visit intro modal — once per project per device. The "?" button in
@@ -809,6 +861,8 @@ export default function ClientEditor() {
             return (
               <div
                 key={field.id}
+                onFocus={() => handleFieldFocus(field.label)}
+                onBlur={handleFieldBlur}
                 style={{
                   opacity: field.isLocked ? 0.55 : 1,
                   transition: `opacity 0.2s ${ease}`,
