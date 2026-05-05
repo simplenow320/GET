@@ -299,12 +299,18 @@ export default function ClientEditor() {
     if (siteUrl) setIframeStatus("loading");
   }, [siteUrl]);
 
-  // Timeout: if onLoad hasn't fired within 10 s, assume blocked.
+  // When entering desktop mode, ensure iframe gets a fresh load attempt.
   useEffect(() => {
-    if (!siteUrl || iframeStatus !== "loading") return;
+    if (showPreviewPanel && siteUrl) setIframeStatus("loading");
+  }, [showPreviewPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Timeout: if onLoad hasn't fired within 10 s, assume blocked.
+  // Only active when the preview panel is actually rendered.
+  useEffect(() => {
+    if (!siteUrl || !showPreviewPanel || iframeStatus !== "loading") return;
     const t = setTimeout(() => setIframeStatus("blocked"), 10_000);
     return () => clearTimeout(t);
-  }, [siteUrl, iframeStatus]);
+  }, [siteUrl, showPreviewPanel, iframeStatus]);
 
   const handleIframeLoad = () => {
     try {
@@ -1145,7 +1151,7 @@ export default function ClientEditor() {
                   Connect your site first and the live preview will appear here automatically.
                 </p>
                 <a
-                  href={`/app/projects/${projectId}`}
+                  href={`/app/setup/${projectId}`}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
