@@ -287,7 +287,7 @@ function buildStackSnippet(stack: Stack, scannerUrl: string, keyHint: string): s
 }
 
 const STACK_HINTS: Record<Stack, string> = {
-  replit: "Copy the AI prompt below and paste it into Replit AI — it will find your HTML file and add the tag.",
+  replit: "One paste does everything — adds the script and tags all your content areas automatically.",
   html: "Paste this just before the closing </body> tag in your main HTML file.",
   vite: "Paste this near the bottom of your index.html file, just before </body>.",
   next: "Paste this into your root layout file. App Router shown — Pages Router works the same way.",
@@ -317,14 +317,39 @@ function ScannerSetupCard({
     queryFn: async () => apiFetch(`/api/projects/${projectId}/keys`),
   });
 
+  const { data: fields = [] } = useListContentFields(projectId);
+
   const firstKey = keys[0];
   const scannerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}${BASE}/api/public/scanner.js`;
   const keyHint = firstKey ? `${firstKey.keyPrefix}…` : "YOUR_PROJECT_KEY";
 
   const snippet = buildStackSnippet(stack, scannerUrl, keyHint);
 
+  const fieldLines = fields.length > 0
+    ? fields.map(f => {
+        const elementHint =
+          f.type === "image" ? "img element" :
+          f.type === "richtext" ? "rich text / HTML block element" :
+          "text element (heading or paragraph)";
+        return `  - "${f.label}" → find the ${elementHint} for this content → add: data-get-key="${f.label}"`;
+      }).join("\n")
+    : "  (No fields yet — add fields in the Fields tab first, then come back for the full prompt.)";
+
   const replitPrompt = firstKey
-    ? `Add the get CMS scanner script to my Replit app. Make ONLY the change described — do not rename, delete, or modify anything else.\n\nI've already added GET_PROJECT_KEY to my Replit Secrets. Find my main HTML file (usually index.html, or the template file that wraps every page). Just before the closing </body> tag, add this script tag:\n\n<script\n  src="${scannerUrl}"\n  data-key="INSERT_GET_PROJECT_KEY_VALUE_HERE"\n  defer\n></script>\n\nHow to get the data-key value:\n- If this is a server-rendered app (Express + EJS, Handlebars, etc.), read it from process.env.GET_PROJECT_KEY and inject it into the template.\n- If it's a static HTML file, open Replit Secrets, copy GET_PROJECT_KEY, and paste the value directly. The key starts with "${firstKey.keyPrefix}".\n\nRules:\n- Only add this one script tag. Change nothing else.\n- Do not rename or delete any files.\n- Do not touch styles, routes, or other logic.\n- After making the change, show me the exact line you added so I can confirm it looks right.`
+    ? `Set up the get CMS in my Replit app. Make ONLY the changes described — do not rename, delete, or modify anything else.\n\n` +
+      `STEP 1 — Add the scanner script\n` +
+      `I've already added GET_PROJECT_KEY to Replit Secrets. Find my main HTML file (usually index.html, or the template that wraps every page). Just before the closing </body> tag, add:\n\n` +
+      `<script\n  src="${scannerUrl}"\n  data-key="INSERT_GET_PROJECT_KEY_VALUE_HERE"\n  defer\n></script>\n\n` +
+      `How to fill in data-key:\n` +
+      `- Server-rendered app (Express + EJS, Handlebars, etc.) → inject process.env.GET_PROJECT_KEY into the template\n` +
+      `- Static HTML file → open Replit Secrets, copy GET_PROJECT_KEY (it starts with "${firstKey.keyPrefix}"), paste the value directly\n\n` +
+      `STEP 2 — Tag the editable content areas\n` +
+      `For each item below, find the matching element on the page and add the data-get-key attribute. The value must match exactly — same spelling, same capitals.\n\n` +
+      fieldLines + `\n\n` +
+      `Rules:\n` +
+      `- Only add the script tag and data-get-key attributes. Change nothing else.\n` +
+      `- Do not rename or delete files, change styles, or touch any other logic.\n` +
+      `- After ALL changes are done, show me each modified line so I can confirm everything looks right.`
     : null;
 
   const agentPrompt = firstKey
@@ -392,7 +417,7 @@ function ScannerSetupCard({
               Connect your site
             </p>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
-              Two steps: add a small script to your site, then mark anything you want clients to be able to change. When they save an edit, it shows up on your site automatically.
+              Copy the prompt below and paste it into Replit AI. It will add the script <em>and</em> tag all your content areas in one go — nothing to do manually.
             </p>
           </div>
           {onDismiss && (
