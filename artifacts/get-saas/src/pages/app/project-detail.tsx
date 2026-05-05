@@ -392,10 +392,11 @@ function ScannerSetupCard({
   // Verify install: poll the project's lastSeenAt, looking for it to advance
   // past the baseline we captured when the user clicked Verify. We try for
   // ~10s to keep the UI snappy and to keep accidental clicks cheap.
+  type FieldCheckResult = { label: string; found: boolean };
   type VerifyState =
     | { kind: "idle" }
     | { kind: "polling"; baselineMs: number; attempts: number }
-    | { kind: "ok"; at: string }
+    | { kind: "ok"; at: string; fieldResults: FieldCheckResult[] | null }
     | { kind: "fail"; lastSeen?: string | null };
   const [verify, setVerify] = useState<VerifyState>({ kind: "idle" });
 
@@ -418,7 +419,27 @@ function ScannerSetupCard({
         const at = proj?.lastSeenAt as string | null | undefined;
         const atMs = at ? new Date(at).getTime() : 0;
         if (at && atMs > baselineMs) {
-          setVerify({ kind: "ok", at });
+          // Script is alive — now check which fields the scanner actually found.
+          // The snapshot stores exactly what data-get-key labels were on the page.
+          let fieldResults: FieldCheckResult[] | null = null;
+          try {
+            const snap = await apiFetch(
+              `/api/projects/${projectId}/content/pull-from-site`,
+              { method: "POST" }
+            ) as any;
+            const foundLabels = new Set<string>(
+              (snap?.sections ?? []).flatMap((s: any) =>
+                (s.fields ?? []).map((f: any) => f.label as string)
+              )
+            );
+            if (fields.length > 0) {
+              fieldResults = fields.map(f => ({
+                label: f.label,
+                found: foundLabels.has(f.label),
+              }));
+            }
+          } catch { /* no snapshot yet — skip field check */ }
+          setVerify({ kind: "ok", at, fieldResults });
           return;
         }
         if (Date.now() - startedAt >= 10_000) {
@@ -800,16 +821,69 @@ function ScannerSetupCard({
           </div>
 
           {verify.kind === "ok" && (
-            <div data-testid="verify-result-ok" style={{
-              padding: "10px 14px", borderRadius: 10,
-              background: "rgba(16, 185, 129, 0.08)",
-              border: "1px solid rgba(16, 185, 129, 0.25)",
-              color: "#047857",
-              fontSize: type.sm, fontWeight: 600,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <Check style={{ width: 14, height: 14 }} />
-              We just saw your site at {format(new Date(verify.at), "h:mm:ss a")}.
+            <div data-testid="verify-result-ok" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* Script alive banner */}
+              <div style={{
+                padding: "10px 14px", borderRadius: 10,
+                background: "rgba(16, 185, 129, 0.08)",
+                border: "1px solid rgba(16, 185, 129, 0.25)",
+                color: "#047857",
+                fontSize: type.sm, fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <Check style={{ width: 14, height: 14, flexShrink: 0 }} />
+                Script connected at {format(new Date(verify.at), "h:mm:ss a")}.
+              </div>
+
+              {/* Per-field check — only shown when we have a snapshot */}
+              {verify.fieldResults && verify.fieldResults.length > 0 && (() => {
+                const missing = verify.fieldResults.filter(r => !r.found);
+                const allGood = missing.length === 0;
+                return (
+                  <div style={{
+                    padding: "12px 14px", borderRadius: 10,
+                    background: allGood ? "rgba(16,185,129,0.06)" : "rgba(217,119,6,0.07)",
+                    border: `1px solid ${allGood ? "rgba(16,185,129,0.2)" : "rgba(217,119,6,0.25)"}`,
+                    display: "flex", flexDirection: "column", gap: 8,
+                  }}>
+                    <p style={{ fontSize: type.xs, fontWeight: 700, color: allGood ? "#047857" : "#92400e", margin: 0 }}>
+                      {allGood
+                        ? `All ${verify.fieldResults.length} field${verify.fieldResults.length !== 1 ? "s" : ""} tagged correctly`
+                        : `${missing.length} field${missing.length !== 1 ? "s" : ""} not found on the page`}
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {verify.fieldResults.map(r => (
+                        <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {r.found
+                            ? <Check style={{ width: 13, height: 13, color: "#10b981", flexShrink: 0 }} />
+                            : <XIcon style={{ width: 13, height: 13, color: "#f59e0b", flexShrink: 0 }} />}
+                          <code style={{
+                            fontSize: 12, fontFamily: "ui-monospace, Menlo, monospace",
+                            color: r.found ? "#047857" : "#92400e",
+                          }}>
+                            data-get-key="{r.label}"
+                          </code>
+                          {!r.found && (
+                            <span style={{ fontSize: type.xs, color: tone[500] }}>— not found on page</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {!allGood && (
+                      <p style={{ fontSize: type.xs, color: "#92400e", margin: 0, lineHeight: 1.55 }}>
+                        The missing fields aren't tagged yet. Run the Replit AI prompt again, or manually add <code style={{ fontFamily: "monospace" }}>data-get-key="..."</code> to the right elements.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* No fields defined yet */}
+              {verify.fieldResults && verify.fieldResults.length === 0 && (
+                <p style={{ fontSize: type.xs, color: tone[500], margin: 0 }}>
+                  No fields set up yet — go to the Fields tab to add what clients can edit.
+                </p>
+              )}
             </div>
           )}
           {verify.kind === "fail" && (
