@@ -442,7 +442,11 @@ export default function ClientEditor() {
           // not be able to edit them even when the field itself is not locked).
           const isViewerRole = myRoleRef.current === "viewer";
           if (!field.isLocked && !isViewerRole) {
-            const input = container.querySelector<HTMLElement>("input, textarea");
+            // Include button[role="switch"] so boolean fields (shadcn Switch)
+            // receive focus, in addition to text/textarea/url/number inputs.
+            const input = container.querySelector<HTMLElement>(
+              'input, textarea, button[role="switch"]',
+            );
             if (input) setTimeout(() => input.focus(), 200);
           }
         }

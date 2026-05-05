@@ -843,9 +843,15 @@ const SCANNER_SCRIPT = /* javascript */ `
           tip.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 220)) + 'px';
         });
 
-        // Hide tooltip on mouseout
+        // Hide tooltip on mouseout — only when the mouse actually leaves the
+        // tagged element, not when it moves to a child node of the same element.
         document.addEventListener('mouseout', function(e) {
-          if (nearestKey(e.target)) tip.style.display = 'none';
+          var el = nearestKey(e.target);
+          if (!el) return;
+          // relatedTarget is where the mouse is going. If it's still inside
+          // the same tagged ancestor we do nothing (avoids flicker on children).
+          if (el.contains(e.relatedTarget)) return;
+          tip.style.display = 'none';
         });
 
         // Intercept click — use capture phase to run before any site handlers
