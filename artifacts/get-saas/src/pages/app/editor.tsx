@@ -287,12 +287,47 @@ export default function ClientEditor() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const siteUrl: string | null = (project as any)?.lastSeenOrigin ?? null;
+  const siteUrl: string | null = project?.lastSeenOrigin ?? null;
   const showPreviewPanel = windowWidth >= 900;
+
+  // "loading" while the iframe is fetching; "loaded" on success;
+  // "blocked" when X-Frame-Options or a network error prevents rendering.
+  const [iframeStatus, setIframeStatus] = useState<"loading" | "loaded" | "blocked">("loading");
+
+  // Reset status whenever the URL changes.
+  useEffect(() => {
+    if (siteUrl) setIframeStatus("loading");
+  }, [siteUrl]);
+
+  // Timeout: if onLoad hasn't fired within 10 s, assume blocked.
+  useEffect(() => {
+    if (!siteUrl || iframeStatus !== "loading") return;
+    const t = setTimeout(() => setIframeStatus("blocked"), 10_000);
+    return () => clearTimeout(t);
+  }, [siteUrl, iframeStatus]);
+
+  const handleIframeLoad = () => {
+    try {
+      // If we can access contentDocument without a SecurityError, the frame
+      // loaded. An empty body (childElementCount === 0) means the browser
+      // silently blocked it (X-Frame-Options / CSP frame-ancestors).
+      const doc = iframeRef.current?.contentDocument;
+      if (doc !== null && doc !== undefined && (doc.body?.childElementCount ?? 0) === 0) {
+        setIframeStatus("blocked");
+      } else {
+        setIframeStatus("loaded");
+      }
+    } catch {
+      // SecurityError → cross-origin frame loaded successfully; we just
+      // can't read the document from here.
+      setIframeStatus("loaded");
+    }
+  };
 
   const reloadIframe = () => {
     const iframe = iframeRef.current;
     if (!iframe) return;
+    setIframeStatus("loading");
     try {
       iframe.contentWindow?.location.reload();
     } catch {
@@ -1109,22 +1144,105 @@ export default function ClientEditor() {
                 <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55, maxWidth: 280 }}>
                   Connect your site first and the live preview will appear here automatically.
                 </p>
+                <a
+                  href={`/app/projects/${projectId}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: 4,
+                    fontSize: type.sm,
+                    fontWeight: 600,
+                    color: BRAND.ink,
+                    textDecoration: "none",
+                    padding: "8px 16px",
+                    borderRadius: 10,
+                    border: `1px solid ${line.base}`,
+                  }}
+                >
+                  Go to setup
+                  <ArrowRight style={{ width: 13, height: 13 }} />
+                </a>
               </div>
             ) : (
               /* Live site iframe */
               <>
-                <iframe
-                  ref={iframeRef}
-                  src={siteUrl}
-                  title="Site preview"
-                  style={{
-                    flex: 1,
-                    border: "none",
-                    display: "block",
-                    width: "100%",
-                  }}
-                />
-                {/* Fallback for X-Frame-Options blocks — always shown */}
+                {/* Blocked overlay — shown when X-Frame-Options prevents rendering */}
+                {iframeStatus === "blocked" ? (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 40,
+                      gap: 12,
+                      textAlign: "center",
+                      background: tone[50],
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        background: "rgba(255,215,71,0.18)",
+                        border: "1px solid rgba(255,215,71,0.55)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <AlertTriangle style={{ width: 20, height: 20, color: "#b45309" }} />
+                    </div>
+                    <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
+                      Preview unavailable
+                    </p>
+                    <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55, maxWidth: 300 }}>
+                      Your site doesn't allow previews — open it in a new tab instead.
+                    </p>
+                    <a
+                      href={siteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: 4,
+                        fontSize: type.sm,
+                        fontWeight: 600,
+                        color: BRAND.ink,
+                        textDecoration: "none",
+                        padding: "8px 16px",
+                        borderRadius: 10,
+                        border: `1px solid ${line.base}`,
+                      }}
+                    >
+                      Open site in new tab
+                      <ExternalLink style={{ width: 13, height: 13 }} />
+                    </a>
+                  </div>
+                ) : (
+                  <iframe
+                    ref={iframeRef}
+                    src={siteUrl}
+                    title="Site preview"
+                    onLoad={handleIframeLoad}
+                    onError={() => setIframeStatus("blocked")}
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      display: "block",
+                      width: "100%",
+                      opacity: iframeStatus === "loading" ? 0.4 : 1,
+                      transition: "opacity 0.3s ease",
+                    }}
+                  />
+                )}
+                {/* Always-visible footer: quick link and status hint */}
                 <div
                   style={{
                     flexShrink: 0,
@@ -1138,7 +1256,7 @@ export default function ClientEditor() {
                   }}
                 >
                   <p style={{ fontSize: type.xs, color: tone[400], margin: 0 }}>
-                    Not seeing the preview?
+                    {iframeStatus === "loading" ? "Loading preview…" : "Live preview"}
                   </p>
                   <a
                     href={siteUrl}
