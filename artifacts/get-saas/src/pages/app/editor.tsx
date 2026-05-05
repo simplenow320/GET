@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@workspace/object-storage-web";
 import {
   Loader2, Save, FileEdit, Lock, Check, RefreshCw, Undo2, AlertTriangle, X,
-  HelpCircle, ArrowRight,
+  HelpCircle, ArrowRight, ExternalLink,
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
@@ -276,6 +276,33 @@ export default function ClientEditor() {
     () => localStorage.getItem(SKIP_WARN_KEY) === "true",
   );
 
+  // Live preview iframe
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [windowWidth, setWindowWidth] = useState(
+    () => typeof window !== "undefined" ? window.innerWidth : 1200,
+  );
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const siteUrl: string | null = (project as any)?.lastSeenOrigin ?? null;
+  const showPreviewPanel = windowWidth >= 900;
+
+  const reloadIframe = () => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    try {
+      iframe.contentWindow?.location.reload();
+    } catch {
+      // Cross-origin — fall back to re-assigning src
+      const src = iframe.src;
+      iframe.src = "";
+      iframe.src = src;
+    }
+  };
+
   // First-visit intro modal — once per project per device. The "?" button in
   // the header re-opens it.
   const introKey = `get:editor-intro-seen:${projectId}`;
@@ -288,6 +315,7 @@ export default function ClientEditor() {
       await refetch();
       setJustRefreshed(true);
       setTimeout(() => setJustRefreshed(false), 1800);
+      reloadIframe();
     } finally {
       setIsRefreshing(false);
     }
@@ -433,6 +461,8 @@ export default function ClientEditor() {
           try { localStorage.removeItem(draftKey(fieldId)); } catch {}
           refetch();
           setSavingField(null);
+          // Reload the preview so the scanner picks up the new value.
+          reloadIframe();
         },
         onError: (err) => {
           toast({ variant: "destructive", title: "Save failed", description: err.message });
@@ -616,6 +646,30 @@ export default function ClientEditor() {
           >
             <HelpCircle style={{ width: 14, height: 14 }} />
           </button>
+          {/* Open site in new tab — always visible */}
+          {siteUrl && (
+            <a
+              href={siteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open site in new tab"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                border: `1px solid ${line.base}`,
+                background: "transparent",
+                cursor: "pointer",
+                color: tone[500],
+                textDecoration: "none",
+              }}
+            >
+              <ExternalLink style={{ width: 14, height: 14 }} />
+            </a>
+          )}
           {/* Refresh button */}
           <button
             onClick={handleRefresh}
@@ -673,7 +727,17 @@ export default function ClientEditor() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "44px clamp(20px, 4vw, 32px) 80px" }}>
+      {/* Two-column body: fields (left) + live preview (right) */}
+      <div style={{ display: "flex", alignItems: "flex-start" }}>
+        {/* ── Left panel: field list ─────────────────────────────────────── */}
+        <div
+          style={{
+            flex: showPreviewPanel ? "0 0 42%" : "1 1 auto",
+            minWidth: 0,
+            borderRight: showPreviewPanel ? `1px solid ${line.faint}` : "none",
+          }}
+        >
+        <div style={{ maxWidth: showPreviewPanel ? "none" : 640, margin: showPreviewPanel ? "0" : "0 auto", padding: "44px clamp(20px, 4vw, 32px) 80px" }}>
         <div style={{ marginBottom: 40 }}>
           <h1
             style={{
@@ -995,6 +1059,109 @@ export default function ClientEditor() {
             />
           </div>
         </div>
+        </div>
+        </div>
+
+        {/* ── Right panel: live preview ──────────────────────────────────── */}
+        {showPreviewPanel && (
+          <div
+            style={{
+              flex: "0 0 58%",
+              position: "sticky",
+              top: 60,
+              height: "calc(100dvh - 60px)",
+              display: "flex",
+              flexDirection: "column",
+              background: tone[50],
+            }}
+          >
+            {!siteUrl ? (
+              /* No URL yet — site hasn't connected */
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 40,
+                  gap: 12,
+                  textAlign: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 14,
+                    background: tone[100],
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: 4,
+                  }}
+                >
+                  <ExternalLink style={{ width: 20, height: 20, color: tone[400] }} />
+                </div>
+                <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
+                  No preview yet
+                </p>
+                <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55, maxWidth: 280 }}>
+                  Connect your site first and the live preview will appear here automatically.
+                </p>
+              </div>
+            ) : (
+              /* Live site iframe */
+              <>
+                <iframe
+                  ref={iframeRef}
+                  src={siteUrl}
+                  title="Site preview"
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    display: "block",
+                    width: "100%",
+                  }}
+                />
+                {/* Fallback for X-Frame-Options blocks — always shown */}
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: "8px 16px",
+                    borderTop: `1px solid ${line.faint}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    background: BRAND.paper,
+                  }}
+                >
+                  <p style={{ fontSize: type.xs, color: tone[400], margin: 0 }}>
+                    Not seeing the preview?
+                  </p>
+                  <a
+                    href={siteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: type.xs,
+                      fontWeight: 600,
+                      color: BRAND.ink,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Open in new tab
+                    <ExternalLink style={{ width: 11, height: 11 }} />
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
