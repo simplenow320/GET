@@ -67,14 +67,71 @@ function parseDraft(raw: string | null): StoredDraft | null {
 }
 
 // ---------------------------------------------------------------------------
+// Client-side rich-text sanitizer
+// Mirrors the server allowlist in artifacts/api-server/src/lib/sanitize.ts
+// (sanitizeRichContent). Used only for rendering local draft previews —
+// the server still re-sanitizes on save.
+// ---------------------------------------------------------------------------
+const RICH_ALLOWED_TAGS = new Set(["B","STRONG","I","EM","UL","OL","LI","A","BR","P"]);
+// Tags whose contents should be removed entirely (not unwrapped) to mirror
+// the server sanitizer's `stripIgnoreTagBody: ["script", "style"]` option.
+const RICH_DROP_WITH_BODY = new Set(["SCRIPT","STYLE"]);
+function sanitizeRichClient(input: string): string {
+  if (!input) return "";
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") return "";
+  const doc = new DOMParser().parseFromString(`<div id="__r">${input}</div>`, "text/html");
+  const root = doc.getElementById("__r");
+  if (!root) return "";
+  const walk = (node: Element) => {
+    // Iterate over a snapshot since we may mutate the live list.
+    const children = Array.from(node.children);
+    for (const child of children) {
+      if (RICH_DROP_WITH_BODY.has(child.tagName)) {
+        // Drop the element AND its contents.
+        child.parentNode?.removeChild(child);
+        continue;
+      }
+      if (!RICH_ALLOWED_TAGS.has(child.tagName)) {
+        // Unwrap: replace with its sanitized children.
+        walk(child);
+        const parent = child.parentNode;
+        if (parent) {
+          while (child.firstChild) parent.insertBefore(child.firstChild, child);
+          parent.removeChild(child);
+        }
+        continue;
+      }
+      // Strip all attributes except a[href] with safe protocol.
+      for (const attr of Array.from(child.attributes)) {
+        if (child.tagName === "A" && attr.name === "href") {
+          const v = attr.value.trim().toLowerCase();
+          if (v.startsWith("javascript:") || v.startsWith("vbscript:") || v.startsWith("data:")) {
+            child.removeAttribute(attr.name);
+          }
+          continue;
+        }
+        child.removeAttribute(attr.name);
+      }
+      walk(child);
+    }
+  };
+  walk(root);
+  return root.innerHTML;
+}
+
+// ---------------------------------------------------------------------------
 // Save-confirmation dialog
 // ---------------------------------------------------------------------------
 function SaveWarningDialog({
   fieldLabel,
+  fieldType,
+  value,
   onConfirm,
   onCancel,
 }: {
   fieldLabel: string;
+  fieldType: string;
+  value: string;
   onConfirm: (skipNext: boolean) => void;
   onCancel: () => void;
 }) {
@@ -162,6 +219,29 @@ function SaveWarningDialog({
         <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65 }}>
           Saving this will make it visible to everyone visiting the site — usually within a few minutes. Make sure you're happy with it before continuing.
         </p>
+
+        {/* Formatted preview — only for richtext fields, so the user can
+            verify their formatting before publishing. */}
+        {fieldType === "richtext" && value && (
+          <div
+            style={{
+              border: `1px solid ${line.base}`,
+              background: tone[50],
+              borderRadius: 10,
+              padding: "10px 12px",
+              maxHeight: 180,
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: tone[500], textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
+              Preview
+            </div>
+            <div
+              style={{ fontSize: type.sm, color: BRAND.ink, lineHeight: 1.55 }}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichClient(value) }}
+            />
+          </div>
+        )}
 
         {/* Don't show again */}
         <label
@@ -788,6 +868,8 @@ export default function ClientEditor() {
       {pendingFieldId && pendingField && (
         <SaveWarningDialog
           fieldLabel={pendingField.label}
+          fieldType={pendingField.type}
+          value={localValues[pendingField.id] ?? ""}
           onConfirm={handleDialogConfirm}
           onCancel={handleDialogCancel}
         />
