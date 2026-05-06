@@ -195,6 +195,35 @@ export default function ProjectDetail() {
               {project.description || "No description"}
             </p>
           </div>
+          {/* Primary CTA — opens the side-by-side live editor for this project.
+              Available to every role, including viewers (the editor itself
+              gates write actions by myRole). */}
+          <Link href={`/app/editor/${projectId}`}>
+            <button
+              data-testid="button-open-editor"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 18px",
+                background: BRAND.ink,
+                color: BRAND.paper,
+                border: "none",
+                borderRadius: 10,
+                fontSize: type.sm,
+                fontWeight: 600,
+                cursor: "pointer",
+                flexShrink: 0,
+                marginTop: 2,
+                transition: `opacity 0.15s ${ease}`,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+            >
+              <FileEdit style={{ width: 15, height: 15 }} />
+              Open editor
+            </button>
+          </Link>
         </div>
 
         {/* Tabs */}
