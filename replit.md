@@ -39,6 +39,7 @@ The project is built as a monorepo using `pnpm workspaces` with Node.js 24 and T
     - **XSS Hardening:** All user-supplied strings are sanitized using `xss({ whiteList: {} })` before persistence. The frontend avoids rendering user-generated HTML.
     - **Token Storage:** All sensitive credentials (sessions, project keys, reset tokens, invite tokens) are stored as SHA-256 hashes.
 - **Critical Infrastructure:** Public API routes (`/api/public/*`) are intentionally embeddable with permissive CORS and `Cross-Origin-Resource-Policy: cross-origin`. Sensitive endpoints must not be mounted under this path.
+- **Project-key origin allowlist:** `requireProjectKey` enforces the project's `domainsTable` allowlist. If a project has zero domains configured, requests from any origin are accepted (back-compat for fresh installs). If at least one domain is configured and the request carries an Origin/Referer header, the hostname must match exactly OR be a subdomain of an allowed apex (e.g. `app.example.com` matches `example.com`; `www.` is normalized). Server-side requests with no Origin/Referer (SSR, cron, curl) are always allowed. Mismatches return 403 and are logged via `req.log.warn`.
 - **Database Integrity:** Foreign key relationships are explicitly defined with `CASCADE` for project-scoped children and user-related auth/memberships, and `RESTRICT` for critical relationships like `projects.owner_id`.
 
 **Feature Specifications:**
