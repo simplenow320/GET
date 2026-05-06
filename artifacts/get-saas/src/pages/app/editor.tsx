@@ -1248,12 +1248,13 @@ export default function ClientEditor() {
             paddingTop: 24,
             borderTop: `1px solid ${line.faint}`,
             display: "flex",
-            alignItems: "center",
+            alignItems: windowWidth < 500 ? "flex-start" : "center",
             justifyContent: "space-between",
-            gap: 16,
+            flexDirection: windowWidth < 500 ? "column" : "row",
+            gap: windowWidth < 500 ? 12 : 16,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: type.sm, fontWeight: 600, color: BRAND.ink, marginBottom: 2 }}>
               Save confirmation
             </p>
