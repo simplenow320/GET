@@ -184,9 +184,10 @@ const SCANNER_SCRIPT = /* javascript */ `
   // element that carries a [data-get-key="Field Label"] attribute.
   //
   // Type rules:
-  //   image  → img.src; background-image on non-img elements
-  //   url    → element.href (works on <a>)
-  //   text / richtext / number / anything else → element.textContent
+  //   image   → img.src; background-image on non-img elements
+  //   url     → element.href (works on <a>)
+  //   richtext → element.innerHTML (value is server-sanitised HTML)
+  //   text / number / anything else → element.textContent
   //
   // Fire-and-update: we never block the initial render. Default content in the
   // HTML shows first, then swaps as soon as the fetch resolves (typically one
@@ -219,6 +220,9 @@ const SCANNER_SCRIPT = /* javascript */ `
           }
         } else if (type === 'url') {
           if ('href' in el) { el.href = value; } else { el.setAttribute('href', value); }
+        } else if (type === 'richtext') {
+          // Value is server-sanitised HTML — set as innerHTML so formatting renders.
+          el.innerHTML = value;
         } else {
           el.textContent = value;
         }
@@ -892,12 +896,13 @@ const SCANNER_SCRIPT = /* javascript */ `
         }
 
         // Position the mini-toolbar above (or below) its target element.
-        function positionToolbar(toolbar, el) {
+        // tbwHint: estimated toolbar width in px (used for edge clamping before layout).
+        function positionToolbar(toolbar, el, tbwHint) {
           var rect = el.getBoundingClientRect();
+          var tbw = tbwHint || 168;
           var top = rect.top - 44;
           if (top < 8) top = rect.bottom + 8;
           var left = rect.left;
-          var tbw = 168;
           if (left + tbw > window.innerWidth - 8) left = window.innerWidth - tbw - 8;
           toolbar.style.top = Math.max(4, top) + 'px';
           toolbar.style.left = Math.max(4, left) + 'px';
@@ -914,9 +919,64 @@ const SCANNER_SCRIPT = /* javascript */ `
           return b;
         }
 
+        // Compact format button for the rich-text toolbar (Bold, Italic, etc.)
+        function makeFormatBtn(label) {
+          var b = document.createElement('button');
+          b.textContent = label;
+          b.setAttribute('style',
+            'background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.20);' +
+            'cursor:pointer;padding:3px 8px;border-radius:5px;font-size:12px;font-weight:700;' +
+            'font-family:system-ui,-apple-system,sans-serif;line-height:1.4;flex-shrink:0;' +
+            'min-width:26px;text-align:center;');
+          return b;
+        }
+
+        // ── Rich-text HTML sanitiser ──────────────────────────────────────
+        // Strips everything except a safe allowlist before sending via postMessage.
+        // Allowed: b, strong, i, em, ul, ol, li, a[href], br, p
+        function sanitizeRich(html) {
+          if (!html) return '';
+          var ALLOWED = { B:1, STRONG:1, I:1, EM:1, UL:1, OL:1, LI:1, A:1, BR:1, P:1 };
+          function processChildren(parent) {
+            var i = 0;
+            while (i < parent.childNodes.length) {
+              var node = parent.childNodes[i];
+              if (node.nodeType === 1) {
+                var tag = node.tagName.toUpperCase();
+                if (ALLOWED[tag]) {
+                  // Remove all attributes except href on <a>; block dangerous protocols
+                  var attrs = Array.prototype.slice.call(node.attributes);
+                  for (var ai = 0; ai < attrs.length; ai++) {
+                    if (tag === 'A' && attrs[ai].name === 'href') continue;
+                    node.removeAttribute(attrs[ai].name);
+                  }
+                  if (tag === 'A') {
+                    var h = (node.getAttribute('href') || '').trim();
+                    if (/^(javascript|data|vbscript):/i.test(h)) node.removeAttribute('href');
+                  }
+                  processChildren(node);
+                  i++;
+                } else {
+                  // Unwrap: hoist children before this node, then delete it.
+                  // Do NOT increment — newly-hoisted children sit at index i.
+                  while (node.firstChild) parent.insertBefore(node.firstChild, node);
+                  parent.removeChild(node);
+                }
+              } else {
+                i++;
+              }
+            }
+          }
+          try {
+            var doc = (new DOMParser()).parseFromString(html, 'text/html');
+            processChildren(doc.body);
+            return doc.body.innerHTML;
+          } catch(e) { return ''; }
+        }
+
         // Deactivate the active inline edit.
-        // revert=true  → restore original text and flush get:field-input with it.
-        // revert=false → flush current el.textContent before tearing down, so
+        // revert=true  → restore original content and flush get:field-input with it.
+        // revert=false → flush current content before tearing down, so
         //                Escape / click-outside never silently drop the last
         //                keystrokes that the debounce timer hadn't sent yet.
         function deactivate(revert) {
@@ -925,9 +985,9 @@ const SCANNER_SCRIPT = /* javascript */ `
           activeEdit = null;
           // Cancel any pending debounce — we are about to flush synchronously.
           if (ae.inputTimer) { clearTimeout(ae.inputTimer); ae.inputTimer = null; }
-          // Capture current text BEFORE removing contenteditable so textContent
-          // still reflects what the user typed.
-          var finalText = ae.el.textContent || '';
+          // Capture current content BEFORE removing contenteditable.
+          // For richtext we use sanitized innerHTML; for plain text we use textContent.
+          var finalText = ae.isRich ? sanitizeRich(ae.el.innerHTML || '') : ae.el.textContent || '';
           ae.el.removeAttribute('contenteditable');
           ae.el.style.outline = ae.originalOutline;
           ae.el.style.outlineOffset = ae.originalOutlineOffset;
@@ -938,7 +998,8 @@ const SCANNER_SCRIPT = /* javascript */ `
             ae.toolbar.parentNode.removeChild(ae.toolbar);
           }
           if (revert) {
-            ae.el.textContent = ae.originalText;
+            if (ae.isRich) { ae.el.innerHTML = ae.originalText; }
+            else { ae.el.textContent = ae.originalText; }
             try {
               window.parent.postMessage(
                 { type: 'get:field-input', label: ae.label, value: ae.originalText }, '*');
@@ -956,16 +1017,26 @@ const SCANNER_SCRIPT = /* javascript */ `
         }
 
         // Activate inline editing on a [data-get-key] text element.
+        // For 'richtext' fields the toolbar gains formatting buttons (Bold, Italic,
+        // Bullet list, Link) and the element is edited as HTML instead of plaintext.
         function activate(el, lbl) {
           if (activeEdit) deactivate(false);
 
-          var originalText = el.textContent || '';
+          // Detect field type from the server-populated map.
+          var isRich = contentTypeMap[lbl] === 'richtext';
+
+          // Capture original content — innerHTML for richtext, textContent for plain.
+          var originalText = isRich ? (el.innerHTML || '') : (el.textContent || '');
           var originalOutline = el.style.outline || '';
           var originalOutlineOffset = el.style.outlineOffset || '';
 
-          // Make the element editable — prefer plaintext-only to block HTML paste.
-          try { el.contentEditable = 'plaintext-only'; } catch(ex) {}
-          if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
+          // Make editable — richtext uses HTML mode; plain text prefers plaintext-only.
+          if (isRich) {
+            el.contentEditable = 'true';
+          } else {
+            try { el.contentEditable = 'plaintext-only'; } catch(ex) {}
+            if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
+          }
 
           el.style.outline = '2px solid rgba(59,130,246,0.70)';
           el.style.outlineOffset = '3px';
@@ -973,22 +1044,52 @@ const SCANNER_SCRIPT = /* javascript */ `
           // ── Floating mini-toolbar ──────────────────────────────────────
           var toolbar = document.createElement('div');
           toolbar.setAttribute('style',
-            'position:fixed;z-index:2147483647;display:flex;align-items:center;gap:6px;' +
+            'position:fixed;z-index:2147483647;display:flex;align-items:center;gap:5px;' +
             'background:rgba(26,26,46,0.95);border-radius:8px;padding:5px 8px;' +
             'box-shadow:0 4px 20px rgba(0,0,0,0.38);pointer-events:auto;' +
-            'font-family:system-ui,-apple-system,sans-serif;');
+            'font-family:system-ui,-apple-system,sans-serif;flex-wrap:nowrap;');
+
+          // ── Rich-text format buttons (richtext fields only) ────────────
+          if (isRich) {
+            var boldBtn   = makeFormatBtn('B');
+            var italicBtn = makeFormatBtn('I');
+            var listBtn   = makeFormatBtn('\\u2022');
+            var linkBtn   = makeFormatBtn('\\uD83D\\uDD17');
+            boldBtn.title   = 'Bold';
+            italicBtn.title = 'Italic';
+            listBtn.title   = 'Bullet list';
+            linkBtn.title   = 'Insert link';
+            // Style the Bold and Italic labels for visual clarity
+            boldBtn.style.fontStyle   = 'normal';
+            italicBtn.style.fontStyle = 'italic';
+            toolbar.appendChild(boldBtn);
+            toolbar.appendChild(italicBtn);
+            toolbar.appendChild(listBtn);
+            toolbar.appendChild(linkBtn);
+            // Separator between format buttons and Save/Cancel
+            var sep = document.createElement('div');
+            sep.setAttribute('style',
+              'width:1px;background:rgba(255,255,255,0.22);align-self:stretch;' +
+              'margin:0 2px;flex-shrink:0;');
+            toolbar.appendChild(sep);
+          }
 
           var saveBtn   = makeBtn('\\u2713 Save',   '#facc15', '#1a1a2e');
           var cancelBtn = makeBtn('\\u2715 Cancel', 'rgba(255,255,255,0.13)', '#fff');
           toolbar.appendChild(saveBtn);
           toolbar.appendChild(cancelBtn);
           (document.body || document.documentElement).appendChild(toolbar);
-          positionToolbar(toolbar, el);
+          positionToolbar(toolbar, el, isRich ? 310 : 168);
+
+          // ── Helper: get the current edited value ───────────────────────
+          function getValue() {
+            return isRich ? sanitizeRich(el.innerHTML || '') : el.textContent || '';
+          }
 
           // ── Input → debounced postMessage ──────────────────────────────
           var inputTimer = null;
           function onInput() {
-            var val = el.textContent || '';
+            var val = getValue();
             if (inputTimer) clearTimeout(inputTimer);
             inputTimer = setTimeout(function() {
               inputTimer = null;
@@ -1001,13 +1102,32 @@ const SCANNER_SCRIPT = /* javascript */ `
             if (activeEdit) activeEdit.inputTimer = inputTimer;
           }
 
-          // ── Paste: strip HTML, insert plain text ───────────────────────
+          // ── Paste handler ──────────────────────────────────────────────
+          // Rich fields: allow HTML paste but sanitize it.
+          // Plain fields: strip to plain text only.
           function onPaste(e) {
             e.preventDefault();
-            var text = '';
-            try { text = (e.clipboardData || window.clipboardData).getData('text/plain'); } catch(ex) {}
-            try { document.execCommand('insertText', false, text); } catch(ex) {
-              el.textContent = (el.textContent || '') + text;
+            if (isRich) {
+              var html = '';
+              try { html = (e.clipboardData || window.clipboardData).getData('text/html'); } catch(ex) {}
+              if (html) {
+                html = sanitizeRich(html);
+                try { document.execCommand('insertHTML', false, html); } catch(ex) {
+                  var pt = '';
+                  try { pt = (e.clipboardData || window.clipboardData).getData('text/plain'); } catch(ex2) {}
+                  try { document.execCommand('insertText', false, pt); } catch(ex3) { el.innerHTML += pt; }
+                }
+              } else {
+                var plainText = '';
+                try { plainText = (e.clipboardData || window.clipboardData).getData('text/plain'); } catch(ex) {}
+                try { document.execCommand('insertText', false, plainText); } catch(ex) { el.innerHTML += plainText; }
+              }
+            } else {
+              var text = '';
+              try { text = (e.clipboardData || window.clipboardData).getData('text/plain'); } catch(ex) {}
+              try { document.execCommand('insertText', false, text); } catch(ex) {
+                el.textContent = (el.textContent || '') + text;
+              }
             }
           }
 
@@ -1024,12 +1144,47 @@ const SCANNER_SCRIPT = /* javascript */ `
           el.addEventListener('keydown', onKeydown);
           el.addEventListener('paste', onPaste);
 
+          // ── Format button handlers (richtext only) ─────────────────────
+          // mousedown with preventDefault keeps focus on the contenteditable el.
+          if (isRich) {
+            function attachFormat(btn, cmd, promptUrl) {
+              btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+              btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                el.focus();
+                if (promptUrl) {
+                  var url = prompt('Enter URL (e.g. https://example.com):', 'https://');
+                  if (url) {
+                    // Strip dangerous protocols before inserting
+                    if (!/^(javascript|data|vbscript):/i.test(url.trim())) {
+                      try { document.execCommand('createLink', false, url); } catch(ex) {}
+                    }
+                  }
+                } else {
+                  try { document.execCommand(cmd, false, null); } catch(ex) {}
+                }
+                // execCommand fires 'input' automatically in most browsers;
+                // fall back to a manual flush for browsers that don't.
+                setTimeout(function() {
+                  try {
+                    window.parent.postMessage(
+                      { type: 'get:field-input', label: lbl, value: getValue() }, '*');
+                  } catch(e) {}
+                }, 0);
+              });
+            }
+            attachFormat(boldBtn,   'bold',                   false);
+            attachFormat(italicBtn, 'italic',                 false);
+            attachFormat(listBtn,   'insertUnorderedList',    false);
+            attachFormat(linkBtn,   null,                     true);
+          }
+
           // ── Toolbar button handlers ────────────────────────────────────
           // mousedown prevents the blur from firing before the click.
           saveBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
           saveBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            var val = el.textContent || '';
+            var val = getValue();
             if (activeEdit && activeEdit.inputTimer) {
               clearTimeout(activeEdit.inputTimer);
               activeEdit.inputTimer = null;
@@ -1051,7 +1206,7 @@ const SCANNER_SCRIPT = /* javascript */ `
           });
 
           activeEdit = {
-            el: el, label: lbl,
+            el: el, label: lbl, isRich: isRich,
             originalText: originalText,
             originalOutline: originalOutline,
             originalOutlineOffset: originalOutlineOffset,

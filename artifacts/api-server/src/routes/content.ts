@@ -3,7 +3,7 @@ import { db, contentFieldsTable, draftsTable, contentSnapshotsTable, projectsTab
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateContentFieldBody, UpdateContentFieldBody } from "@workspace/api-zod";
-import { sanitizeContent } from "../lib/sanitize";
+import { sanitizeContent, sanitizeRichContent } from "../lib/sanitize";
 import { logAudit } from "../lib/audit";
 import { FieldLabel, ContentValue, SelectorString, parseIdParam } from "../lib/validation";
 import { z } from "zod";
@@ -11,6 +11,11 @@ import { z } from "zod";
 const router = Router({ mergeParams: true });
 
 const FIELD_TYPES = ["text", "richtext", "image", "url", "number", "boolean"] as const;
+
+/** Pick the right sanitizer based on field type — richtext keeps safe HTML tags. */
+function sanitizeForType(value: string, type: string): string {
+  return type === "richtext" ? sanitizeRichContent(value) : sanitizeContent(value);
+}
 
 const StrictCreateField = z.object({
   label: FieldLabel,
@@ -67,7 +72,7 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
       label: parsed.data.label,
       type: parsed.data.type,
       selector: parsed.data.selector ?? null,
-      value: parsed.data.value ? sanitizeContent(parsed.data.value) : null,
+      value: parsed.data.value ? sanitizeForType(parsed.data.value, parsed.data.type) : null,
     })
     .returning();
 
@@ -125,14 +130,14 @@ router.patch(
     if (data.isLocked !== undefined) updatePayload.isLocked = data.isLocked;
     if (data.label !== undefined) updatePayload.label = data.label;
     if (data.value !== undefined)
-      updatePayload.value = data.value === null ? null : sanitizeContent(data.value);
+      updatePayload.value = data.value === null ? null : sanitizeForType(data.value, field.type);
 
     let sanitizedDraft: string | null = null;
     // Track whether this save bypassed the review queue so the audit log and
     // response copy can reflect what really happened.
     let didAutoPublish = false;
     if (data.draftValue !== undefined) {
-      sanitizedDraft = data.draftValue === null ? null : sanitizeContent(data.draftValue);
+      sanitizedDraft = data.draftValue === null ? null : sanitizeForType(data.draftValue, field.type);
 
       const isOwnerOrAdmin = ["owner", "admin"].includes(role);
 

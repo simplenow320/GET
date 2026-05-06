@@ -7,7 +7,6 @@ import {
   getGetProjectQueryKey,
 } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@workspace/object-storage-web";
@@ -1161,18 +1160,11 @@ export default function ClientEditor() {
                 )}
 
                 {field.type === "richtext" && (
-                  <Textarea
+                  <RichTextField
                     value={localValues[field.id] || ""}
-                    onChange={(e) => handleValueChange(field.id, e.target.value)}
-                    disabled={field.isLocked}
-                    style={{
-                      ...fieldInputStyle,
-                      height: "auto",
-                      minHeight: 140,
-                      resize: "vertical",
-                      lineHeight: 1.6,
-                      padding: "12px 14px",
-                    }}
+                    disabled={!!field.isLocked}
+                    onChange={(v) => handleValueChange(field.id, v)}
+                    fieldInputStyle={fieldInputStyle}
                   />
                 )}
 
@@ -1478,6 +1470,133 @@ export default function ClientEditor() {
         )}
       </div>
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RichTextField — contenteditable panel editor with Bold / Italic / List / Link
+// ────────────────────────────────────────────────────────────────────────────
+
+function RichTextField({
+  value,
+  disabled,
+  onChange,
+  fieldInputStyle,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (v: string) => void;
+  fieldInputStyle: React.CSSProperties;
+}) {
+  const editableRef = useRef<HTMLDivElement>(null);
+  const isFocused = useRef(false);
+
+  // Sync external value → DOM, but only when the field isn't being actively edited.
+  // This prevents cursor-jump when React re-renders mid-keystroke.
+  useEffect(() => {
+    const el = editableRef.current;
+    if (!el || isFocused.current) return;
+    if (el.innerHTML !== value) {
+      el.innerHTML = value;
+    }
+  }, [value]);
+
+  const handleInput = () => {
+    const html = editableRef.current?.innerHTML ?? "";
+    onChange(html);
+  };
+
+  const execFormat = (cmd: string, val?: string) => {
+    if (disabled) return;
+    editableRef.current?.focus();
+    try {
+      document.execCommand(cmd, false, val);
+    } catch {}
+    onChange(editableRef.current?.innerHTML ?? "");
+  };
+
+  const handleLinkClick = () => {
+    const url = prompt("Enter URL:", "https://");
+    if (url && !/^(javascript|data|vbscript):/i.test(url.trim())) {
+      execFormat("createLink", url);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {!disabled && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <RichFormatBtn onMouseDown={(e) => { e.preventDefault(); execFormat("bold"); }} title="Bold">
+            <strong>B</strong>
+          </RichFormatBtn>
+          <RichFormatBtn onMouseDown={(e) => { e.preventDefault(); execFormat("italic"); }} title="Italic">
+            <em>I</em>
+          </RichFormatBtn>
+          <RichFormatBtn onMouseDown={(e) => { e.preventDefault(); execFormat("insertUnorderedList"); }} title="Bullet list">
+            • List
+          </RichFormatBtn>
+          <RichFormatBtn onMouseDown={(e) => { e.preventDefault(); handleLinkClick(); }} title="Insert link">
+            🔗 Link
+          </RichFormatBtn>
+        </div>
+      )}
+      <div
+        ref={editableRef}
+        contentEditable={disabled ? false : true}
+        suppressContentEditableWarning
+        onFocus={() => { isFocused.current = true; }}
+        onBlur={() => { isFocused.current = false; }}
+        onInput={handleInput}
+        style={{
+          ...fieldInputStyle,
+          height: "auto",
+          minHeight: 140,
+          overflowY: "auto",
+          padding: "12px 14px",
+          lineHeight: 1.6,
+          outline: "none",
+          cursor: disabled ? "default" : "text",
+          border: `1px solid ${line.base}`,
+          borderRadius: r.md,
+          fontSize: type.base,
+          background: disabled ? "transparent" : "white",
+          wordBreak: "break-word",
+        }}
+        data-placeholder="Enter rich text..."
+      />
+    </div>
+  );
+}
+
+function RichFormatBtn({
+  children,
+  onMouseDown,
+  title,
+}: {
+  children: React.ReactNode;
+  onMouseDown: (e: React.MouseEvent) => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={onMouseDown}
+      style={{
+        padding: "4px 10px",
+        borderRadius: 6,
+        border: `1px solid ${line.base}`,
+        background: "transparent",
+        color: BRAND.ink,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        lineHeight: 1.4,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
