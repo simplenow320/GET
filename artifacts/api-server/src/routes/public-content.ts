@@ -222,7 +222,13 @@ const SCANNER_SCRIPT = /* javascript */ `
           if ('href' in el) { el.href = value; } else { el.setAttribute('href', value); }
         } else if (type === 'richtext') {
           // Value is server-sanitised HTML — set as innerHTML so formatting renders.
-          el.innerHTML = value;
+          // Safety: legacy plain-text values (no HTML tags) use textContent so any
+          // stray '<' / '&' characters render literally instead of being parsed.
+          if (/<[a-zA-Z!\/]/.test(value)) {
+            el.innerHTML = value;
+          } else {
+            el.textContent = value;
+          }
         } else {
           el.textContent = value;
         }
