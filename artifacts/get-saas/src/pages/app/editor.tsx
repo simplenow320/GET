@@ -1573,6 +1573,7 @@ function RichTextField({
 }) {
   const editableRef = useRef<HTMLDivElement>(null);
   const isFocused = useRef(false);
+  const [inLink, setInLink] = useState(false);
 
   // Sync external value → DOM, but only when the field isn't being actively edited.
   // This prevents cursor-jump when React re-renders mid-keystroke.
@@ -1583,6 +1584,32 @@ function RichTextField({
       el.innerHTML = value;
     }
   }, [value]);
+
+  // Track whether the caret is currently inside an <a>, so we can show
+  // an Unlink button to remove or change the link.
+  useEffect(() => {
+    const el = editableRef.current;
+    if (!el) return;
+    const update = () => {
+      if (!isFocused.current) return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) {
+        setInLink(false);
+        return;
+      }
+      let node: Node | null = sel.anchorNode;
+      while (node && node !== el) {
+        if (node.nodeType === 1 && (node as HTMLElement).tagName === "A") {
+          setInLink(true);
+          return;
+        }
+        node = node.parentNode;
+      }
+      setInLink(false);
+    };
+    document.addEventListener("selectionchange", update);
+    return () => document.removeEventListener("selectionchange", update);
+  }, []);
 
   const handleInput = () => {
     const html = editableRef.current?.innerHTML ?? "";
@@ -1605,6 +1632,11 @@ function RichTextField({
     }
   };
 
+  const handleUnlinkClick = () => {
+    execFormat("unlink");
+    setInLink(false);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {!disabled && (
@@ -1621,6 +1653,11 @@ function RichTextField({
           <RichFormatBtn onMouseDown={(e) => { e.preventDefault(); handleLinkClick(); }} title="Insert link">
             🔗 Link
           </RichFormatBtn>
+          {inLink && (
+            <RichFormatBtn onMouseDown={(e) => { e.preventDefault(); handleUnlinkClick(); }} title="Remove link">
+              ⛓️‍💥 Unlink
+            </RichFormatBtn>
+          )}
         </div>
       )}
       <div
@@ -1628,7 +1665,7 @@ function RichTextField({
         contentEditable={disabled ? false : true}
         suppressContentEditableWarning
         onFocus={() => { isFocused.current = true; }}
-        onBlur={() => { isFocused.current = false; }}
+        onBlur={() => { isFocused.current = false; setInLink(false); }}
         onInput={handleInput}
         style={{
           ...fieldInputStyle,

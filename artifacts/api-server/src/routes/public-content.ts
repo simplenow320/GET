@@ -994,6 +994,11 @@ const SCANNER_SCRIPT = /* javascript */ `
           ae.el.removeEventListener('input', ae.onInput);
           ae.el.removeEventListener('keydown', ae.onKeydown);
           ae.el.removeEventListener('paste', ae.onPaste);
+          if (ae.onUnlinkVisibilityChange) {
+            document.removeEventListener('selectionchange', ae.onUnlinkVisibilityChange);
+            ae.el.removeEventListener('keyup', ae.onUnlinkVisibilityChange);
+            ae.el.removeEventListener('mouseup', ae.onUnlinkVisibilityChange);
+          }
           if (ae.onScrollResize) {
             window.removeEventListener('scroll', ae.onScrollResize, true);
             window.removeEventListener('resize', ae.onScrollResize);
@@ -1059,17 +1064,22 @@ const SCANNER_SCRIPT = /* javascript */ `
             var italicBtn = makeFormatBtn('I');
             var listBtn   = makeFormatBtn('\\u2022');
             var linkBtn   = makeFormatBtn('\\uD83D\\uDD17');
+            var unlinkBtn = makeFormatBtn('\\uD83D\\uDD17\\u00D7');
             boldBtn.title   = 'Bold';
             italicBtn.title = 'Italic';
             listBtn.title   = 'Bullet list';
             linkBtn.title   = 'Insert link';
+            unlinkBtn.title = 'Remove link';
             // Style the Bold and Italic labels for visual clarity
             boldBtn.style.fontStyle   = 'normal';
             italicBtn.style.fontStyle = 'italic';
+            // Unlink button is only shown when caret is inside an <a>
+            unlinkBtn.style.display = 'none';
             toolbar.appendChild(boldBtn);
             toolbar.appendChild(italicBtn);
             toolbar.appendChild(listBtn);
             toolbar.appendChild(linkBtn);
+            toolbar.appendChild(unlinkBtn);
             // Separator between format buttons and Save/Cancel
             var sep = document.createElement('div');
             sep.setAttribute('style',
@@ -1154,6 +1164,7 @@ const SCANNER_SCRIPT = /* javascript */ `
 
           // ── Format button handlers (richtext only) ─────────────────────
           // mousedown with preventDefault keeps focus on the contenteditable el.
+          var onUnlinkVisibilityChange = null;
           if (isRich) {
             function attachFormat(btn, cmd, promptUrl) {
               btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
@@ -1185,6 +1196,32 @@ const SCANNER_SCRIPT = /* javascript */ `
             attachFormat(italicBtn, 'italic',                 false);
             attachFormat(listBtn,   'insertUnorderedList',    false);
             attachFormat(linkBtn,   null,                     true);
+            attachFormat(unlinkBtn, 'unlink',                 false);
+
+            // Show / hide the Unlink button based on whether the caret
+            // is currently inside an <a> within this editable element.
+            function updateUnlinkVisibility() {
+              var sel = window.getSelection();
+              var inLink = false;
+              if (sel && sel.rangeCount > 0) {
+                var node = sel.anchorNode;
+                while (node && node !== el) {
+                  if (node.nodeType === 1 && node.tagName === 'A') {
+                    inLink = true; break;
+                  }
+                  node = node.parentNode;
+                }
+              }
+              unlinkBtn.style.display = inLink ? '' : 'none';
+              positionToolbar(toolbar, el, tbwHint);
+            }
+            document.addEventListener('selectionchange', updateUnlinkVisibility);
+            el.addEventListener('keyup', updateUnlinkVisibility);
+            el.addEventListener('mouseup', updateUnlinkVisibility);
+            onUnlinkVisibilityChange = updateUnlinkVisibility;
+            // Run once after activation so initial state reflects whether
+            // the field happens to start with the caret inside a link.
+            setTimeout(updateUnlinkVisibility, 0);
           }
 
           // ── Toolbar button handlers ────────────────────────────────────
@@ -1221,6 +1258,7 @@ const SCANNER_SCRIPT = /* javascript */ `
             toolbar: toolbar,
             onInput: onInput, onKeydown: onKeydown, onPaste: onPaste,
             onScrollResize: onScrollResize,
+            onUnlinkVisibilityChange: onUnlinkVisibilityChange,
             inputTimer: null,
           };
 
