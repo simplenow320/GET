@@ -994,6 +994,10 @@ const SCANNER_SCRIPT = /* javascript */ `
           ae.el.removeEventListener('input', ae.onInput);
           ae.el.removeEventListener('keydown', ae.onKeydown);
           ae.el.removeEventListener('paste', ae.onPaste);
+          if (ae.onScrollResize) {
+            window.removeEventListener('scroll', ae.onScrollResize, true);
+            window.removeEventListener('resize', ae.onScrollResize);
+          }
           if (ae.toolbar && ae.toolbar.parentNode) {
             ae.toolbar.parentNode.removeChild(ae.toolbar);
           }
@@ -1079,7 +1083,11 @@ const SCANNER_SCRIPT = /* javascript */ `
           toolbar.appendChild(saveBtn);
           toolbar.appendChild(cancelBtn);
           (document.body || document.documentElement).appendChild(toolbar);
-          positionToolbar(toolbar, el, isRich ? 310 : 168);
+          var tbwHint = isRich ? 310 : 168;
+          positionToolbar(toolbar, el, tbwHint);
+          function onScrollResize() { positionToolbar(toolbar, el, tbwHint); }
+          window.addEventListener('scroll', onScrollResize, true);
+          window.addEventListener('resize', onScrollResize);
 
           // ── Helper: get the current edited value ───────────────────────
           function getValue() {
@@ -1212,6 +1220,7 @@ const SCANNER_SCRIPT = /* javascript */ `
             originalOutlineOffset: originalOutlineOffset,
             toolbar: toolbar,
             onInput: onInput, onKeydown: onKeydown, onPaste: onPaste,
+            onScrollResize: onScrollResize,
             inputTimer: null,
           };
 
