@@ -1040,6 +1040,19 @@ const SCANNER_SCRIPT = /* javascript */ `
           // Detect field type from the server-populated map.
           var isRich = contentTypeMap[lbl] === 'richtext';
 
+          // Normalize richtext HTML *before* contentEditable activates so the
+          // user starts editing the same allowlist-clean DOM that will be saved.
+          // Without this, deeply-nested existing HTML (e.g. <span><font><b>…)
+          // produces unpredictable behaviour while typing — the cursor jumps,
+          // toggling Bold deletes wrappers, etc. Sanitizing up-front collapses
+          // all of that to the safe tag set, making the round-trip predictable.
+          if (isRich) {
+            try {
+              var normalised = sanitizeRich(el.innerHTML || '');
+              if (normalised !== el.innerHTML) el.innerHTML = normalised;
+            } catch (e) {}
+          }
+
           // Capture original content — innerHTML for richtext, textContent for plain.
           var originalText = isRich ? (el.innerHTML || '') : (el.textContent || '');
           var originalOutline = el.style.outline || '';

@@ -366,7 +366,48 @@ export default function ClientEditor() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const siteUrl: string | null = project?.lastSeenOrigin ?? null;
+  // Manual URL fallback: when the developer hasn't installed scanner.js yet,
+  // lastSeenOrigin is null and there's nothing to preview against. We let the
+  // user type a URL in the empty state and remember it per-project in
+  // localStorage so refreshing the editor doesn't lose it. Once scanner.js
+  // pings the server, lastSeenOrigin takes precedence automatically.
+  const MANUAL_URL_KEY = `get:editor-manual-url:${projectId}`;
+  const [manualUrl, setManualUrl] = useState<string>(() => {
+    try { return localStorage.getItem(MANUAL_URL_KEY) || ""; } catch { return ""; }
+  });
+  const [manualUrlInput, setManualUrlInput] = useState<string>("");
+  const [manualUrlError, setManualUrlError] = useState<string>("");
+
+  // Re-hydrate manualUrl whenever the route's project changes. wouter swaps
+  // params without unmounting the editor, so without this the previous
+  // project's URL would leak into the next one and show the wrong iframe.
+  useEffect(() => {
+    let next = "";
+    try { next = localStorage.getItem(MANUAL_URL_KEY) || ""; } catch {}
+    setManualUrl(next);
+    setManualUrlInput("");
+    setManualUrlError("");
+  }, [MANUAL_URL_KEY]);
+
+  function commitManualUrl(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) { setManualUrlError("Enter a URL"); return; }
+    // Allow bare hostnames by prepending https:// — most users will paste
+    // "example.com" rather than the full scheme.
+    const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    let parsed: URL;
+    try { parsed = new URL(candidate); }
+    catch { setManualUrlError("That doesn't look like a valid URL"); return; }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      setManualUrlError("URL must start with http:// or https://"); return;
+    }
+    const clean = parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname);
+    try { localStorage.setItem(MANUAL_URL_KEY, clean); } catch {}
+    setManualUrl(clean);
+    setManualUrlError("");
+  }
+
+  const siteUrl: string | null = project?.lastSeenOrigin ?? (manualUrl || null);
   const showPreviewPanel = windowWidth >= 900;
 
   // "loading" while the iframe is fetching; "loaded" on success;
@@ -1412,27 +1453,70 @@ export default function ClientEditor() {
                 <p style={{ fontSize: type.base, fontWeight: 600, color: BRAND.ink }}>
                   No preview yet
                 </p>
-                <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55, maxWidth: 280 }}>
-                  Connect your site first and the live preview will appear here automatically.
+                <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.55, maxWidth: 320 }}>
+                  Paste your site's URL to preview it here, or finish setup to connect it permanently.
                 </p>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); commitManualUrl(manualUrlInput); }}
+                  style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 320, marginTop: 4 }}
+                >
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      type="text"
+                      inputMode="url"
+                      placeholder="https://your-site.com"
+                      value={manualUrlInput}
+                      onChange={(e) => { setManualUrlInput(e.target.value); if (manualUrlError) setManualUrlError(""); }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        fontSize: type.sm,
+                        border: `1px solid ${manualUrlError ? "#dc2626" : line.base}`,
+                        borderRadius: 8,
+                        outline: "none",
+                        background: BRAND.paper,
+                        color: BRAND.ink,
+                      }}
+                      data-testid="input-manual-preview-url"
+                    />
+                    <button
+                      type="submit"
+                      style={{
+                        padding: "8px 14px",
+                        fontSize: type.sm,
+                        fontWeight: 600,
+                        background: BRAND.ink,
+                        color: BRAND.paper,
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                      data-testid="button-preview-url"
+                    >
+                      Preview
+                    </button>
+                  </div>
+                  {manualUrlError && (
+                    <p style={{ fontSize: type.xs, color: "#dc2626", textAlign: "left", margin: 0 }}>
+                      {manualUrlError}
+                    </p>
+                  )}
+                </form>
                 <a
                   href={`/app/setup/${projectId}`}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    marginTop: 4,
-                    fontSize: type.sm,
-                    fontWeight: 600,
-                    color: BRAND.ink,
+                    marginTop: 8,
+                    fontSize: type.xs,
+                    fontWeight: 500,
+                    color: tone[500],
                     textDecoration: "none",
-                    padding: "8px 16px",
-                    borderRadius: 10,
-                    border: `1px solid ${line.base}`,
                   }}
                 >
-                  Go to setup
-                  <ArrowRight style={{ width: 13, height: 13 }} />
+                  Or go to setup
+                  <ArrowRight style={{ width: 11, height: 11 }} />
                 </a>
               </div>
             ) : (
