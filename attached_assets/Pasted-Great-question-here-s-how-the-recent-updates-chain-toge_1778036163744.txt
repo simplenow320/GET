@@ -1,0 +1,34 @@
+Great question — here's how the recent updates chain together to give clients true real-time feedback:
+
+The "see it as you change it" loop
+1. The scanner script paints content onto the page — every element on your client's site tagged with data-get-key="hero.title" gets its current CMS value injected on page load. So the preview panel in the editor IS the real site, not a mockup.
+
+2. While they're typing, the page updates live (Task #8)
+
+When the client clicks any text element on the page, it becomes editable in place — no panel needed
+Every keystroke fires a postMessage back to the editor (debounced ~200 ms) so the left panel and the live preview stay in sync
+A floating ✓ Save / ✕ Cancel toolbar follows them
+3. The toolbar follows the scroll (Task #11)
+
+Previously the toolbar drifted away when they scrolled — now it sticks to the element so the editing experience never breaks on long pages
+4. Rich-text formatting renders immediately (Tasks #10, #14, #16)
+
+Bold, italic, lists, and links apply on the page as they click the toolbar buttons
+"Unlink" lets them strip a bad link without losing the text
+When they save, the formatting carries through to the live site automatically (not just plain text)
+5. They preview the formatted result before publishing (Task #15)
+
+The save-confirmation dialog now renders the actual formatted HTML — bold looks bold, lists look like lists — so they catch mistakes before the change goes public
+6. It works on their phone (Tasks #9, #12)
+
+The whole editor — top bar, field panel, modals, preferences — fits and behaves on a 375 px iPhone screen
+What "real time" means here
+For the client editing: instant — every keystroke updates the panel and the live preview iframe simultaneously.
+
+For visitors of the live site: as soon as the client clicks Save, the change is persisted and the next page load shows it. (If autoPublish is off, it goes to a review queue first instead.)
+
+What's not yet real-time
+Other people viewing the live site right now don't see the change push to their browser — they see it on their next page load. True push-to-live (websocket broadcast to active visitors) isn't built.
+Multiple clients editing the same field at the same time — the autosave conflict prompt warns them, but there's no Google-Docs-style multi-cursor.
+The owner watching from the dashboard doesn't see edits stream in live — that's what the proposed activity feed (Task #6) would add.
+Want me to plan any of those next?
