@@ -375,6 +375,10 @@ export default function ClientEditor() {
   const myRoleRef = useRef(myRole);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
 
+  // Stable ref for executeSave — used by the get:field-save message handler to
+  // pass an explicit value (bypassing stale React state) when saving inline edits.
+  const executeSaveRef = useRef<(fieldId: string, valueOverride?: string) => void>(() => {});
+
   // Callback-ref map so we can imperatively scroll/focus any field container.
   const fieldContainerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -411,23 +415,75 @@ export default function ClientEditor() {
     }, 50);
   };
 
-  // ── Phase 3: receive get:field-click from the scanner in the preview iframe
-  // When the client clicks a [data-get-key] element in the preview, jump to
-  // and focus the matching field in the left panel.
+  // ── Phase 3: receive messages from the scanner in the preview iframe
+  //
+  // get:field-click  → scroll/focus the matching field in the left panel.
+  // get:field-input  → mirror an inline-edit keystroke into localValues
+  //                    (debounced from the scanner; no API call yet).
+  // get:field-save   → trigger a save for the label that was inline-edited
+  //                    (fired when the user clicks ✓ Save in the toolbar).
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       try {
         // Only process messages originating from our preview iframe.
-        // This prevents unrelated postMessage senders (e.g. analytics scripts
-        // on the same page) from triggering UI jumps.
         if (evt.source !== iframeRef.current?.contentWindow) return;
-        const msg = evt.data as { type: string; label: string } | null;
-        if (!msg || msg.type !== "get:field-click") return;
+        const msg = evt.data as {
+          type: string;
+          label?: string;
+          value?: string;
+        } | null;
+        if (!msg || typeof msg.type !== "string") return;
+
+        // ── get:field-input: mirror inline keystrokes ─────────────────
+        if (msg.type === "get:field-input") {
+          const label = msg.label;
+          const value = typeof msg.value === "string" ? msg.value : "";
+          const field = fieldsRef.current?.find((f) => f.label === label);
+          if (!field) return;
+          setLocalValues((prev) => ({ ...prev, [field.id]: value }));
+          // Persist draft so a tab-close doesn't lose in-progress typing.
+          // capturedServerUpdatedAt is omitted (null) here — conflict detection
+          // is not needed for inline edits; the user sees the result live.
+          try {
+            const serverVal = field.draftValue || field.value || "";
+            if (value === serverVal) {
+              localStorage.removeItem(
+                `get:editor-draft:${projectId}:${field.id}`,
+              );
+            } else {
+              localStorage.setItem(
+                `get:editor-draft:${projectId}:${field.id}`,
+                JSON.stringify({
+                  _v: 2,
+                  value,
+                  capturedServerUpdatedAt: null,
+                }),
+              );
+            }
+          } catch {}
+          return;
+        }
+
+        // ── get:field-save: trigger the save pipeline ─────────────────
+        if (msg.type === "get:field-save") {
+          const label = msg.label;
+          const value = typeof msg.value === "string" ? msg.value : undefined;
+          const field = fieldsRef.current?.find((f) => f.label === label);
+          if (!field || field.isLocked || myRoleRef.current === "viewer")
+            return;
+          // Use the explicit value from the message to avoid reading from
+          // possibly-stale React state (setLocalValues is async).
+          executeSaveRef.current(field.id, value);
+          return;
+        }
+
+        // ── get:field-click: scroll & focus the field panel row ───────
+        if (msg.type !== "get:field-click") return;
         const label = msg.label;
         const field = fieldsRef.current?.find((f) => f.label === label);
         if (!field) return;
         // Phase 2 hook: ring the element in the iframe immediately.
-        postHighlight(label);
+        postHighlight(label ?? null);
         // Scroll the field panel to the matching row and flash it.
         const container = fieldContainerRefs.current.get(field.id);
         if (container) {
@@ -575,6 +631,8 @@ export default function ClientEditor() {
       setPendingFieldId(fieldId);
     }
   };
+  // Keep the stable ref in sync on every render.
+  useEffect(() => { executeSaveRef.current = executeSave; });
 
   // Dialog confirmed
   const handleDialogConfirm = (skipNext: boolean) => {
@@ -592,14 +650,16 @@ export default function ClientEditor() {
     setPendingFieldId(null);
   };
 
-  // Actually call the API
-  const executeSave = (fieldId: string) => {
+  // Actually call the API.
+  // valueOverride lets callers (e.g. the get:field-save message handler) pass the
+  // final value explicitly, avoiding a race with async React setState.
+  const executeSave = (fieldId: string, valueOverride?: string) => {
     setSavingField(fieldId);
     updateMutation.mutate(
       {
         projectId,
         fieldId,
-        data: { draftValue: localValues[fieldId] },
+        data: { draftValue: valueOverride !== undefined ? valueOverride : localValues[fieldId] },
       },
       {
         onSuccess: (data: any) => {

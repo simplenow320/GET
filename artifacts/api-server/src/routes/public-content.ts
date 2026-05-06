@@ -192,10 +192,17 @@ const SCANNER_SCRIPT = /* javascript */ `
   // HTML shows first, then swaps as soon as the fetch resolves (typically one
   // network round-trip on the same origin).
 
+  // ── Content-type map ─────────────────────────────────────────────────────
+  // Populated by applyContent so the inline-editor can gate by field type
+  // (image / url / boolean → redirect to field panel, not contenteditable).
+  var contentTypeMap = {};
+
   function applyContent(content) {
     for (var label in content) {
       var field = content[label];
       var value = field.value;
+      // Always record the type even if value is empty.
+      contentTypeMap[label] = field.type;
       if (value == null || value === '') continue;
       var type = field.type;
       // Escape double-quotes in the label so it's safe inside the CSS attribute
@@ -844,7 +851,10 @@ const SCANNER_SCRIPT = /* javascript */ `
           tip.style.left = Math.max(4, x) + 'px';
           tip.style.top = Math.max(4, y) + 'px';
         }
-        document.addEventListener('mouseover', showTip);
+        // Wrap in an arrow function so variable resolution happens at call time,
+        // not at bind time — this ensures the inline-edit showTip override
+        // (installed later in setupClickToEdit) applies to this listener too.
+        document.addEventListener('mouseover', function(e) { showTip(e); });
         document.addEventListener('mousemove', function(e) {
           if (tip.style.display === 'none') return;
           showTip(e);
@@ -861,16 +871,249 @@ const SCANNER_SCRIPT = /* javascript */ `
           tip.style.display = 'none';
         });
 
+        // ── Inline editing state ───────────────────────────────────────────
+        // Tracks the currently-active contenteditable field, if any.
+        var activeEdit = null;
+
+        // Returns true when a [data-get-key] element should open inline editing.
+        // Excluded by DOM tag: IMG, A, form controls (they use get:field-click).
+        // Excluded by server type: image / url / boolean (even on non-native tags).
+        function isEditableTextField(el, lbl) {
+          var tag = (el.tagName || '').toUpperCase();
+          if (tag === 'IMG' || tag === 'A' || tag === 'INPUT' ||
+              tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON') {
+            return false;
+          }
+          var serverType = contentTypeMap[lbl];
+          if (serverType === 'image' || serverType === 'url' || serverType === 'boolean') {
+            return false;
+          }
+          return true;
+        }
+
+        // Position the mini-toolbar above (or below) its target element.
+        function positionToolbar(toolbar, el) {
+          var rect = el.getBoundingClientRect();
+          var top = rect.top - 44;
+          if (top < 8) top = rect.bottom + 8;
+          var left = rect.left;
+          var tbw = 168;
+          if (left + tbw > window.innerWidth - 8) left = window.innerWidth - tbw - 8;
+          toolbar.style.top = Math.max(4, top) + 'px';
+          toolbar.style.left = Math.max(4, left) + 'px';
+        }
+
+        function makeBtn(text, bg, color) {
+          var b = document.createElement('button');
+          b.textContent = text;
+          b.setAttribute('style',
+            'background:' + bg + ';color:' + color + ';border:none;cursor:pointer;' +
+            'padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;' +
+            'font-family:system-ui,-apple-system,sans-serif;line-height:1;' +
+            'flex-shrink:0;');
+          return b;
+        }
+
+        // Deactivate the active inline edit.
+        // revert=true  → restore original text and flush get:field-input with it.
+        // revert=false → flush current el.textContent before tearing down, so
+        //                Escape / click-outside never silently drop the last
+        //                keystrokes that the debounce timer hadn't sent yet.
+        function deactivate(revert) {
+          if (!activeEdit) return;
+          var ae = activeEdit;
+          activeEdit = null;
+          // Cancel any pending debounce — we are about to flush synchronously.
+          if (ae.inputTimer) { clearTimeout(ae.inputTimer); ae.inputTimer = null; }
+          // Capture current text BEFORE removing contenteditable so textContent
+          // still reflects what the user typed.
+          var finalText = ae.el.textContent || '';
+          ae.el.removeAttribute('contenteditable');
+          ae.el.style.outline = ae.originalOutline;
+          ae.el.style.outlineOffset = ae.originalOutlineOffset;
+          ae.el.removeEventListener('input', ae.onInput);
+          ae.el.removeEventListener('keydown', ae.onKeydown);
+          ae.el.removeEventListener('paste', ae.onPaste);
+          if (ae.toolbar && ae.toolbar.parentNode) {
+            ae.toolbar.parentNode.removeChild(ae.toolbar);
+          }
+          if (revert) {
+            ae.el.textContent = ae.originalText;
+            try {
+              window.parent.postMessage(
+                { type: 'get:field-input', label: ae.label, value: ae.originalText }, '*');
+            } catch(e) {}
+          } else {
+            // Always flush the final value so the editor panel stays in sync
+            // even when the debounce hadn't fired before Escape / click-outside.
+            try {
+              window.parent.postMessage(
+                { type: 'get:field-input', label: ae.label, value: finalText }, '*');
+            } catch(e) {}
+          }
+          // Blur so the element loses focus visually after deactivation.
+          try { ae.el.blur(); } catch(e) {}
+        }
+
+        // Activate inline editing on a [data-get-key] text element.
+        function activate(el, lbl) {
+          if (activeEdit) deactivate(false);
+
+          var originalText = el.textContent || '';
+          var originalOutline = el.style.outline || '';
+          var originalOutlineOffset = el.style.outlineOffset || '';
+
+          // Make the element editable — prefer plaintext-only to block HTML paste.
+          try { el.contentEditable = 'plaintext-only'; } catch(ex) {}
+          if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
+
+          el.style.outline = '2px solid rgba(59,130,246,0.70)';
+          el.style.outlineOffset = '3px';
+
+          // ── Floating mini-toolbar ──────────────────────────────────────
+          var toolbar = document.createElement('div');
+          toolbar.setAttribute('style',
+            'position:fixed;z-index:2147483647;display:flex;align-items:center;gap:6px;' +
+            'background:rgba(26,26,46,0.95);border-radius:8px;padding:5px 8px;' +
+            'box-shadow:0 4px 20px rgba(0,0,0,0.38);pointer-events:auto;' +
+            'font-family:system-ui,-apple-system,sans-serif;');
+
+          var saveBtn   = makeBtn('\\u2713 Save',   '#facc15', '#1a1a2e');
+          var cancelBtn = makeBtn('\\u2715 Cancel', 'rgba(255,255,255,0.13)', '#fff');
+          toolbar.appendChild(saveBtn);
+          toolbar.appendChild(cancelBtn);
+          (document.body || document.documentElement).appendChild(toolbar);
+          positionToolbar(toolbar, el);
+
+          // ── Input → debounced postMessage ──────────────────────────────
+          var inputTimer = null;
+          function onInput() {
+            var val = el.textContent || '';
+            if (inputTimer) clearTimeout(inputTimer);
+            inputTimer = setTimeout(function() {
+              inputTimer = null;
+              if (activeEdit) activeEdit.inputTimer = null;
+              try {
+                window.parent.postMessage(
+                  { type: 'get:field-input', label: lbl, value: val }, '*');
+              } catch(e) {}
+            }, 200);
+            if (activeEdit) activeEdit.inputTimer = inputTimer;
+          }
+
+          // ── Paste: strip HTML, insert plain text ───────────────────────
+          function onPaste(e) {
+            e.preventDefault();
+            var text = '';
+            try { text = (e.clipboardData || window.clipboardData).getData('text/plain'); } catch(ex) {}
+            try { document.execCommand('insertText', false, text); } catch(ex) {
+              el.textContent = (el.textContent || '') + text;
+            }
+          }
+
+          // ── Keyboard: Escape = commit (keep value) ─────────────────────
+          function onKeydown(e) {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              deactivate(false);
+            }
+          }
+
+          el.addEventListener('input', onInput);
+          el.addEventListener('keydown', onKeydown);
+          el.addEventListener('paste', onPaste);
+
+          // ── Toolbar button handlers ────────────────────────────────────
+          // mousedown prevents the blur from firing before the click.
+          saveBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+          saveBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var val = el.textContent || '';
+            if (activeEdit && activeEdit.inputTimer) {
+              clearTimeout(activeEdit.inputTimer);
+              activeEdit.inputTimer = null;
+            }
+            // Sync final value, then ask the editor to save it.
+            // We include the value in get:field-save so the editor can pass it
+            // directly to the save API without reading from possibly-stale state.
+            try {
+              window.parent.postMessage({ type: 'get:field-input', label: lbl, value: val }, '*');
+              window.parent.postMessage({ type: 'get:field-save',  label: lbl, value: val }, '*');
+            } catch(e2) {}
+            deactivate(false);
+          });
+
+          cancelBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+          cancelBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            deactivate(true); // revert to original
+          });
+
+          activeEdit = {
+            el: el, label: lbl,
+            originalText: originalText,
+            originalOutline: originalOutline,
+            originalOutlineOffset: originalOutlineOffset,
+            toolbar: toolbar,
+            onInput: onInput, onKeydown: onKeydown, onPaste: onPaste,
+            inputTimer: null,
+          };
+
+          // Focus and move caret to end.
+          el.focus();
+          try {
+            var range = document.createRange();
+            var sel = window.getSelection();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch(ex) {}
+        }
+
+        // ── Click-outside → commit (keep value) ───────────────────────────
+        document.addEventListener('mousedown', function(e) {
+          if (!activeEdit) return;
+          var ae = activeEdit;
+          if (ae.toolbar && ae.toolbar.contains(e.target)) return;
+          if (ae.el && ae.el.contains(e.target)) return;
+          deactivate(false);
+        }, true);
+
+        // ── Tooltip: skip the currently-active element ─────────────────────
+        // Wrap showTip so it hides itself when we are already inline-editing.
+        var origShowTip = showTip;
+        showTip = function(e) {
+          if (activeEdit && activeEdit.el === nearestKey(e.target)) {
+            tip.style.display = 'none';
+            return;
+          }
+          origShowTip(e);
+        };
+
         // Intercept click — use capture phase to run before any site handlers
         // (important for tagged <a> elements that would otherwise navigate)
         document.addEventListener('click', function(e) {
           var el = nearestKey(e.target);
           if (!el) return;
+
+          var lbl = el.getAttribute('data-get-key') || '';
+
+          // If the user is clicking inside the currently-active editable element
+          // let the browser handle cursor placement — do not intercept.
+          if (activeEdit && activeEdit.el === el) return;
+
           e.preventDefault();
           e.stopPropagation();
           tip.style.display = 'none';
-          var lbl = el.getAttribute('data-get-key') || '';
-          try { window.parent.postMessage({ type: 'get:field-click', label: lbl }, '*'); } catch(e4) {}
+
+          if (isEditableTextField(el, lbl)) {
+            activate(el, lbl);
+          } else {
+            // Images, links, boolean/url fields, form controls → jump to field panel.
+            try { window.parent.postMessage({ type: 'get:field-click', label: lbl }, '*'); } catch(e4) {}
+          }
         }, true);
       }
 
