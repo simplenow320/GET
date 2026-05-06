@@ -824,6 +824,7 @@ export default function ClientEditor() {
       >
         <span
           style={{
+            flex: 1,
             fontSize: type.base,
             fontWeight: 600,
             color: BRAND.ink,
@@ -836,7 +837,7 @@ export default function ClientEditor() {
         >
           {project?.name ?? "Editor"}
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: windowWidth < 500 ? 8 : 12, minWidth: 0 }}>
           {/* Help / re-open intro */}
           <button
             onClick={() => setIntroOpen(true)}
@@ -854,6 +855,7 @@ export default function ClientEditor() {
               background: "transparent",
               cursor: "pointer",
               color: tone[500],
+              flexShrink: 0,
               transition: `color 0.15s ${ease}, background 0.15s ${ease}`,
             }}
           >
@@ -877,13 +879,14 @@ export default function ClientEditor() {
                 background: "transparent",
                 cursor: "pointer",
                 color: tone[500],
+                flexShrink: 0,
                 textDecoration: "none",
               }}
             >
               <ExternalLink style={{ width: 14, height: 14 }} />
             </a>
           )}
-          {/* Refresh button */}
+          {/* Refresh button — icon-only on narrow screens */}
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -892,13 +895,14 @@ export default function ClientEditor() {
               display: "inline-flex",
               alignItems: "center",
               gap: 5,
-              padding: "5px 10px",
+              padding: windowWidth < 500 ? "7px" : "5px 10px",
               borderRadius: 8,
               border: `1px solid ${line.base}`,
               background: "transparent",
               cursor: isRefreshing ? "not-allowed" : "pointer",
               fontSize: type.xs,
               fontWeight: 500,
+              flexShrink: 0,
               color: justRefreshed ? "#16a34a" : tone[500],
               transition: `color 0.3s ${ease}`,
             }}
@@ -908,10 +912,10 @@ export default function ClientEditor() {
             ) : (
               <RefreshCw style={{ width: 12, height: 12 }} />
             )}
-            {justRefreshed ? "Refreshed" : "Refresh"}
+            {windowWidth >= 500 && (justRefreshed ? "Refreshed" : "Refresh")}
           </button>
-          {/* Status badge */}
-          {(() => {
+          {/* Status badge — hidden on very narrow screens */}
+          {windowWidth >= 500 && (() => {
             const anyPending = fields?.some((f) => f.draftValue != null);
             return (
               <span
@@ -922,6 +926,7 @@ export default function ClientEditor() {
                   fontSize: type.xs,
                   fontWeight: 500,
                   color: tone[500],
+                  whiteSpace: "nowrap",
                 }}
               >
                 <span
@@ -930,6 +935,7 @@ export default function ClientEditor() {
                     height: 6,
                     borderRadius: "50%",
                     background: anyPending ? BRAND.yellow : "#4ade80",
+                    flexShrink: 0,
                     display: "inline-block",
                   }}
                 />
@@ -1000,10 +1006,11 @@ export default function ClientEditor() {
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: windowWidth < 500 ? "flex-start" : "center",
+                    flexDirection: windowWidth < 500 ? "column" : "row",
                     justifyContent: "space-between",
                     marginBottom: 10,
-                    gap: 10,
+                    gap: windowWidth < 500 ? 8 : 10,
                   }}
                 >
                   <div
@@ -1200,7 +1207,7 @@ export default function ClientEditor() {
                 )}
 
                 {field.type === "boolean" && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, height: 46 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 46, flexWrap: "wrap" }}>
                     <Switch
                       checked={localValues[field.id] === "true"}
                       onCheckedChange={(c) => handleValueChange(field.id, c ? "true" : "false")}
@@ -1663,8 +1670,10 @@ function ClientIntroModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: BRAND.paper, borderRadius: 18, padding: 32,
+          background: BRAND.paper, borderRadius: 18, padding: "clamp(20px, 5vw, 32px)",
           maxWidth: 460, width: "100%",
+          maxHeight: "calc(100dvh - 48px)",
+          overflowY: "auto",
           boxShadow: "0 24px 60px rgba(26,26,46,0.20)",
           display: "flex", flexDirection: "column", gap: 22,
         }}
