@@ -52,7 +52,7 @@ export default function SecuritySlide() {
               maxWidth: "70vw",
             }}
           >
-            Built like infrastructure, not a side project.
+            Credentials hashed. Requests gated. By default.
           </h2>
 
           <ul
