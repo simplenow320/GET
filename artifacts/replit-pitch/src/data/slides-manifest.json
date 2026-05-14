@@ -8,30 +8,6 @@
 		"speakerNotes": ""
 	},
 	{
-		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0002",
-		"position": 3,
-		"filepath": "src/pages/slides/02-problem.tsx",
-		"title": "The problem",
-		"description": "Vibe coders ship apps; clients then ask for changes.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0003",
-		"position": 4,
-		"filepath": "src/pages/slides/03-what.tsx",
-		"title": "What get does",
-		"description": "One script, tag editable bits, white-labeled client editor.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0007",
-		"position": 6,
-		"filepath": "src/pages/slides/04-security.tsx",
-		"title": "Security, already shipped",
-		"description": "Hashed tokens, CSRF defense in depth, domain allowlist, XSS sanitization, OAuth with PKCE.",
-		"speakerNotes": ""
-	},
-	{
 		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0004",
 		"position": 2,
 		"filepath": "src/pages/slides/04-replit.tsx",
@@ -40,16 +16,32 @@
 		"speakerNotes": ""
 	},
 	{
+		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0003",
+		"position": 3,
+		"filepath": "src/pages/slides/03-what.tsx",
+		"title": "What get does",
+		"description": "One script, tag editable bits, white-labeled client editor.",
+		"speakerNotes": ""
+	},
+	{
 		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0005",
-		"position": 5,
+		"position": 4,
 		"filepath": "src/pages/slides/05-why-now.tsx",
 		"title": "Why now",
 		"description": "Vibe coding is mainstream; client handoff isn't solved.",
 		"speakerNotes": ""
 	},
 	{
+		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0007",
+		"position": 5,
+		"filepath": "src/pages/slides/04-security.tsx",
+		"title": "Security, already shipped",
+		"description": "Hashed tokens, CSRF defense in depth, domain allowlist, XSS sanitization, OAuth with PKCE.",
+		"speakerNotes": ""
+	},
+	{
 		"id": "8a4f9c1e-0b21-4c11-9a31-1c0b8e2a0006",
-		"position": 7,
+		"position": 6,
 		"filepath": "src/pages/slides/06-ask.tsx",
 		"title": "What I'm looking for",
 		"description": "The ask: bring me in to explore a partnership.",
