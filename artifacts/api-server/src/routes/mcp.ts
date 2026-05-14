@@ -164,13 +164,27 @@ function hashKey(raw: string): string {
 }
 
 function extractKey(req: Request): string | null {
+  // Header-only. We previously accepted `?key=pk_...` as a fallback for
+  // MCP clients that couldn't set headers, but query-string credentials
+  // leak into access logs, proxy logs, browser history, and Referer
+  // headers — exactly the kind of thing a security reviewer flags first.
+  // Every modern MCP client (Claude Desktop, Cursor, Replit Agent, the
+  // official @modelcontextprotocol/sdk transports) supports custom
+  // headers via mcp.json, so the fallback isn't earning its risk.
+  //
+  // We log (without logging the key itself) when someone tries `?key=`
+  // so a confused user has something to grep for in their server logs.
   const header = req.headers.authorization;
   if (header && header.startsWith("Bearer ")) {
     const v = header.slice(7).trim();
     if (v.length > 0) return v;
   }
-  const q = (req.query.key ?? "").toString().trim();
-  if (q.length > 0) return q;
+  if (typeof req.query.key === "string" && req.query.key.length > 0) {
+    req.log?.warn?.(
+      { ip: clientIp(req) },
+      "MCP request used deprecated ?key= query auth — rejected. Use Authorization: Bearer pk_...",
+    );
+  }
   return null;
 }
 
@@ -303,14 +317,32 @@ const TOOLS = [
 
 // ── Tool implementations ─────────────────────────────────────────────────────
 
+// Hardened against host-header injection. Previously we trusted
+// `x-forwarded-host` / `x-forwarded-proto` blindly — meaning a caller who
+// could set those headers (e.g. anyone hitting the dev server directly,
+// or any future deployment behind a proxy that forwards arbitrary
+// X-Forwarded-* without sanitizing) could shift the install snippet's
+// scanner URL to their own domain. The model would then paste a snippet
+// that loads `scanner.js` from attacker-controlled origin into the
+// customer's site — full takeover of the customer's CMS surface.
+//
+// New policy:
+//   1. Use PUBLIC_BASE_URL env var if set (canonical production answer).
+//   2. Otherwise, use the first entry in REPLIT_DOMAINS (set by Replit
+//      hosting) over https.
+//   3. Otherwise, fall back to req.protocol/req.get('host'), which only
+//      reflect the actual TCP-level Host the request came in on — not
+//      attacker-controlled X-Forwarded headers.
+// In no case do we read X-Forwarded-Host / X-Forwarded-Proto.
 function publicBaseUrl(req: Request): string {
-  // Honor the proxy headers Replit / typical reverse proxies set so we
-  // emit https://your-app.replit.app instead of http://localhost when
-  // serving the snippet. Falls back to req.protocol/host in dev.
-  const xfProto = (req.headers["x-forwarded-proto"] || "").toString().split(",")[0].trim();
-  const xfHost = (req.headers["x-forwarded-host"] || "").toString().split(",")[0].trim();
-  const proto = xfProto || req.protocol || "https";
-  const host = xfHost || req.get("host") || "get-builder.replit.app";
+  const env = process.env.PUBLIC_BASE_URL?.trim();
+  if (env) return env.replace(/\/+$/, "");
+
+  const replitDomains = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  if (replitDomains) return `https://${replitDomains}`;
+
+  const proto = req.protocol === "https" ? "https" : "http";
+  const host = req.get("host") || "localhost";
   return `${proto}://${host}`;
 }
 
@@ -546,8 +578,11 @@ router.get("/", (_req, res) => {
     .send(
       "get CMS — MCP server\n\n" +
         "POST JSON-RPC 2.0 here with:\n" +
-        '  Authorization: Bearer pk_get_<your-key>   (preferred)\n' +
-        "  or  ?key=pk_get_<your-key>                  (fallback)\n\n" +
+        "  Authorization: Bearer pk_get_<your-key>\n\n" +
+        "Header auth only — the previous ?key= query-string fallback was\n" +
+        "removed because it leaks credentials into access logs and Referer\n" +
+        "headers. Every current MCP client supports custom headers via\n" +
+        "mcp.json's \"headers\" field.\n\n" +
         "Add the URL of this endpoint to your mcp.json.\n",
     );
 });
@@ -594,14 +629,29 @@ router.post("/", async (req: AuthedRequest, res) => {
     });
   }
 
-  const body = req.body as JsonRpcRequest | JsonRpcRequest[] | undefined;
-  if (!body) {
+  // Validate request shape BEFORE we dereference anything on body. The
+  // previous `if (!body)` check passed `{}` (which is what express.json()
+  // gives us for an empty POST), then crashed on `body.method.startsWith`
+  // — leaking a generic 500 instead of a proper JSON-RPC error.
+  const rawBody = req.body as unknown;
+  function isJsonRpcRequest(x: unknown): x is JsonRpcRequest {
+    return (
+      !!x &&
+      typeof x === "object" &&
+      typeof (x as { method?: unknown }).method === "string"
+    );
+  }
+  const isValidSingle = isJsonRpcRequest(rawBody);
+  const isValidBatch =
+    Array.isArray(rawBody) && rawBody.length > 0 && rawBody.every(isJsonRpcRequest);
+  if (!isValidSingle && !isValidBatch) {
     return res.status(400).json({
       jsonrpc: "2.0",
       id: null,
-      error: { code: -32600, message: "Empty request body" },
+      error: { code: -32600, message: "Invalid Request — expected JSON-RPC 2.0 object with `method` field" },
     });
   }
+  const body = rawBody as JsonRpcRequest | JsonRpcRequest[];
 
   // Capture-shim wraps res so we can both inspect what the dispatcher
   // wrote (for the audit log) and forward it to the real response.
