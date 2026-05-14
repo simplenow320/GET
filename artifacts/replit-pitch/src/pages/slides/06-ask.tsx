@@ -9,11 +9,11 @@ export default function AskSlide() {
           fontSize: "25vw",
           lineHeight: 0.8,
           letterSpacing: "-0.05em",
-          color: "rgba(255, 215, 71, 0.45)",
+          color: "rgba(255, 215, 71, 0.22)",
           zIndex: 0,
         }}
       >
-        06
+        08
       </div>
 
       <div
@@ -41,31 +41,63 @@ export default function AskSlide() {
           </div>
         </div>
 
-        <div style={{ marginTop: "14vh", maxWidth: "70vw" }}>
-          <h2
-            className="font-display font-bold text-text m-0"
-            style={{
-              fontSize: "9vw",
-              lineHeight: 1,
-              letterSpacing: "-0.04em",
-            }}
+        <div
+          className="flex-1 flex items-center"
+          style={{ marginTop: "2vh", gap: "4vw" }}
+        >
+          <div style={{ flex: "1 1 55%", maxWidth: "55vw" }}>
+            <h2
+              className="font-display font-bold text-text m-0"
+              style={{
+                fontSize: "8vw",
+                lineHeight: 1,
+                letterSpacing: "-0.04em",
+              }}
+            >
+              Let&apos;s partner.
+            </h2>
+            <p
+              className="font-body font-normal text-text"
+              style={{
+                fontSize: "1.9vw",
+                marginTop: "4vh",
+                lineHeight: 1.45,
+                textWrap: "pretty",
+              }}
+            >
+              I&apos;d love to talk about how get fits into Replit&apos;s story
+              for builders shipping client work — pilot, integration, or
+              distribution.
+            </p>
+            <p
+              className="font-body font-semibold text-text"
+              style={{
+                fontSize: "1.6vw",
+                marginTop: "3vh",
+                lineHeight: 1.45,
+              }}
+            >
+              Happy to start anywhere.
+            </p>
+          </div>
+
+          <div
+            className="flex items-center justify-center"
+            style={{ flex: "1 1 45%" }}
           >
-            Bring me in.
-          </h2>
-          <p
-            className="font-body font-normal text-muted"
-            style={{
-              fontSize: "2.1vw",
-              marginTop: "5vh",
-              lineHeight: 1.5,
-              maxWidth: "60vw",
-              textWrap: "pretty",
-            }}
-          >
-            I&apos;d love to talk about how get fits into Replit&apos;s story
-            for builders shipping client work. Pilot, integration, distribution
-            — happy to start anywhere.
-          </p>
+            <img
+              src={`${import.meta.env.BASE_URL}get-partnership-clean.png`}
+              crossOrigin="anonymous"
+              alt="get and Replit, together"
+              style={{
+                maxHeight: "55vh",
+                maxWidth: "38vw",
+                width: "auto",
+                height: "auto",
+                display: "block",
+              }}
+            />
+          </div>
         </div>
 
         <div
