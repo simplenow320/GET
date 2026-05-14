@@ -323,6 +323,37 @@ const SCANNER_SCRIPT = /* javascript */ `
   // changes, lazy components). Without this cache the observer would
   // have nothing to apply.
   var latestContent = null;
+  // Map from field label → the DOM element pinned during the heuristic scan.
+  // Allows applyContent() to update elements on untagged pages (no data-get-key
+  // attributes) by falling back to the element reference captured at scan time.
+  // Reset at the start of each heuristic scan so stale references never persist.
+  var labelToElement = {};
+
+  // Apply a single content value to a DOM element, type-aware.
+  // Shared by the tagged-element path and the heuristic-fallback path so both
+  // use identical injection logic.
+  function applyToEl(el, type, value) {
+    if (type === 'image') {
+      if (el.tagName === 'IMG') {
+        el.src = value;
+      } else {
+        el.style.backgroundImage = 'url("' + value.replace(/"/g, '\\"') + '")';
+      }
+    } else if (type === 'url') {
+      if ('href' in el) { el.href = value; } else { el.setAttribute('href', value); }
+    } else if (type === 'richtext') {
+      // Value is server-sanitised HTML — set as innerHTML so formatting renders.
+      // Safety: legacy plain-text values (no HTML tags) use textContent so any
+      // stray '<' / '&' characters render literally instead of being parsed.
+      if (/<[a-zA-Z!\/]/.test(value)) {
+        el.innerHTML = value;
+      } else {
+        el.textContent = value;
+      }
+    } else {
+      el.textContent = value;
+    }
+  }
 
   function applyContent(content) {
     latestContent = content;
@@ -338,27 +369,14 @@ const SCANNER_SCRIPT = /* javascript */ `
       var sel = '[data-get-key="' + label.replace(/"/g, '\\"') + '"]';
       var els = document.querySelectorAll(sel);
       for (var i = 0; i < els.length; i++) {
-        var el = els[i];
-        if (type === 'image') {
-          if (el.tagName === 'IMG') {
-            el.src = value;
-          } else {
-            el.style.backgroundImage = 'url("' + value.replace(/"/g, '\\"') + '")';
-          }
-        } else if (type === 'url') {
-          if ('href' in el) { el.href = value; } else { el.setAttribute('href', value); }
-        } else if (type === 'richtext') {
-          // Value is server-sanitised HTML — set as innerHTML so formatting renders.
-          // Safety: legacy plain-text values (no HTML tags) use textContent so any
-          // stray '<' / '&' characters render literally instead of being parsed.
-          if (/<[a-zA-Z!\/]/.test(value)) {
-            el.innerHTML = value;
-          } else {
-            el.textContent = value;
-          }
-        } else {
-          el.textContent = value;
-        }
+        applyToEl(els[i], type, value);
+      }
+      // Fallback: if no [data-get-key] element matched, use the element that the
+      // heuristic DOM scan pinned to this label. This makes saved edits appear on
+      // sites that don't have data-get-key attributes in their HTML — the common
+      // case for a vibe coder who installed the scanner but never touched the HTML.
+      if (els.length === 0 && labelToElement[label]) {
+        applyToEl(labelToElement[label], type, value);
       }
     }
   }
@@ -452,6 +470,7 @@ const SCANNER_SCRIPT = /* javascript */ `
                   : hIdx === 1 ? sectionName + ' Sub-heading'
                   : sectionName + ' Heading ' + (hIdx + 1);
       fields.push({ label: hLabel, type: 'text', value: ht });
+      labelToElement[hLabel] = hs[i];
       hIdx++;
     }
 
@@ -461,7 +480,7 @@ const SCANNER_SCRIPT = /* javascript */ `
     var bodyEls = el.querySelectorAll(
       'p, li, blockquote, figcaption, td, th, dd, [class*="desc"], [class*="text"], [class*="copy"], [class*="caption"]'
     );
-    var bodyLines = [];
+    var bodyLines = [], firstBodyEl = null;
     for (var bi = 0; bi < bodyEls.length; bi++) {
       // Skip if it contains a heading (the heading already captured above)
       if (bodyEls[bi].querySelector('h1,h2,h3,h4,h5,h6')) continue;
@@ -469,9 +488,11 @@ const SCANNER_SCRIPT = /* javascript */ `
       if (bt.length < 3 || seenText.has(bt)) continue;
       seenText.add(bt);
       bodyLines.push(bt);
+      if (!firstBodyEl) firstBodyEl = bodyEls[bi];
     }
     if (bodyLines.length) {
       fields.push({ label: sectionName + ' Body', type: 'richtext', value: bodyLines.join('\\n') });
+      if (firstBodyEl) labelToElement[sectionName + ' Body'] = firstBodyEl;
     }
 
     // ── CTAs — every distinct button / link with human-readable text ──────
@@ -490,6 +511,7 @@ const SCANNER_SCRIPT = /* javascript */ `
                     : sectionName + ' CTA ' + (ctaIdx + 1);
       var ctaType = abs ? 'url' : 'text';
       fields.push({ label: ctaLabel, type: ctaType, value: val });
+      labelToElement[ctaLabel] = ctaEls[ci];
       ctaIdx++;
       if (ctaIdx >= 5) break; // at most 5 CTAs per section
     }
@@ -512,6 +534,7 @@ const SCANNER_SCRIPT = /* javascript */ `
       var imgField = { label: imgLabel, type: 'image', value: absSrc };
       if (altText) imgField.alt = altText;
       fields.push(imgField);
+      labelToElement[imgLabel] = imgs[ii];
       imgIdx++;
       if (imgIdx >= 6) break; // at most 6 images per section
     }
@@ -639,6 +662,7 @@ const SCANNER_SCRIPT = /* javascript */ `
     seenText = new Set();
     seenImages = new Set();
     seenCtaText = new Set();
+    labelToElement = {};
     var sections = [];
     var usedNames = {};
 
@@ -727,10 +751,11 @@ const SCANNER_SCRIPT = /* javascript */ `
         seenText.add(hText);
         var sname = hText.length <= 60 ? hText : hText.slice(0, 60) + '\\u2026';
         var sfields = [{ label: sname + ' Heading', type: 'text', value: hText }];
+        labelToElement[sname + ' Heading'] = hEls[hi];
 
         // Collect all text siblings until next heading
         var sib = hEls[hi].nextElementSibling;
-        var lim = 20, bodyLines = [];
+        var lim = 20, bodyLines = [], firstBodySib = null;
         while (sib && lim-- > 0) {
           if (/^H[1-6]$/.test(sib.tagName)) break;
           var textNodes = [];
@@ -740,6 +765,7 @@ const SCANNER_SCRIPT = /* javascript */ `
             if (tv.length >= 2 && !seenText.has(tv)) {
               seenText.add(tv);
               bodyLines.push(tv);
+              if (!firstBodySib) firstBodySib = sib;
             }
           }
           // Grab images too
@@ -755,7 +781,10 @@ const SCANNER_SCRIPT = /* javascript */ `
           }
           sib = sib.nextElementSibling;
         }
-        if (bodyLines.length) sfields.push({ label: sname + ' Body', type: 'richtext', value: bodyLines.join('\\n') });
+        if (bodyLines.length) {
+          sfields.push({ label: sname + ' Body', type: 'richtext', value: bodyLines.join('\\n') });
+          if (firstBodySib) labelToElement[sname + ' Body'] = firstBodySib;
+        }
         sections.push({ name: sname, fields: sfields });
       }
     }
