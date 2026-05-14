@@ -37,36 +37,89 @@ export default function ReplitSlide() {
             className="font-body font-semibold text-muted uppercase"
             style={{ fontSize: "1vw", letterSpacing: "0.18em" }}
           >
-            Why this fits Replit
+            Why this is good for Replit
           </div>
         </div>
 
-        <div style={{ marginTop: "12vh", maxWidth: "65vw" }}>
+        <div style={{ marginTop: "6vh" }}>
           <h2
             className="font-display font-bold text-text m-0"
             style={{
-              fontSize: "5.4vw",
+              fontSize: "4.6vw",
               lineHeight: 1.05,
               letterSpacing: "-0.03em",
               textWrap: "balance",
+              maxWidth: "75vw",
             }}
           >
-            Replit&apos;s users build things. Their clients want to change them.
+            Replit becomes the place you build sites you can actually hand off.
           </h2>
-          <p
-            className="font-body font-normal text-muted"
+
+          <ul
+            className="font-body font-normal text-text list-none p-0"
             style={{
-              fontSize: "2.1vw",
               marginTop: "5vh",
-              lineHeight: 1.5,
-              maxWidth: "60vw",
+              fontSize: "1.7vw",
+              lineHeight: 1.45,
+              maxWidth: "78vw",
               textWrap: "pretty",
             }}
           >
-            get is the missing handoff layer. Every Replit-built site becomes a
-            deliverable a non-technical client can actually use — no exporting
-            to Webflow, no rebuilding in Wix, no leaving Replit.
-          </p>
+            <li className="flex items-start" style={{ marginBottom: "2.2vh" }}>
+              <span
+                className="text-text/40"
+                style={{ marginRight: "1.6vw", fontWeight: 600 }}
+              >
+                01
+              </span>
+              <span>
+                <span style={{ fontWeight: 700 }}>Stickier builders.</span>{" "}
+                The vibe coder who lands paying clients stays on Replit
+                longer and upgrades — instead of bouncing to Webflow or Wix
+                the moment a real client shows up.
+              </span>
+            </li>
+            <li className="flex items-start" style={{ marginBottom: "2.2vh" }}>
+              <span
+                className="text-text/40"
+                style={{ marginRight: "1.6vw", fontWeight: 600 }}
+              >
+                02
+              </span>
+              <span>
+                <span style={{ fontWeight: 700 }}>A new use case unlocked.</span>{" "}
+                &ldquo;Build client sites on Replit&rdquo; stops being a
+                technical demo and becomes a real freelancer/agency workflow.
+              </span>
+            </li>
+            <li className="flex items-start" style={{ marginBottom: "2.2vh" }}>
+              <span
+                className="text-text/40"
+                style={{ marginRight: "1.6vw", fontWeight: 600 }}
+              >
+                03
+              </span>
+              <span>
+                <span style={{ fontWeight: 700 }}>Builders ship more.</span>{" "}
+                Time that was burned on tiny client edits goes back to
+                building new things — which means more apps deployed on
+                Replit, not fewer.
+              </span>
+            </li>
+            <li className="flex items-start">
+              <span
+                className="text-text/40"
+                style={{ marginRight: "1.6vw", fontWeight: 600 }}
+              >
+                04
+              </span>
+              <span>
+                <span style={{ fontWeight: 700 }}>A friendly door for non-technical clients.</span>{" "}
+                Their first touch with a Replit-built site is a clean,
+                white-labeled editor — not a 500 page or a stale export.
+              </span>
+            </li>
+          </ul>
         </div>
 
         <div
