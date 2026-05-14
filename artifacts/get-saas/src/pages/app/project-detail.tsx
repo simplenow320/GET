@@ -34,7 +34,7 @@ import {
   Globe, Users, Database, FileEdit, Settings, Trash2,
   Lock, Unlock, Plus, Activity as ActivityIcon, ArrowLeft, Loader2,
   KeyRound, Copy, Check, ShieldCheck, RefreshCw, ArrowRight, Info,
-  Radio, X as XIcon,
+  Radio, X as XIcon, Download,
 } from "lucide-react";
 import { LastSeenBadge } from "@/components/last-seen-badge";
 import { useToast } from "@/hooks/use-toast";
@@ -582,8 +582,9 @@ function ScannerSetupCard({
   projectId: string;
   onDismiss: () => void;
 }) {
-  const [openSection, setOpenSection] = useState<"ai" | "manual" | null>("ai");
+  const [openSection, setOpenSection] = useState<"selfhost" | "ai" | "manual" | null>("selfhost");
   const [copied, setCopied] = useState<"snippet" | "prompt" | null>(null);
+  const [selfHostKey, setSelfHostKey] = useState("");
 
   const { data: keys = [], isLoading: keysLoading } = useQuery<ProjectKeyBasic[]>({
     queryKey: ["project-keys-scanner", projectId],
@@ -759,7 +760,7 @@ function ScannerSetupCard({
 
   const AccordionHeader = ({
     id, label, badge, open, onToggle,
-  }: { id: "ai" | "manual"; label: string; badge?: string; open: boolean; onToggle: () => void }) => (
+  }: { id: "selfhost" | "ai" | "manual"; label: string; badge?: string; open: boolean; onToggle: () => void }) => (
     <button
       type="button"
       onClick={onToggle}
@@ -822,7 +823,7 @@ function ScannerSetupCard({
               Connect your site
             </p>
             <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.6 }}>
-              Choose how you want to set up the connection — AI or manual.
+              Three ways to install — pick whichever fits your setup.
             </p>
           </div>
           {onDismiss && (
@@ -840,6 +841,121 @@ function ScannerSetupCard({
               <XIcon style={{ width: 14, height: 14 }} />
             </button>
           )}
+        </div>
+
+        {/* ── Self-host accordion (recommended for agent-built apps) ──── */}
+        <div>
+          <AccordionHeader
+            id="selfhost"
+            label="Self-host (recommended for Replit & AI builders)"
+            badge="Download one file, paste one line — agents won't block it"
+            open={openSection === "selfhost"}
+            onToggle={() => setOpenSection(s => s === "selfhost" ? null : "selfhost")}
+          />
+          <AccordionBody open={openSection === "selfhost"}>
+            {keysLoading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Loader2 style={{ width: 14, height: 14, color: tone[400] }} className="animate-spin" />
+                <span style={{ fontSize: type.sm, color: tone[500] }}>Loading…</span>
+              </div>
+            ) : !firstKey ? noKeyBanner : (
+              <>
+                {/* Why this exists */}
+                <div style={{
+                  padding: "10px 14px", borderRadius: r.md,
+                  background: tone[50], border: `1px solid ${line.faint}`,
+                }}>
+                  <p style={{ fontSize: type.xs, color: tone[600], lineHeight: 1.6, margin: 0 }}>
+                    AI builders like Replit Agent often refuse to add <code style={{ background: "white", padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>&lt;script src="https://..."&gt;</code> tags from services they don't recognize. With this option you download a small file into your own project — your agent sees a local file you chose to add, not an outside dependency, so it won't push back.
+                  </p>
+                </div>
+
+                {/* Step 1 — paste key + download */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <p style={{ fontSize: type.sm, fontWeight: 700, margin: 0 }}>
+                    Step 1 — Download <code style={{ background: tone[100], padding: "1px 6px", borderRadius: 4, fontFamily: "monospace", fontWeight: 600 }}>get-scanner.js</code>
+                  </p>
+                  <p style={{ fontSize: type.xs, color: tone[500], margin: 0, lineHeight: 1.55 }}>
+                    Paste your full project key (it starts with <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{firstKey.keyPrefix}</code>) — we'll bake it into the file so you don't have to set it anywhere else.
+                  </p>
+                  <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexWrap: "wrap" as const }}>
+                    <input
+                      type="text"
+                      value={selfHostKey}
+                      onChange={e => setSelfHostKey(e.target.value.trim())}
+                      placeholder={`${firstKey.keyPrefix}…`}
+                      data-testid="selfhost-key-input"
+                      spellCheck={false}
+                      autoComplete="off"
+                      style={{
+                        ...inputStyle,
+                        flex: 1,
+                        minWidth: 220,
+                        fontFamily: "ui-monospace, Menlo, monospace",
+                        fontSize: 12.5,
+                      }}
+                    />
+                    <a
+                      href={selfHostKey.startsWith("pk_") && selfHostKey.length >= 12
+                        ? `${BASE}/api/public/scanner-download?key=${encodeURIComponent(selfHostKey)}`
+                        : undefined}
+                      onClick={e => {
+                        if (!selfHostKey.startsWith("pk_") || selfHostKey.length < 12) e.preventDefault();
+                      }}
+                      data-testid="selfhost-download"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 8,
+                        padding: "10px 16px", borderRadius: r.md,
+                        background: selfHostKey.startsWith("pk_") && selfHostKey.length >= 12 ? BRAND.ink : tone[200],
+                        color: selfHostKey.startsWith("pk_") && selfHostKey.length >= 12 ? "white" : tone[500],
+                        fontSize: type.sm, fontWeight: 600,
+                        textDecoration: "none",
+                        cursor: selfHostKey.startsWith("pk_") && selfHostKey.length >= 12 ? "pointer" : "not-allowed",
+                        flexShrink: 0,
+                      }}
+                      download="get-scanner.js"
+                    >
+                      <Download style={{ width: 14, height: 14 }} />
+                      Download file
+                    </a>
+                  </div>
+                </div>
+
+                {/* Step 2 — drop in repo */}
+                <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ fontSize: type.sm, fontWeight: 700, margin: 0 }}>
+                    Step 2 — Drop the file into your project
+                  </p>
+                  <p style={{ fontSize: type.xs, color: tone[500], margin: 0, lineHeight: 1.6 }}>
+                    Put <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>get-scanner.js</code> in the folder your site serves static files from. Common spots: <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>public/</code>, <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>static/</code>, or right next to <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>index.html</code>.
+                  </p>
+                </div>
+
+                {/* Step 3 — paste one line */}
+                <div style={{ borderTop: `1px solid ${line.faint}`, paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <p style={{ fontSize: type.sm, fontWeight: 700, margin: 0 }}>
+                    Step 3 — Paste this one line into your <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>&lt;head&gt;</code>
+                  </p>
+                  <CodeBlock text={`<script src="/get-scanner.js" defer></script>`} which="snippet" />
+                  <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
+                    That's it — no key in the HTML, no external URL, no agent objections. Reload your site and the scanner will start syncing content.
+                  </p>
+                </div>
+
+                {/* Heads-up about updates */}
+                <div style={{
+                  padding: "10px 14px", borderRadius: r.md,
+                  background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.3)",
+                  display: "flex", gap: 8,
+                }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>ℹ️</span>
+                  <p style={{ fontSize: type.xs, color: "#78350f", lineHeight: 1.6, margin: 0 }}>
+                    <strong>Heads-up:</strong> because the file lives in your project, you won't get scanner updates automatically. If we ship an improvement we'll let you know — just come back here and download a fresh copy.
+                  </p>
+                </div>
+              </>
+            )}
+          </AccordionBody>
         </div>
 
         {/* ── AI Connect accordion ─────────────────────────────────────── */}

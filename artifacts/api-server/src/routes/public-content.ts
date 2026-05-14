@@ -260,22 +260,65 @@ router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyReques
  *
  * Place just before </body> for best results.
  */
-router.get("/scanner.js", (_req, res) => {
+router.get("/scanner.js", (req, res) => {
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=300");
-  res.send(SCANNER_SCRIPT);
+  res.send(buildScannerScript());
+});
+
+/**
+ * GET /api/public/scanner-download?key=pk_xxx
+ *
+ * Self-hosted variant. Returns the same scanner with the project key + API
+ * origin baked in as constants, served as a downloadable attachment so the
+ * user can drop it straight into their repo (e.g. public/get-scanner.js) and
+ * load it with a single relative <script src="/get-scanner.js"></script> tag.
+ *
+ * Why this exists: agent-based builders (Replit Agent etc.) refuse to add
+ * <script src="https://..."> tags to unverified third-party services. A
+ * locally-committed file is just a file the human chose to add — no agent
+ * objection, no external dependency at install time.
+ */
+router.get("/scanner-download", (req, res) => {
+  const key = String(req.query.key ?? "");
+  if (!key.startsWith("pk_") || key.length < 12 || key.length > 200) {
+    res.status(400).type("text/plain").send(
+      "Missing or invalid 'key' query param. Expected a project key starting with pk_.",
+    );
+    return;
+  }
+  const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0] || req.protocol;
+  const host = req.headers["x-forwarded-host"] as string || req.headers.host || "";
+  const apiOrigin = `${proto}://${host}`;
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="get-scanner.js"');
+  res.setHeader("Cache-Control", "no-store");
+  res.send(buildScannerScript({ key, apiOrigin }));
 });
 
 // ── Scanner script (vanilla JS, no deps) ─────────────────────────────────────
 
-const SCANNER_SCRIPT = /* javascript */ `
-(function () {
-  var scriptEl = document.querySelector('script[src*="scanner.js"][data-key]');
+/**
+ * Builds the scanner JS. When opts is omitted, the scanner reads its key from
+ * its own <script data-key="..."> tag and derives the API origin from its
+ * src URL — the classic hosted install. When opts is provided, both values
+ * are baked in as constants so the file can be served from the user's own
+ * domain (self-hosted install).
+ */
+function buildScannerScript(opts?: { key: string; apiOrigin: string }): string {
+  const bootstrap = opts
+    ? `var key = ${JSON.stringify(opts.key)};\n  var origin = ${JSON.stringify(opts.apiOrigin)};`
+    : `var scriptEl = document.querySelector('script[src*="scanner.js"][data-key]');
   if (!scriptEl) { console.warn('[get] Scanner: missing script tag or data-key.'); return; }
   var key = scriptEl.getAttribute('data-key');
   if (!key || !key.startsWith('pk_')) { console.warn('[get] Scanner: invalid data-key.'); return; }
+  var origin = new URL(scriptEl.src).origin;`;
+  return SCANNER_SCRIPT.replace("/*__BOOTSTRAP__*/", bootstrap);
+}
 
-  var origin = new URL(scriptEl.src).origin;
+const SCANNER_SCRIPT = /* javascript */ `
+(function () {
+  /*__BOOTSTRAP__*/
   var SNAPSHOT_URL = origin + '/api/public/content/snapshot';
   var CONTENT_URL  = origin + '/api/public/content';
 
