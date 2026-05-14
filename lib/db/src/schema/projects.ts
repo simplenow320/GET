@@ -25,6 +25,15 @@ export const projectsTable = pgTable("projects", {
   // get the older "submit draft → owner publishes" workflow back. Owners and
   // admins always auto-publish regardless of this flag.
   autoPublish: boolean("auto_publish").notNull().default(true),
+  // Opt-in lock for security-conscious owners. When TRUE, MCP requests
+  // that arrive with NO Origin/Referer header (i.e. non-browser clients
+  // like Claude Desktop, Cursor, cron, curl) are rejected if the project
+  // also has at least one domain in the allowlist. Default FALSE so
+  // existing MCP integrations (which the spec encourages NOT to send
+  // Origin) keep working out of the box. Owners who only ever use the
+  // MCP from a browser-based client, or who don't use MCP at all, can
+  // flip this on for stricter defense-in-depth.
+  mcpRequireOrigin: boolean("mcp_require_origin").notNull().default(false),
 });
 
 export const insertProjectSchema = createInsertSchema(projectsTable).omit({ id: true, createdAt: true });

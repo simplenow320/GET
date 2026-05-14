@@ -8,7 +8,8 @@ import {
   domainsTable,
   mcpCallLogTable,
 } from "@workspace/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 // ── Invisible safety controls ───────────────────────────────────────────────
 // Three protections that the user / vibe coder never sees but a security
@@ -72,6 +73,43 @@ function rateLimitOk(keyId: number): boolean {
   fresh.push(now);
   rateBuckets.set(keyId, fresh);
   return true;
+}
+
+/**
+ * Cross-process authoritative rate limit. The in-memory `rateLimitOk`
+ * above is fast and correct for a single process, but does nothing when
+ * the API is horizontally scaled. We back it up with a count against
+ * `mcp_call_log` (already indexed on `(project_key_id, created_at)`),
+ * which every process writes to. A request must pass BOTH gates to be
+ * served.
+ *
+ * Costs: one `count(*)` per request scoped to the per-key index. On a
+ * 60/minute ceiling that's at most 60 indexed-count probes per key per
+ * minute — trivial. We tolerate the small race between concurrent
+ * processes both observing N<MAX and both inserting; over a 60s window
+ * the worst-case overage is bounded by the process count, not by
+ * sustained traffic, which is acceptable for an abuse cap.
+ */
+async function dbRateLimitOk(projectKeyId: number): Promise<boolean> {
+  try {
+    const cutoff = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
+    const rows = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(mcpCallLogTable)
+      .where(
+        and(
+          eq(mcpCallLogTable.projectKeyId, projectKeyId),
+          gte(mcpCallLogTable.createdAt, cutoff),
+        ),
+      );
+    const c = rows[0]?.c ?? 0;
+    return c < RATE_LIMIT_MAX;
+  } catch {
+    // Fail-open on DB errors so a transient outage doesn't lock out every
+    // MCP user. The in-memory layer still applies, so a single broken
+    // process can't be weaponised.
+    return true;
+  }
 }
 
 // Exported for test introspection only.
@@ -155,7 +193,7 @@ interface AuthedRequest extends Request {
 // usually does not see the Authorization header itself). `forbidden`
 // signals an Origin-allowlist failure so the JSON-RPC layer can return a
 // distinct error code from "missing/invalid key".
-type AuthOk = { ok: true; projectId: number; projectKeyId: number; keyPrefix: string; rawKey: string };
+type AuthOk = { ok: true; projectId: number; projectKeyId: number; keyPrefix: string };
 type AuthFail = { ok: false; reason: "unauth" | "forbidden" | "rate_limited" };
 type AuthResult = AuthOk | AuthFail;
 
@@ -191,6 +229,8 @@ function extractKey(req: Request): string | null {
 async function authenticate(req: AuthedRequest): Promise<AuthResult> {
   const raw = extractKey(req);
   if (!raw || !raw.startsWith("pk_")) return { ok: false, reason: "unauth" };
+  // Join the project row so we can read the per-project mcpRequireOrigin
+  // policy in the same trip.
   const rows = await db
     .select({
       projectId: projectKeysTable.projectId,
@@ -198,8 +238,10 @@ async function authenticate(req: AuthedRequest): Promise<AuthResult> {
       id: projectKeysTable.id,
       createdAt: projectKeysTable.createdAt,
       lastUsedAt: projectKeysTable.lastUsedAt,
+      mcpRequireOrigin: projectsTable.mcpRequireOrigin,
     })
     .from(projectKeysTable)
+    .innerJoin(projectsTable, eq(projectsTable.id, projectKeysTable.projectId))
     .where(
       and(
         eq(projectKeysTable.keyHash, hashKey(raw)),
@@ -228,33 +270,45 @@ async function authenticate(req: AuthedRequest): Promise<AuthResult> {
     return { ok: false, reason: "unauth" };
   }
 
-  // Origin allowlist — same policy as requireProjectKey middleware:
-  //   - no domains configured  → accept any origin (back-compat)
-  //   - "absent" Origin/Referer → allow (server-side / cron / curl / MCP host)
+  // Origin allowlist policy:
+  //   - no domains configured  → accept any origin (back-compat for
+  //     fresh installs that haven't set up their allowlist yet)
+  //   - "absent" Origin/Referer → allow by default (server-side / cron
+  //     / curl / MCP host like Claude Desktop). If the project has
+  //     opted into mcpRequireOrigin AND has at least one domain
+  //     configured, reject — this is the per-project tightening that
+  //     security-conscious owners can flip on.
   //   - "host" → must match exactly OR be a subdomain of an allowed apex
   //   - "invalid" → reject (malformed header is suspicious)
   const origin = requestOrigin(req);
-  if (origin.kind !== "absent") {
-    const allowedRows = await db
-      .select({ hostname: domainsTable.hostname })
-      .from(domainsTable)
-      .where(eq(domainsTable.projectId, k.projectId));
-    if (allowedRows.length > 0) {
-      if (origin.kind === "invalid") {
-        req.log?.warn?.(
-          { projectId: k.projectId, rawOrigin: req.headers.origin, rawReferer: req.headers.referer },
-          "MCP key used with malformed Origin/Referer",
-        );
-        return { ok: false, reason: "forbidden" };
-      }
-      const allowed = allowedRows.map((d) => normalizeAllowed(d.hostname));
-      if (!hostnameAllowed(origin.host, allowed)) {
-        req.log?.warn?.(
-          { projectId: k.projectId, reqHost: origin.host, allowed },
-          "MCP key used from disallowed origin",
-        );
-        return { ok: false, reason: "forbidden" };
-      }
+  const allowedRows = await db
+    .select({ hostname: domainsTable.hostname })
+    .from(domainsTable)
+    .where(eq(domainsTable.projectId, k.projectId));
+  const hasAllowlist = allowedRows.length > 0;
+  if (origin.kind === "absent") {
+    if (k.mcpRequireOrigin && hasAllowlist) {
+      req.log?.warn?.(
+        { projectId: k.projectId, projectKeyId: k.id },
+        "MCP key used without Origin/Referer while project requires it",
+      );
+      return { ok: false, reason: "forbidden" };
+    }
+  } else if (hasAllowlist) {
+    if (origin.kind === "invalid") {
+      req.log?.warn?.(
+        { projectId: k.projectId, rawOrigin: req.headers.origin, rawReferer: req.headers.referer },
+        "MCP key used with malformed Origin/Referer",
+      );
+      return { ok: false, reason: "forbidden" };
+    }
+    const allowed = allowedRows.map((d) => normalizeAllowed(d.hostname));
+    if (!hostnameAllowed(origin.host, allowed)) {
+      req.log?.warn?.(
+        { projectId: k.projectId, reqHost: origin.host, allowed },
+        "MCP key used from disallowed origin",
+      );
+      return { ok: false, reason: "forbidden" };
     }
   }
 
@@ -269,7 +323,6 @@ async function authenticate(req: AuthedRequest): Promise<AuthResult> {
     projectId: k.projectId,
     projectKeyId: k.id,
     keyPrefix: k.keyPrefix,
-    rawKey: raw,
   };
 }
 
@@ -282,7 +335,7 @@ const TOOLS = [
   {
     name: "get_install_snippet",
     description:
-      "Return the exact <script> tag the user must paste before </body> in their main HTML file to connect their site to the 'get' CMS. The snippet is pre-filled with the correct scanner URL and the project key. Call this first when setting up.",
+      "Return the install snippet template AND a one-click URL that shows the user their project key. The snippet contains a YOUR_PROJECT_KEY placeholder — the user opens the URL, copies their key, and pastes it into the placeholder. We deliberately do NOT return the raw key in this response so it never enters model conversation logs. Call this first when setting up.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -314,6 +367,22 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
 ] as const;
+
+/**
+ * Server-side Zod schemas mirroring each tool's advertised JSON Schema.
+ * Enforced in the dispatcher BEFORE tool code runs so we never feed
+ * unchecked attacker-controlled args into business logic. `.strict()`
+ * rejects unknown keys (defense in depth against future-tool injection
+ * via the `arguments` blob).
+ */
+const TOOL_INPUT_SCHEMAS: Record<string, z.ZodTypeAny> = {
+  get_install_snippet: z.object({}).strict(),
+  get_list_fields: z.object({}).strict(),
+  get_tag_instructions: z
+    .object({ fieldLabel: z.string().min(1).max(120).optional() })
+    .strict(),
+  get_install_status: z.object({}).strict(),
+};
 
 // ── Tool implementations ─────────────────────────────────────────────────────
 
@@ -348,18 +417,26 @@ function publicBaseUrl(req: Request): string {
 
 async function tool_get_install_snippet(
   req: Request,
-  ctx: { projectId: number; keyPrefix: string; rawKey: string },
+  ctx: { projectId: number; keyPrefix: string },
 ): Promise<{ content: { type: "text"; text: string }[] }> {
   const base = publicBaseUrl(req);
-  // Embed the full raw key the caller authenticated with. MCP clients do
-  // not surface the Authorization header to the model, so without this the
-  // assistant would have to ask the user to paste the key — defeating the
-  // "no copy-paste" goal of the tool.
+  // The model never sees the raw project key. MCP clients do not surface
+  // the Authorization header to the model in the first place, but tool
+  // RESPONSE text IS recorded in the conversation log by every major
+  // provider (Anthropic, OpenAI, etc.). Returning the raw key here would
+  // therefore persist a live credential into third-party log storage.
+  // Instead we return:
+  //   - a TEMPLATE snippet with a YOUR_PROJECT_KEY placeholder
+  //   - a deep link to the project's keys page where the real value is
+  //     shown to the user, who pastes it locally into the placeholder
+  // This keeps the no-copy-paste UX for everything except the one secret
+  // value, which is the only piece that has to traverse a trust boundary.
+  const keysUrl = `${base}/app/projects/${ctx.projectId}/keys`;
   const snippet =
     `<!-- Paste just before </body> in your main HTML file. -->\n` +
     `<script\n` +
     `  src="${base}/api/public/scanner.js"\n` +
-    `  data-key="${ctx.rawKey}"\n` +
+    `  data-key="YOUR_PROJECT_KEY"\n` +
     `  defer\n` +
     `></script>`;
   return {
@@ -367,8 +444,23 @@ async function tool_get_install_snippet(
       {
         type: "text",
         text:
-          "Install snippet for the 'get' CMS. Paste this exactly once, immediately before the closing </body> tag of the main HTML file. Do not duplicate. The data-key is already filled in with the project's key — do not modify it.\n\n" +
-          snippet,
+          `Install steps for the 'get' CMS:\n\n` +
+          `1. Insert this template just before the </body> tag in the main HTML file. ` +
+          `Do not duplicate.\n\n${snippet}\n\n` +
+          `2. Tell the user (verbatim) to do these two things THEMSELVES, in their ` +
+          `editor — not by pasting anything into this chat:\n` +
+          `   a. Open this URL in their browser to view their project key:\n` +
+          `      ${keysUrl}\n` +
+          `   b. In the file you just edited, manually replace the literal string ` +
+          `YOUR_PROJECT_KEY with the value shown on that page, then save the file.\n\n` +
+          `IMPORTANT for the assistant: do NOT ask the user to paste the key into chat. ` +
+          `Do NOT offer to perform the substitution for them. The key must never enter ` +
+          `the conversation. Once the user confirms they've replaced the placeholder ` +
+          `and saved, call get_install_status to verify the install end-to-end.\n\n` +
+          `(Security rationale: tool outputs and chat messages are persisted in model ` +
+          `provider logs. Routing the key from the dashboard directly to the file — ` +
+          `bypassing the conversation — is the only way to keep it out of third-party ` +
+          `log storage.)`,
       },
     ],
   };
@@ -496,7 +588,7 @@ function rpcError(id: JsonRpcRequest["id"], code: number, message: string) {
 async function dispatch(
   req: Request,
   body: JsonRpcRequest,
-  auth: { projectId: number; projectKeyId: number; keyPrefix: string; rawKey: string },
+  auth: { projectId: number; projectKeyId: number; keyPrefix: string },
   res: Response,
 ): Promise<void> {
   const { method, params, id } = body;
@@ -530,7 +622,31 @@ async function dispatch(
 
     case "tools/call": {
       const name = (params?.name as string) ?? "";
-      const args = (params?.arguments as Record<string, unknown>) ?? {};
+      const rawArgs = (params?.arguments as unknown) ?? {};
+
+      // Runtime validation BEFORE dispatch. Each tool advertises an
+      // inputSchema in tools/list — that's a hint to the model, not a
+      // server guarantee. We re-check with Zod so a misbehaving model
+      // (or a directly-poking attacker) can't slip unexpected types or
+      // unknown keys into tool code. Returns JSON-RPC -32602 ("Invalid
+      // params") with the specific Zod issue so the model can self-correct.
+      const schema = TOOL_INPUT_SCHEMAS[name];
+      if (!schema) {
+        res.json(rpcError(id, -32601, `Unknown tool: ${name}`));
+        return;
+      }
+      const parsed = schema.safeParse(rawArgs);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        const path = issue?.path?.join(".") || "(root)";
+        const msg = issue?.message ?? "validation failed";
+        res.json(
+          rpcError(id, -32602, `Invalid arguments for ${name}: ${path}: ${msg}`),
+        );
+        return;
+      }
+      const args = parsed.data as Record<string, unknown>;
+
       try {
         let out;
         switch (name) {
@@ -547,6 +663,9 @@ async function dispatch(
             out = await tool_get_install_status(auth);
             break;
           default:
+            // Defensive — should be unreachable since TOOL_INPUT_SCHEMAS
+            // gates the name above. If the schema map and switch ever
+            // disagree, we fall through to a clean 32601 instead of 500.
             res.json(rpcError(id, -32601, `Unknown tool: ${name}`));
             return;
         }
@@ -608,9 +727,15 @@ router.post("/", async (req: AuthedRequest, res) => {
     });
   }
 
-  // Per-key rate limit. Logged so abuse leaves a paper trail even if the
-  // attacker never gets a successful response.
-  if (!rateLimitOk(auth.projectKeyId)) {
+  // Two-layer rate limit:
+  //   1. In-memory ring buffer — fast, exact within this process.
+  //   2. DB count over `mcp_call_log` — authoritative across processes
+  //      so the limit survives horizontal scale-out.
+  // A request must pass BOTH gates. Logged either way so abuse leaves a
+  // paper trail even if the attacker never gets a successful response.
+  const memOk = rateLimitOk(auth.projectKeyId);
+  const dbOk = memOk ? await dbRateLimitOk(auth.projectKeyId) : false;
+  if (!memOk || !dbOk) {
     logCall({
       projectId: auth.projectId,
       projectKeyId: auth.projectKeyId,
@@ -651,7 +776,48 @@ router.post("/", async (req: AuthedRequest, res) => {
       error: { code: -32600, message: "Invalid Request — expected JSON-RPC 2.0 object with `method` field" },
     });
   }
+  // Cap batch size. Without this, a single HTTP request that already
+  // passed the rate-limit gate could carry an unbounded array of tool
+  // calls — a trivial way to amplify a single token of the 60/min budget
+  // into thousands of tool invocations. MCP clients in the wild send
+  // batches of 1-3 items; 20 is comfortably above any legitimate use.
+  const MAX_BATCH = 20;
+  if (Array.isArray(rawBody) && rawBody.length > MAX_BATCH) {
+    return res.status(400).json({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: `Batch too large — max ${MAX_BATCH} items per request` },
+    });
+  }
   const body = rawBody as JsonRpcRequest | JsonRpcRequest[];
+
+  // Charge each batch item against the in-memory rate limiter so a
+  // 20-item batch consumes 20 tokens, not 1. The DB-backed limiter
+  // counts post-hoc via mcp_call_log inserts, so it'll catch the
+  // overage on subsequent requests anyway, but charging up-front
+  // prevents a single request from blowing through the budget.
+  if (Array.isArray(body)) {
+    for (let i = 1; i < body.length; i++) {
+      if (!rateLimitOk(auth.projectKeyId)) {
+        logCall({
+          projectId: auth.projectId,
+          projectKeyId: auth.projectKeyId,
+          method: "rate_limited_batch",
+          toolName: null,
+          ip,
+          userAgent: ua,
+          ok: false,
+          errorCode: -32004,
+        });
+        res.setHeader("Retry-After", "60");
+        return res.status(429).json({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32004, message: "Rate limit exceeded mid-batch — try again in a minute" },
+        });
+      }
+    }
+  }
 
   // Capture-shim wraps res so we can both inspect what the dispatcher
   // wrote (for the audit log) and forward it to the real response.
