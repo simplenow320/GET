@@ -404,6 +404,13 @@ export default function ClientEditor() {
         tone: "bad",
       };
     }
+    if (!installCheck.scannerKeyMatches) {
+      return {
+        color: "#ef4444",
+        tip: "Scanner is installed but the key doesn't match this project — saves won't show.",
+        tone: "bad",
+      };
+    }
     const fs = installCheck.fieldStatuses.find((f) => f.label === label);
     if (fs && fs.status === "wired") {
       return { color: "#22c55e", tip: "Wired up — changes will show on your site.", tone: "ok" };
@@ -847,11 +854,25 @@ export default function ClientEditor() {
       {
         onSuccess: (data: any) => {
           const isPending = data?.draftValue != null;
+          // Honest save toast — append the same install-check hint the
+          // header badge uses so we never tell the user "now live" when
+          // the scanner isn't installed or the field isn't tagged.
+          // Prefer the label off the server response (authoritative) and
+          // fall back to the local closure only as a secondary lookup.
+          const savedLabel: string | undefined = data?.label
+            ?? fields?.find((f) => f.id === fieldId)?.label;
+          const s = savedLabel ? statusForField(savedLabel) : null;
+          // Conservative default: if we couldn't resolve the field or have
+          // no install-check yet, do NOT claim "now live."
+          let liveDescription = "Saved. We haven't confirmed your site is wired up yet — open it in another tab so we can check.";
+          if (s && s.tone === "bad") liveDescription = "Saved — but " + s.tip;
+          else if (s && s.tone === "warn") liveDescription = "Saved — " + s.tip;
+          else if (s && s.tone === "ok") liveDescription = "Your change is now live.";
           toast({
             title: isPending ? "Saved — pending review" : "Saved",
             description: isPending
               ? "The project owner will review before it goes live."
-              : "Your change is now live.",
+              : liveDescription,
           });
           // Server now has the change — drop the local autosave for this field.
           try { localStorage.removeItem(draftKey(fieldId)); } catch {}

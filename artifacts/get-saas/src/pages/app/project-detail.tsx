@@ -216,7 +216,7 @@ function CheckSetupButton({ projectId }: { projectId: string }) {
                         title={result.scannerFound ? "Scanner script is installed" : "Scanner script is missing"}
                         detail={result.scannerFound
                           ? (result.scannerKeyMatches ? "Key matches this project." : "Script found, but the key doesn't look right.")
-                          : "Add the install snippet from the API Keys tab to your site's <head>."}
+                          : "Add the install snippet from the Connect tab to your site's <head>."}
                       />
                     </>
                   )}
@@ -382,7 +382,7 @@ export default function ProjectDetail() {
     { value: "clients",  icon: Users,       label: "Clients"  },
     { value: "domains",  icon: Globe,       label: "Domains"  },
     { value: "drafts",   icon: FileEdit,    label: "Drafts"   },
-    { value: "keys",     icon: KeyRound,    label: "Site keys" },
+    { value: "keys",     icon: KeyRound,    label: "Connect"  },
     { value: "activity", icon: ActivityIcon,label: "Activity" },
     // Settings holds rename + delete; owners only.
     ...(isOwner ? [{ value: "settings", icon: Settings, label: "Settings" }] : []),
@@ -794,7 +794,7 @@ function ScannerSetupCard({
   const noKeyBanner = (
     <div style={{ padding: "12px 14px", borderRadius: r.md, background: tone[50], border: `1px solid ${line.base}` }}>
       <p style={{ fontSize: type.sm, color: tone[600], margin: 0 }}>
-        You need a project key first. Go to the <strong>Site keys</strong> tab, create one, then come back here.
+        You need a project key first. Go to the <strong>Connect</strong> tab, create one, then come back here.
       </p>
     </div>
   );
@@ -931,7 +931,7 @@ function ScannerSetupCard({
                   </p>
                   <CodeBlock text={snippet} which="snippet" />
                   <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
-                    Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>YOUR_FULL_KEY_HERE</code> with your full key from the <strong>Site keys</strong> tab.
+                    Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>YOUR_FULL_KEY_HERE</code> with your full key from the <strong>Connect</strong> tab.
                   </p>
 
                   {/* Where to put it — by platform */}
