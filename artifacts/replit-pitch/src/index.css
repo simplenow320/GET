@@ -6,18 +6,19 @@
   --color-bg: var(--slide-bg);
   --color-text: var(--slide-text);
   --color-muted: var(--slide-muted);
+  --color-divider: var(--slide-divider);
   --font-display: var(--font-display-family);
   --font-body: var(--font-body-family);
 }
 
 :root {
-  /* Replace these with brand colors */
-  --slide-primary: #4f46e5;
-  --slide-accent: #06b6d4;
-  --slide-bg: #f8fafc;
-  --slide-text: #0f172a;
-  --slide-muted: #64748b;
-  --font-display-family: "Inter", system-ui, sans-serif;
+  --slide-primary: #1a1a2e;
+  --slide-accent: #ffd747;
+  --slide-bg: #faf9f6;
+  --slide-text: #1a1a2e;
+  --slide-muted: #6b6b7a;
+  --slide-divider: #e6e3da;
+  --font-display-family: "Playfair Display", Georgia, serif;
   --font-body-family: "Inter", system-ui, sans-serif;
   color-scheme: light;
 }
