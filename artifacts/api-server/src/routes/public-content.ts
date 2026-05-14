@@ -375,8 +375,28 @@ const SCANNER_SCRIPT = /* javascript */ `
       // heuristic DOM scan pinned to this label. This makes saved edits appear on
       // sites that don't have data-get-key attributes in their HTML — the common
       // case for a vibe coder who installed the scanner but never touched the HTML.
-      if (els.length === 0 && labelToElement[label]) {
-        applyToEl(labelToElement[label], type, value);
+      if (els.length === 0) {
+        var fallbackEl = labelToElement[label];
+        // Fuzzy fallback: when the user's field is named "Hero" but the scanner
+        // produces qualified labels like "Hero Heading" / "Hero Body" / "Hero CTA"
+        // / "Hero Image", pick the heuristic label that best fits the field type.
+        // This is the common case for users who renamed fields in the editor or
+        // created new fields with short names that don't include the role suffix.
+        if (!fallbackEl) {
+          var prefix = label + ' ';
+          var preferred = type === 'image' ? 'Image'
+                        : type === 'url'   ? 'CTA'
+                        : type === 'richtext' ? 'Body'
+                        : 'Heading'; // text / number / default
+          var firstMatch = null;
+          for (var k in labelToElement) {
+            if (k.indexOf(prefix) !== 0) continue;
+            if (!firstMatch) firstMatch = k;
+            if (k === prefix + preferred) { fallbackEl = labelToElement[k]; break; }
+          }
+          if (!fallbackEl && firstMatch) fallbackEl = labelToElement[firstMatch];
+        }
+        if (fallbackEl) applyToEl(fallbackEl, type, value);
       }
     }
   }
