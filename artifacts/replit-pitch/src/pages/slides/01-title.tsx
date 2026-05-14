@@ -41,17 +41,13 @@ export default function TitleSlide() {
           </div>
         </div>
 
-        <div style={{ marginTop: "14vh", maxWidth: "70vw" }}>
-          <h1
-            className="font-display font-bold text-text lowercase m-0"
-            style={{
-              fontSize: "14vw",
-              lineHeight: 0.95,
-              letterSpacing: "-0.04em",
-            }}
-          >
-            get
-          </h1>
+        <div style={{ marginTop: "10vh", maxWidth: "70vw" }}>
+          <img
+            src={`${import.meta.env.BASE_URL}get-logo.png`}
+            crossOrigin="anonymous"
+            alt="get logo"
+            style={{ height: "30vh", width: "auto", display: "block" }}
+          />
           <p
             className="font-body font-normal text-muted"
             style={{
