@@ -18,8 +18,8 @@
   --slide-text: #1a1a2e;
   --slide-muted: #6b6b7a;
   --slide-divider: #e6e3da;
-  --font-display-family: "Playfair Display", Georgia, serif;
-  --font-body-family: "Inter", system-ui, sans-serif;
+  --font-display-family: "Nunito", system-ui, sans-serif;
+  --font-body-family: "Nunito", system-ui, sans-serif;
   color-scheme: light;
 }
 

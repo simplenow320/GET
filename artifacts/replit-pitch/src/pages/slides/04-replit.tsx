@@ -21,20 +21,14 @@ export default function ReplitSlide() {
         style={{ padding: "6vh 6vw", zIndex: 1 }}
       >
         <div
-          className="flex justify-between items-center"
+          className="flex justify-end items-center"
           style={{
             paddingBottom: "4vh",
             borderBottom: "0.15vh solid var(--slide-divider)",
           }}
         >
           <div
-            className="font-display font-bold text-text lowercase"
-            style={{ fontSize: "2.4vw", lineHeight: 1, letterSpacing: "-0.03em" }}
-          >
-            get
-          </div>
-          <div
-            className="font-body font-medium text-muted uppercase"
+            className="font-body font-semibold text-muted uppercase"
             style={{ fontSize: "1vw", letterSpacing: "0.18em" }}
           >
             Why this fits Replit
