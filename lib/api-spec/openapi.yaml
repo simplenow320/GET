@@ -676,7 +676,7 @@ components:
   schemas:
     UploadUrlRequest:
       type: object
-      required: [name, size, contentType]
+      required: [name, size, contentType, projectId]
       properties:
         name:
           type: string
@@ -687,6 +687,10 @@ components:
         contentType:
           type: string
           minLength: 1
+        projectId:
+          type: integer
+          minimum: 1
+          description: Project this upload belongs to. Caller must be an editor or higher in this project.
     UploadUrlResponse:
       type: object
       required: [uploadURL, objectPath]

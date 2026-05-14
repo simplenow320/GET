@@ -1,9 +1,85 @@
 import { Router, type IRouter, type Request } from "express";
+import { z } from "zod";
 import { db, contentFieldsTable, contentSnapshotsTable, projectsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireProjectKey, type ProjectKeyRequest } from "../middlewares/project-key-auth";
+import { sanitizeContent, sanitizeRichContent } from "../lib/sanitize";
 
 const router: IRouter = Router();
+
+// ── Public-write hardening (audit critical #1 + medium #5) ──────────────────
+//
+// The pk_ project key authenticating these endpoints lives in plaintext in
+// the customer's HTML — anyone who can `view-source:` the site has it. So the
+// "auth" here is really only "you are SOMEWHERE on the open internet". Every
+// write path below therefore treats the body as fully untrusted: validated
+// with Zod, capped, sanitized per field type, and never stored verbatim.
+//
+// In particular, richtext seeds previously hit the DB with whatever HTML the
+// caller sent — and the scanner later re-hydrated those values via
+// `innerHTML`. That is stored XSS. sanitizeForType() below mirrors the
+// authenticated /api/projects/:id/content route's treatment so the public
+// surface can never become a soft underbelly.
+
+/** Hard limits applied to any public-write payload. Generous for legit use,
+ *  small enough to bound abuse cost. */
+const MAX_SEED_FIELDS = 200;
+const MAX_SEED_VALUE_LEN = 10_000;
+const MAX_SNAPSHOT_SECTIONS = 50;
+const MAX_SNAPSHOT_FIELDS_PER_SECTION = 200;
+const MAX_SNAPSHOT_VALUE_LEN = 10_000;
+const MAX_PAGE_URL_LEN = 2048;
+
+/** Choose the right sanitizer for a given field type — richtext keeps a safe
+ *  HTML allowlist; everything else gets stripped to plain text. */
+function sanitizeForType(value: string, type: string): string {
+  return type === "richtext" ? sanitizeRichContent(value) : sanitizeContent(value);
+}
+
+/** Strip a caller-supplied page URL down to scheme://host[:port]/path — drops
+ *  query strings (which routinely carry session ids / tokens / PII) and any
+ *  fragment. Returns null on anything unparseable. */
+function safePageUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_PAGE_URL_LEN) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return (u.origin + u.pathname).slice(0, MAX_PAGE_URL_LEN);
+  } catch {
+    return null;
+  }
+}
+
+const SeedBody = z.object({
+  seed: z
+    .record(z.string().min(1).max(120), z.string().max(MAX_SEED_VALUE_LEN))
+    .refine(
+      (rec) => Object.keys(rec).length <= MAX_SEED_FIELDS,
+      `Too many seed fields (max ${MAX_SEED_FIELDS})`,
+    )
+    .optional(),
+});
+
+// A snapshot section as the scanner posts it. Unknown fields are stripped
+// rather than rejected so older scanner versions don't break on schema drift.
+const SnapshotField = z
+  .object({
+    label: z.string().min(1).max(120),
+    type: z.string().max(40),
+    value: z.string().max(MAX_SNAPSHOT_VALUE_LEN).optional().nullable(),
+    selector: z.string().max(500).optional().nullable(),
+  })
+  .passthrough();
+const SnapshotSection = z
+  .object({
+    title: z.string().max(200).optional().nullable(),
+    fields: z.array(SnapshotField).max(MAX_SNAPSHOT_FIELDS_PER_SECTION),
+  })
+  .passthrough();
+const SnapshotBody = z.object({
+  sections: z.array(SnapshotSection).min(1).max(MAX_SNAPSHOT_SECTIONS),
+  pageUrl: z.string().max(MAX_PAGE_URL_LEN).optional().nullable(),
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,41 +147,51 @@ router.get("/content", requireProjectKey, async (req: ProjectKeyRequest, res) =>
 router.post("/content", requireProjectKey, async (req: ProjectKeyRequest, res) => {
   const projectId = req.projectId!;
 
-  const rawSeed = req.body?.seed;
-  const seed: Record<string, string> = {};
-  if (rawSeed && typeof rawSeed === "object" && !Array.isArray(rawSeed)) {
-    for (const [label, val] of Object.entries(rawSeed)) {
-      if (typeof val === "string" && val.trim() !== "") {
-        seed[label] = val;
-      }
-    }
+  // Validate first — caller is effectively anonymous (their pk_ is in their
+  // public HTML), so we treat the body as hostile until proven otherwise.
+  const parsed = SeedBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid request body" });
   }
+  const rawSeed = parsed.data.seed ?? {};
 
   const fields = await db
     .select()
     .from(contentFieldsTable)
     .where(eq(contentFieldsTable.projectId, projectId));
 
-  const toSeed = fields.filter(
-    (f) => (f.value == null || f.value === "") && seed[f.label] != null,
-  );
+  // Only seed fields that (a) were declared by the project owner, (b) are
+  // still empty, and (c) have a non-empty seed value supplied. Sanitize
+  // every accepted value per the field's declared type so a richtext seed
+  // can't smuggle <script> through to the browser via innerHTML.
+  const toSeed: { id: number; label: string; sanitized: string }[] = [];
+  for (const f of fields) {
+    if (f.value != null && f.value !== "") continue;
+    const supplied = rawSeed[f.label];
+    if (typeof supplied !== "string" || supplied.trim() === "") continue;
+    const sanitized = sanitizeForType(supplied, f.type);
+    if (sanitized === "") continue;
+    toSeed.push({ id: f.id, label: f.label, sanitized });
+  }
 
   if (toSeed.length > 0) {
     await Promise.all(
-      toSeed.map((f) =>
+      toSeed.map((s) =>
         db
           .update(contentFieldsTable)
-          .set({ value: seed[f.label] })
-          .where(eq(contentFieldsTable.id, f.id)),
+          .set({ value: s.sanitized })
+          .where(eq(contentFieldsTable.id, s.id)),
       ),
     );
-    for (const f of toSeed) {
-      (f as any).value = seed[f.label];
+    const byId = new Map(toSeed.map((s) => [s.id, s.sanitized]));
+    for (const f of fields) {
+      const v = byId.get(f.id);
+      if (v !== undefined) (f as { value: string | null }).value = v;
     }
   }
 
   recordPing(projectId, req);
-  res.json({ projectId: String(projectId), content: buildContentMap(fields) });
+  return res.json({ projectId: String(projectId), content: buildContentMap(fields) });
 });
 
 // ── Scanner ───────────────────────────────────────────────────────────────────
@@ -118,21 +204,35 @@ router.post("/content", requireProjectKey, async (req: ProjectKeyRequest, res) =
  */
 router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyRequest, res) => {
   const projectId = req.projectId!;
-  const rawSections = req.body?.sections;
-  const pageUrl: string | undefined = typeof req.body?.pageUrl === "string"
-    ? req.body.pageUrl
-    : undefined;
 
-  if (!Array.isArray(rawSections) || rawSections.length === 0) {
-    return res.status(400).json({ error: "sections must be a non-empty array" });
+  const parsed = SnapshotBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid snapshot payload" });
   }
+
+  // Sanitize every label / value the scanner reports so a hostile site
+  // hosting our scanner tag can't poison the dashboard preview with stored
+  // XSS. We also strip the pageUrl down to origin+path so query-string PII
+  // (session ids, tokens, filter params) never enters the snapshot row.
+  const cleanSections = parsed.data.sections.map((s) => ({
+    ...s,
+    title: s.title ? sanitizeContent(s.title) : s.title,
+    fields: s.fields.map((f) => ({
+      ...f,
+      label: sanitizeContent(f.label),
+      type: sanitizeContent(f.type),
+      value: f.value == null ? f.value : sanitizeForType(f.value, f.type),
+      selector: f.selector ? sanitizeContent(f.selector) : f.selector,
+    })),
+  }));
+  const cleanPageUrl = safePageUrl(parsed.data.pageUrl);
 
   await db
     .insert(contentSnapshotsTable)
     .values({
       projectId,
-      sections: rawSections as any,
-      pageUrl: pageUrl ?? null,
+      sections: cleanSections as unknown as object,
+      pageUrl: cleanPageUrl,
       capturedAt: new Date(),
     })
     .onConflictDoUpdate({
@@ -178,6 +278,26 @@ const SCANNER_SCRIPT = /* javascript */ `
   var origin = new URL(scriptEl.src).origin;
   var SNAPSHOT_URL = origin + '/api/public/content/snapshot';
   var CONTENT_URL  = origin + '/api/public/content';
+
+  // ── Editor bridge state (audit High #3) ────────────────────────────────
+  // When framed by the get editor, the parent posts us a one-shot
+  // get:bridge-init handshake containing a per-mount nonce. We capture the
+  // parent's real origin (evt.origin) AND the nonce, then use BOTH to
+  // authenticate every subsequent message we send up. If we never receive
+  // a bridge-init (e.g. the page is being viewed directly, or some random
+  // other page is iframing it) all our outbound messages are no-ops, which
+  // means inline-editing simply won't bridge back to anywhere.
+  var parentOrigin = null;
+  var bridgeNonce = null;
+  function postToParent(msg) {
+    if (!parentOrigin || !bridgeNonce) return;
+    try {
+      var payload = {};
+      for (var k in msg) if (Object.prototype.hasOwnProperty.call(msg, k)) payload[k] = msg[k];
+      payload.nonce = bridgeNonce;
+      window.parent.postMessage(payload, parentOrigin);
+    } catch (e) {}
+  }
 
   // ── Content injection ─────────────────────────────────────────────────────
   // Fetches the project's published field values and writes them into any
@@ -789,7 +909,30 @@ const SCANNER_SCRIPT = /* javascript */ `
     window.addEventListener('message', function (evt) {
       try {
         var msg = evt.data;
-        if (!msg || msg.type !== 'get:highlight') return;
+        if (!msg || typeof msg.type !== 'string') return;
+
+        // ── Bridge handshake from the get editor ──────────────────────────
+        // The very first thing the editor sends is a get:bridge-init with a
+        // per-mount nonce. We trust evt.origin here (it's wherever the
+        // parent really is) and store both for later auth — but only when
+        // we are actually framed, since stand-alone pages should not
+        // accept any "parent" instructions.
+        if (msg.type === 'get:bridge-init' && window.self !== window.top) {
+          if (typeof msg.nonce === 'string' && msg.nonce.length > 0) {
+            parentOrigin = evt.origin;
+            bridgeNonce = msg.nonce;
+          }
+          return;
+        }
+
+        // After handshake, every other inbound message must come from the
+        // SAME origin we handshook with AND carry the matching nonce. This
+        // shuts down message spoofing from any other window/tab that might
+        // somehow reach us.
+        if (!parentOrigin || evt.origin !== parentOrigin) return;
+        if (msg.nonce !== bridgeNonce) return;
+
+        if (msg.type !== 'get:highlight') return;
         // Remove any existing highlights.
         var prev = document.querySelectorAll('.get-highlight');
         for (var i = 0; i < prev.length; i++) prev[i].classList.remove('get-highlight');
@@ -1022,17 +1165,11 @@ const SCANNER_SCRIPT = /* javascript */ `
           if (revert) {
             if (ae.isRich) { ae.el.innerHTML = ae.originalText; }
             else { ae.el.textContent = ae.originalText; }
-            try {
-              window.parent.postMessage(
-                { type: 'get:field-input', label: ae.label, value: ae.originalText }, '*');
-            } catch(e) {}
+            postToParent({ type: 'get:field-input', label: ae.label, value: ae.originalText });
           } else {
             // Always flush the final value so the editor panel stays in sync
             // even when the debounce hadn't fired before Escape / click-outside.
-            try {
-              window.parent.postMessage(
-                { type: 'get:field-input', label: ae.label, value: finalText }, '*');
-            } catch(e) {}
+            postToParent({ type: 'get:field-input', label: ae.label, value: finalText });
           }
           // Blur so the element loses focus visually after deactivation.
           try { ae.el.blur(); } catch(e) {}
@@ -1138,10 +1275,7 @@ const SCANNER_SCRIPT = /* javascript */ `
             inputTimer = setTimeout(function() {
               inputTimer = null;
               if (activeEdit) activeEdit.inputTimer = null;
-              try {
-                window.parent.postMessage(
-                  { type: 'get:field-input', label: lbl, value: val }, '*');
-              } catch(e) {}
+              postToParent({ type: 'get:field-input', label: lbl, value: val });
             }, 200);
             if (activeEdit) activeEdit.inputTimer = inputTimer;
           }
@@ -1211,10 +1345,7 @@ const SCANNER_SCRIPT = /* javascript */ `
                 // execCommand fires 'input' automatically in most browsers;
                 // fall back to a manual flush for browsers that don't.
                 setTimeout(function() {
-                  try {
-                    window.parent.postMessage(
-                      { type: 'get:field-input', label: lbl, value: getValue() }, '*');
-                  } catch(e) {}
+                  postToParent({ type: 'get:field-input', label: lbl, value: getValue() });
                 }, 0);
               });
             }
@@ -1263,10 +1394,8 @@ const SCANNER_SCRIPT = /* javascript */ `
             // Sync final value, then ask the editor to save it.
             // We include the value in get:field-save so the editor can pass it
             // directly to the save API without reading from possibly-stale state.
-            try {
-              window.parent.postMessage({ type: 'get:field-input', label: lbl, value: val }, '*');
-              window.parent.postMessage({ type: 'get:field-save',  label: lbl, value: val }, '*');
-            } catch(e2) {}
+            postToParent({ type: 'get:field-input', label: lbl, value: val });
+            postToParent({ type: 'get:field-save',  label: lbl, value: val });
             deactivate(false);
           });
 
@@ -1340,7 +1469,7 @@ const SCANNER_SCRIPT = /* javascript */ `
             activate(el, lbl);
           } else {
             // Images, links, boolean/url fields, form controls → jump to field panel.
-            try { window.parent.postMessage({ type: 'get:field-click', label: lbl }, '*'); } catch(e4) {}
+            postToParent({ type: 'get:field-click', label: lbl });
           }
         }, true);
       }

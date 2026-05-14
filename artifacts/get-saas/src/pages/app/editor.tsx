@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams } from "wouter";
 import {
   useListContentFields,
@@ -502,6 +502,38 @@ export default function ClientEditor() {
     return () => clearTimeout(t);
   }, [siteUrl, showPreviewPanel, iframeStatus]);
 
+  // ── Editor ↔ scanner postMessage bridge (audit High #3) ────────────────────
+  //
+  // The preview iframe runs the customer's site, which loads our scanner.js.
+  // Scanner emits get:field-click / -input / -save up to this editor; editor
+  // emits get:highlight down. Without origin checking AND a shared secret,
+  // a malicious page that happens to be open in another window could spoof
+  // either side and either steal field state or trigger writes.
+  //
+  // Defenses:
+  //   1. expectedIframeOrigin — derived from siteUrl, used as targetOrigin
+  //      for every outbound postMessage and validated on every inbound one.
+  //   2. bridgeNonce — fresh per editor mount, sent to the scanner once via
+  //      the get:bridge-init handshake and required on every inbound
+  //      get:field-* message. The scanner only ever learns it after we
+  //      explicitly send it to the iframe's *real* origin, so a hostile
+  //      page on a different origin literally cannot guess it.
+  const expectedIframeOrigin = useMemo(() => {
+    if (!siteUrl) return null;
+    try {
+      return new URL(siteUrl).origin;
+    } catch {
+      return null;
+    }
+  }, [siteUrl]);
+  const bridgeNonceRef = useRef<string>("");
+  if (!bridgeNonceRef.current) {
+    bridgeNonceRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
   const handleIframeLoad = () => {
     try {
       // If we can access contentDocument without a SecurityError, the frame
@@ -519,15 +551,26 @@ export default function ClientEditor() {
       // can't read the document from here.
       setIframeStatus("loaded");
     }
+    // Bridge handshake: hand the scanner our nonce so subsequent inbound
+    // messages can be authenticated. Send to the iframe's real origin only
+    // — never '*' — so a hostile sibling window can't sniff the nonce.
+    if (expectedIframeOrigin) {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "get:bridge-init", nonce: bridgeNonceRef.current },
+          expectedIframeOrigin,
+        );
+      } catch {}
+    }
     // Re-apply the current highlight after the page finishes loading.
     // The 300 ms delay lets the scanner script initialise before we post.
     const labelToRestore = highlightedLabelRef.current;
-    if (labelToRestore) {
+    if (labelToRestore && expectedIframeOrigin) {
       setTimeout(() => {
         try {
           iframeRef.current?.contentWindow?.postMessage(
-            { type: "get:highlight", label: labelToRestore },
-            "*",
+            { type: "get:highlight", label: labelToRestore, nonce: bridgeNonceRef.current },
+            expectedIframeOrigin,
           );
         } catch {}
       }, 300);
@@ -577,9 +620,13 @@ export default function ClientEditor() {
 
   const postHighlight = (label: string | null) => {
     try {
+      // targetOrigin must be the iframe's real origin, never '*' — a wildcard
+      // would leak the highlight (and the nonce we ride alongside) to any
+      // origin the iframe redirected to.
+      if (!expectedIframeOrigin) return;
       iframeRef.current?.contentWindow?.postMessage(
-        { type: "get:highlight", label },
-        "*",
+        { type: "get:highlight", label, nonce: bridgeNonceRef.current },
+        expectedIframeOrigin,
       );
       highlightedLabelRef.current = label;
     } catch {
@@ -615,14 +662,24 @@ export default function ClientEditor() {
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       try {
-        // Only process messages originating from our preview iframe.
+        // Defense in depth — three independent checks, ALL must pass:
+        //   (a) message came from our iframe's window object
+        //   (b) message came from the iframe's expected origin (not a
+        //       redirected-to attacker origin)
+        //   (c) message carries the per-mount nonce we handed the scanner
+        //       via the bridge handshake — proves the sender saw our
+        //       targeted postMessage, i.e. it really is the scanner we
+        //       initialised, not a hostile page riding the same parent.
         if (evt.source !== iframeRef.current?.contentWindow) return;
+        if (!expectedIframeOrigin || evt.origin !== expectedIframeOrigin) return;
         const msg = evt.data as {
           type: string;
           label?: string;
           value?: string;
+          nonce?: string;
         } | null;
         if (!msg || typeof msg.type !== "string") return;
+        if (msg.nonce !== bridgeNonceRef.current) return;
 
         // ── get:field-input: mirror inline keystrokes ─────────────────
         if (msg.type === "get:field-input") {
@@ -700,7 +757,7 @@ export default function ClientEditor() {
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expectedIframeOrigin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // First-visit intro modal — once per project per device. The "?" button in
   // the header re-opens it.
@@ -1443,6 +1500,7 @@ export default function ClientEditor() {
                     disabled={!!field.isLocked}
                     onChange={(v) => handleValueChange(field.id, v)}
                     fieldInputStyle={fieldInputStyle}
+                    projectId={Number(projectId)}
                   />
                 )}
 
@@ -1947,11 +2005,13 @@ function ImageField({
   disabled,
   onChange,
   fieldInputStyle,
+  projectId,
 }: {
   value: string;
   disabled: boolean;
   onChange: (v: string) => void;
   fieldInputStyle: React.CSSProperties;
+  projectId: number;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
@@ -1959,6 +2019,7 @@ function ImageField({
   const baseHref = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
   const { uploadFile, isUploading, progress } = useUpload({
     basePath: `${baseHref}/api/storage`,
+    projectId,
     onSuccess: (resp: { objectPath: string }) => {
       // Build an absolute URL so client sites on other origins can render it.
       const absolute =

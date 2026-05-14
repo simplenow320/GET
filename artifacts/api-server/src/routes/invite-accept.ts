@@ -28,13 +28,12 @@ router.get("/:token", async (req, res) => {
   // Tokens are hex; normalize case so a copied link with mixed case still works.
   const raw = String(req.params.token || "").toLowerCase();
   if (!TOKEN_RE.test(raw)) {
-    return res.status(404).json({ error: "Invite not found" });
-  }
+    res.status(404).json({ error: "Invite not found" }); return;  }
 
   const tokenHash = hashToken(raw);
   const rows = await db.select().from(invitesTable).where(eq(invitesTable.tokenHash, tokenHash));
   const invite = rows[0];
-  if (!invite) return res.status(404).json({ error: "Invite not found" });
+  if (!invite) { res.status(404).json({ error: "Invite not found" }); return; }
 
   const projects = await db
     .select({ id: projectsTable.id, name: projectsTable.name })
@@ -63,7 +62,7 @@ router.post("/:token/accept", requireAuth, async (req: AuthRequest, res) => {
   // attempting the consume. The actual consume below is atomic and re-validates.
   const preRows = await db.select().from(invitesTable).where(eq(invitesTable.tokenHash, tokenHash));
   const pre = preRows[0];
-  if (!pre) return res.status(404).json({ error: "Invite not found" });
+  if (!pre) { res.status(404).json({ error: "Invite not found" }); return; }
 
   // Email match must happen before consume (single-use semantics — we don't want
   // to burn a token if the wrong account is logged in).
@@ -96,14 +95,11 @@ router.post("/:token/accept", requireAuth, async (req: AuthRequest, res) => {
 
   // Terminal states (accepted/revoked/expired) — bail before consuming.
   if (pre.status === "accepted") {
-    return res.status(409).json({ error: "This invite has already been used" });
-  }
+    res.status(409).json({ error: "This invite has already been used" }); return;  }
   if (pre.status === "revoked") {
-    return res.status(409).json({ error: "This invite has been revoked" });
-  }
+    res.status(409).json({ error: "This invite has been revoked" }); return;  }
   if (pre.status === "expired" || isExpired(pre)) {
-    return res.status(409).json({ error: "This invite has expired" });
-  }
+    res.status(409).json({ error: "This invite has expired" }); return;  }
 
   // Atomic consume: single conditional UPDATE that flips pending → accepted only
   // if it's still pending and not expired. Then insert membership in same txn.
@@ -164,18 +160,14 @@ router.post("/:token/accept", requireAuth, async (req: AuthRequest, res) => {
 
       // Otherwise, surface the real terminal state.
       const after = (await db.select().from(invitesTable).where(eq(invitesTable.id, pre.id)))[0];
-      if (!after) return res.status(404).json({ error: "Invite not found" });
+      if (!after) { res.status(404).json({ error: "Invite not found" }); return; }
       if (after.status === "accepted") {
-        return res.status(409).json({ error: "This invite has already been used" });
-      }
+        res.status(409).json({ error: "This invite has already been used" }); return;      }
       if (after.status === "revoked") {
-        return res.status(409).json({ error: "This invite has been revoked" });
-      }
+        res.status(409).json({ error: "This invite has been revoked" }); return;      }
       if (after.status === "pending" && isExpired(after)) {
-        return res.status(409).json({ error: "This invite has expired" });
-      }
-      return res.status(409).json({ error: "This invite is no longer valid" });
-    }
+        res.status(409).json({ error: "This invite has expired" }); return;      }
+      res.status(409).json({ error: "This invite is no longer valid" }); return;    }
 
     await logAudit({
       projectId: result.projectId,
@@ -190,8 +182,7 @@ router.post("/:token/accept", requireAuth, async (req: AuthRequest, res) => {
     });
   } catch (err: any) {
     // Defensive: surface anything unexpected without leaking internals.
-    return res.status(500).json({ error: "Could not accept invite. Please try again." });
-  }
+    res.status(500).json({ error: "Could not accept invite. Please try again." }); return;  }
 });
 
 export default router;

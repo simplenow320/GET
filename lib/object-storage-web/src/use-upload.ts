@@ -16,6 +16,9 @@ interface UploadResponse {
 interface UseUploadOptions {
   /** Base path where object storage routes are mounted (default: "/api/storage") */
   basePath?: string;
+  /** Project this upload belongs to. Required by the server's per-project
+   *  upload ACL — the caller must be an editor or higher in this project. */
+  projectId: number;
   onSuccess?: (response: UploadResponse) => void;
   onError?: (error: Error) => void;
 }
@@ -53,8 +56,9 @@ interface UseUploadOptions {
  * }
  * ```
  */
-export function useUpload(options: UseUploadOptions = {}) {
+export function useUpload(options: UseUploadOptions) {
   const basePath = options.basePath ?? "/api/storage";
+  const projectId = options.projectId;
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [progress, setProgress] = useState(0);
@@ -71,6 +75,7 @@ export function useUpload(options: UseUploadOptions = {}) {
           name: file.name,
           size: file.size,
           contentType: file.type || "application/octet-stream",
+          projectId,
         }),
       });
 
@@ -81,7 +86,7 @@ export function useUpload(options: UseUploadOptions = {}) {
 
       return response.json();
     },
-    []
+    [basePath, projectId]
   );
 
   const uploadToPresignedUrl = useCallback(
@@ -147,6 +152,7 @@ export function useUpload(options: UseUploadOptions = {}) {
           name: file.name,
           size: file.size,
           contentType: file.type || "application/octet-stream",
+          projectId,
         }),
       });
 

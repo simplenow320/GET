@@ -2,11 +2,12 @@ import { Router } from "express";
 import { db, activityTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
+import { parseIdParam } from "../lib/validation";
 
 const router = Router({ mergeParams: true });
 
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const entries = await db.select().from(activityTable)
     .where(eq(activityTable.projectId, projectId))
     .orderBy(desc(activityTable.createdAt))

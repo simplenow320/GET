@@ -5,7 +5,7 @@ import { promises as dnsPromises } from "node:dns";
 import net from "node:net";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
-import { ProjectName, ProjectDescription } from "../lib/validation";
+import { ProjectName, ProjectDescription, parseIdParam } from "../lib/validation";
 import { logAudit } from "../lib/audit";
 import { z } from "zod";
 
@@ -45,7 +45,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
   const projectIds = owned.map((p) => p.id);
 
   if (projectIds.length === 0) {
-    return res.json({
+    res.json({
       totalProjects: 0,
       activeProjects: 0,
       totalClients: 0,
@@ -53,6 +53,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       recentEdits: 0,
       liveSites: 0,
     });
+    return;
   }
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -103,7 +104,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .from(projectUsersTable)
     .where(eq(projectUsersTable.userId, userId));
 
-  if (memberships.length === 0) return res.json([]);
+  if (memberships.length === 0) { res.json([]); return; }
 
   const ids = memberships.map((m) => m.projectId);
   const projects = await db.select().from(projectsTable).where(inArray(projectsTable.id, ids));
@@ -133,11 +134,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 // POST / — create a new project
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   const shape = CreateProjectBody.safeParse(req.body);
-  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
   const parsed = StrictCreateProject.safeParse(shape.data);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
-  }
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }); return;  }
 
   const userId = req.userId!;
   const [project] = await db
@@ -163,10 +163,10 @@ router.get(
   requireAuth,
   requireProjectAccess("viewer"),
   async (req: AuthRequest, res) => {
-    const id = parseInt(req.params.projectId);
+    const id = parseIdParam(req.params.projectId)!;
     const projects = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
     const project = projects[0];
-    if (!project) return res.status(404).json({ error: "Not found" });
+    if (!project) { res.status(404).json({ error: "Not found" }); return; }
 
     const [fields, clients] = await Promise.all([
       db
@@ -192,28 +192,26 @@ router.patch(
   requireAuth,
   requireProjectAccess("admin"),
   async (req: AuthRequest, res) => {
-    const id = parseInt(req.params.projectId);
+    const id = parseIdParam(req.params.projectId)!;
 
     const shape = UpdateProjectBody.safeParse(req.body);
-    if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+    if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
     const parsed = StrictUpdateProject.safeParse(shape.data);
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
-    }
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }); return;    }
 
     // The autoPublish toggle changes the trust model for client edits, so it
     // should match the UI gating (owner-only). Other fields can still be
     // edited by admins.
     if (parsed.data.autoPublish !== undefined && req.projectRole !== "owner") {
-      return res.status(403).json({ error: "Only the project owner can change client publishing" });
-    }
+      res.status(403).json({ error: "Only the project owner can change client publishing" }); return;    }
 
     const [updated] = await db
       .update(projectsTable)
       .set(parsed.data)
       .where(eq(projectsTable.id, id))
       .returning();
-    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
     await logAudit({
       projectId: id,
@@ -243,7 +241,7 @@ router.delete(
   requireAuth,
   requireProjectAccess("owner"),
   async (req: AuthRequest, res) => {
-    const id = parseInt(req.params.projectId);
+    const id = parseIdParam(req.params.projectId)!;
     await logAudit({
       projectId: id,
       userId: req.userId!,
@@ -284,17 +282,16 @@ router.post(
   requireAuth,
   requireProjectAccess("editor"),
   async (req: AuthRequest, res) => {
-    const projectId = parseInt(String(req.params.projectId));
+    const projectId = parseIdParam(req.params.projectId)!;
     const parsed = InstallCheckBody.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ error: "Invalid request body" });
-    }
+      res.status(400).json({ error: "Invalid request body" }); return;    }
 
     const [project] = await db
       .select()
       .from(projectsTable)
       .where(eq(projectsTable.id, projectId));
-    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
     // Resolve which URL to probe: explicit override > lastSeenOrigin.
     const siteUrl = parsed.data.url ?? project.lastSeenOrigin ?? null;

@@ -92,11 +92,26 @@ export const KeyName = z
 
 /**
  * Parse a positive integer route param. Returns null on anything bogus.
+ *
+ * Express 5 widened `req.params[k]` to `string | string[] | undefined` to
+ * support repeated query-style segments. We never use repeated params for
+ * IDs, so any non-string here is rejected up front rather than silently
+ * picking the first/last array element.
  */
-export function parseIdParam(raw: string | undefined): number | null {
-  if (!raw) return null;
+export function parseIdParam(raw: string | string[] | undefined): number | null {
+  if (typeof raw !== "string") return null;
   if (!/^\d+$/.test(raw)) return null;
   const n = Number(raw);
   if (!Number.isSafeInteger(n) || n <= 0) return null;
   return n;
+}
+
+/**
+ * Coerce an Express 5 route param to a plain string (or undefined). Mirrors
+ * `parseIdParam`'s defensive stance toward repeated-segment arrays — if the
+ * router ever produces one, treat it as missing rather than guessing which
+ * element to use.
+ */
+export function paramStr(raw: string | string[] | undefined): string | undefined {
+  return typeof raw === "string" ? raw : undefined;
 }

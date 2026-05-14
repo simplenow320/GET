@@ -30,8 +30,32 @@ const EXPIRY_DAYS = 90;
 const EXPIRY_MS = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
 // keyId → ring of recent timestamps (ms). Trimmed on each check so memory
-// stays O(active keys × RATE_LIMIT_MAX).
+// stays O(active keys × RATE_LIMIT_MAX). A periodic janitor evicts buckets
+// whose entire ring has aged out so a long-running process doesn't retain
+// rows for keys that haven't been used (or have been revoked) in a while.
 const rateBuckets = new Map<number, number[]>();
+const RATE_BUCKET_SWEEP_MS = 5 * 60 * 1000; // every 5 minutes
+
+function sweepRateBuckets(): void {
+  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS;
+  for (const [keyId, ring] of rateBuckets) {
+    // A bucket is dead once every recorded hit is older than the window.
+    // We test the LAST entry (newest) — if that's stale, all earlier ones are too.
+    const newest = ring[ring.length - 1];
+    if (newest === undefined || newest < cutoff) {
+      rateBuckets.delete(keyId);
+    }
+  }
+}
+
+// Don't keep the event loop alive just for the janitor (matters in tests
+// and graceful-shutdown scenarios).
+if (typeof setInterval === "function") {
+  const t = setInterval(sweepRateBuckets, RATE_BUCKET_SWEEP_MS);
+  if (typeof t === "object" && t !== null && "unref" in t && typeof t.unref === "function") {
+    t.unref();
+  }
+}
 
 function rateLimitOk(keyId: number): boolean {
   const now = Date.now();
@@ -49,6 +73,9 @@ function rateLimitOk(keyId: number): boolean {
   rateBuckets.set(keyId, fresh);
   return true;
 }
+
+// Exported for test introspection only.
+export const __test__ = { rateBuckets, sweepRateBuckets };
 
 function clientIp(req: Request): string | null {
   const xf = (req.headers["x-forwarded-for"] || "").toString().split(",")[0]?.trim();

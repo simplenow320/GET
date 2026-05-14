@@ -24,7 +24,7 @@ function draftToResponse(d: typeof draftsTable.$inferSelect) {
 
 // GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const drafts = await db.select().from(draftsTable).where(eq(draftsTable.projectId, projectId));
   res.json(drafts.map(draftToResponse));
 });
@@ -37,18 +37,17 @@ router.post(
   publishLimiter,
   async (req: AuthRequest, res) => {
     const draftId = parseIdParam(req.params.draftId);
-    const projectId = parseInt(req.params.projectId);
-    if (!draftId) return res.status(400).json({ error: "Invalid draft ID" });
+    const projectId = parseIdParam(req.params.projectId)!;
+    if (!draftId) { res.status(400).json({ error: "Invalid draft ID" }); return; }
 
     const drafts = await db
       .select()
       .from(draftsTable)
       .where(and(eq(draftsTable.id, draftId), eq(draftsTable.projectId, projectId)));
     const draft = drafts[0];
-    if (!draft) return res.status(404).json({ error: "Draft not found" });
+    if (!draft) { res.status(404).json({ error: "Draft not found" }); return; }
     if (draft.status !== "pending") {
-      return res.status(409).json({ error: "Draft is not in pending state" });
-    }
+      res.status(409).json({ error: "Draft is not in pending state" }); return;    }
 
     // Wrap the live-content update and the draft state change in a single
     // transaction so we never end up with the field updated but the draft
@@ -95,8 +94,7 @@ router.post(
     });
 
     if ("__error" in published) {
-      return res.status(published.__error).json({ error: published.message });
-    }
+      res.status(published.__error).json({ error: published.message }); return;    }
 
     await logAudit({
       projectId,
@@ -118,18 +116,17 @@ router.post(
   requireProjectAccess("admin"),
   async (req: AuthRequest, res) => {
     const draftId = parseIdParam(req.params.draftId);
-    const projectId = parseInt(req.params.projectId);
-    if (!draftId) return res.status(400).json({ error: "Invalid draft ID" });
+    const projectId = parseIdParam(req.params.projectId)!;
+    if (!draftId) { res.status(400).json({ error: "Invalid draft ID" }); return; }
 
     const drafts = await db
       .select()
       .from(draftsTable)
       .where(and(eq(draftsTable.id, draftId), eq(draftsTable.projectId, projectId)));
     const draft = drafts[0];
-    if (!draft) return res.status(404).json({ error: "Draft not found" });
+    if (!draft) { res.status(404).json({ error: "Draft not found" }); return; }
     if (draft.status !== "pending") {
-      return res.status(409).json({ error: "Draft is not in pending state" });
-    }
+      res.status(409).json({ error: "Draft is not in pending state" }); return;    }
 
     const [rejected] = await db
       .update(draftsTable)

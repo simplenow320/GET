@@ -57,20 +57,19 @@ function inviteToResponse(
 
 // GET / — any member; tokens are NEVER returned (we only store hashes at rest).
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (_req: AuthRequest, res) => {
-  const projectId = parseInt(_req.params.projectId);
+  const projectId = parseIdParam(_req.params.projectId)!;
   const invites = await db.select().from(invitesTable).where(eq(invitesTable.projectId, projectId));
   res.json(invites.map((i) => inviteToResponse(i, {})));
 });
 
 // POST / — admin+
 router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const shape = CreateInviteBody.safeParse(req.body);
-  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
   const parsed = StrictCreateInvite.safeParse(shape.data);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
-  }
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }); return;  }
 
   const email = parsed.data.email;
 
@@ -84,8 +83,7 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
         and(eq(projectUsersTable.projectId, projectId), eq(projectUsersTable.userId, existingUser[0].id)),
       );
     if (alreadyMember.length > 0) {
-      return res.status(409).json({ error: "This person is already a member of the project" });
-    }
+      res.status(409).json({ error: "This person is already a member of the project" }); return;    }
   }
 
   const existing = await db
@@ -101,8 +99,7 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
       (!i.expiresAt || i.expiresAt.getTime() > Date.now()),
   );
   if (livePending) {
-    return res.status(409).json({ error: "A pending invite already exists for this email" });
-  }
+    res.status(409).json({ error: "A pending invite already exists for this email" }); return;  }
 
   const { raw: rawToken, hash: tokenHash } = generateInviteTokenPair();
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -157,14 +154,14 @@ router.delete(
   requireProjectAccess("admin"),
   async (req: AuthRequest, res) => {
     const inviteId = parseIdParam(req.params.inviteId);
-    const projectId = parseInt(req.params.projectId);
-    if (!inviteId) return res.status(400).json({ error: "Invalid invite ID" });
+    const projectId = parseIdParam(req.params.projectId)!;
+    if (!inviteId) { res.status(400).json({ error: "Invalid invite ID" }); return; }
 
     const target = await db
       .select()
       .from(invitesTable)
       .where(and(eq(invitesTable.id, inviteId), eq(invitesTable.projectId, projectId)));
-    if (!target[0]) return res.status(404).json({ error: "Invite not found" });
+    if (!target[0]) { res.status(404).json({ error: "Invite not found" }); return; }
 
     if (target[0].status === "pending") {
       await db

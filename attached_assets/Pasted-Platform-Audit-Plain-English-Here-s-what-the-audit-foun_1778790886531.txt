@@ -1,0 +1,36 @@
+Platform Audit — Plain English
+Here's what the audit found, ranked. Three things are urgent. The rest are real but not on fire.
+
+🔴 Critical — fix this week
+1. Public content endpoint is too generous. Anyone holding the public pk_ key (which lives in your customers' HTML, by design) can send writes that silently create or empty out fields. Worse, those values aren't sanitized, and the scanner later renders rich-text fields with innerHTML. That's a stored-XSS hole — a hostile site could push a <script> into a content field that runs in the next visitor's browser. Fix: stop accepting writes on the public path, and sanitize by field type before saving.
+
+🟠 High — fix this month
+2. Uploaded files aren't locked to a project. Anyone who guesses an object path can fetch a private upload — there's no per-project ACL on the storage routes. Fix: tag every uploaded object with its project, and gate reads on requireProjectAccess.
+
+3. The editor trusts the wrong thing about postMessage. When the editor is talking to the embedded preview iframe, it checks "did this message come from a window I know?" but not "did it come from the origin I expect?". A malicious framed page can forge "save this field" events. Fix: check evt.origin against the expected origin and add a per-session nonce.
+
+4. Type-check is broken across many API routes. ~50 errors in projects.ts, content.ts, auth.ts, etc. Mostly from Express 5 changing req.params to string | string[]. Runtime works, but you can't trust pnpm typecheck to catch real bugs because it's already red. Fix: a small param-helper utility, applied everywhere.
+
+🟡 Medium — worth scheduling
+5. Public snapshot endpoint accepts unvalidated JSON including full URLs (which may carry PII in query strings). Add a Zod schema and strip URLs to origin+path.
+
+6. No DB uniqueness on key hashes — astronomically unlikely to collide, but a UNIQUE index costs nothing and makes auditors happy.
+
+7. No DB uniqueness on (project_id, hostname) in domains — race could create duplicate allowlist entries.
+
+8. MCP rate-limit map never evicts dormant keys. Slow memory leak over months. Add a sweep, or delete the bucket when it empties.
+
+9. Forgot-password "constant time" is only a 350ms floor. A slow real-user path could still take longer than that and leak existence. Fix: a fixed window with jitter, and fully async send.
+
+🟢 Low / informational
+10. Auth, sessions, OAuth, RBAC, Helmet, trust-proxy, CSRF Origin gate — all sound. Project route mounting order is correct. RBAC is consistently enforced.
+
+11. Signup returns 409 on duplicate email — user enumeration is technically possible. Rate limit mitigates it. Most consumer apps accept this trade for UX.
+
+What I'd do, in order
+Lock down the public write path + sanitize content. (Critical #1)
+Per-project ACL on storage. (High #2)
+Origin check + nonce on the editor↔preview postMessage bridge. (High #3)
+Fix the param-typing situation so typecheck is green and CI can actually catch regressions. (High #4)
+Add Zod to the snapshot endpoint. (Medium #5)
+The 4 small DB / memory / timing items (#6, #7, #8, #9) bundled as a quick "audit polish" PR.

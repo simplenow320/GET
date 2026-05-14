@@ -47,7 +47,7 @@ function fieldToResponse(f: typeof contentFieldsTable.$inferSelect) {
 
 // GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const fields = await db
     .select()
     .from(contentFieldsTable)
@@ -57,13 +57,12 @@ router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthReq
 
 // POST / — admin+
 router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const shape = CreateContentFieldBody.safeParse(req.body);
-  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
   const parsed = StrictCreateField.safeParse(shape.data);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
-  }
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }); return;  }
 
   const [field] = await db
     .insert(contentFieldsTable)
@@ -94,25 +93,25 @@ router.patch(
   requireProjectAccess("editor"),
   async (req: AuthRequest, res) => {
     const fieldId = parseIdParam(req.params.fieldId);
-    const projectId = parseInt(req.params.projectId);
-    if (!fieldId) return res.status(400).json({ error: "Invalid field ID" });
+    const projectId = parseIdParam(req.params.projectId)!;
+    if (!fieldId) { res.status(400).json({ error: "Invalid field ID" }); return; }
 
     const role = req.projectRole!;
     const shape = UpdateContentFieldBody.safeParse(req.body);
-    if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+    if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
     const parsed = StrictUpdateField.safeParse(shape.data);
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
-    }
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }); return;    }
     const data = parsed.data;
 
     // Admin+ only: lock toggle, live `value`, and label changes.
     const adminOnlyChange =
       data.isLocked !== undefined || data.value !== undefined || data.label !== undefined;
     if (adminOnlyChange && !["owner", "admin"].includes(role)) {
-      return res
+      res
         .status(403)
         .json({ error: "Requires admin access to change lock state, label, or live value" });
+      return;
     }
 
     const existing = await db
@@ -120,11 +119,10 @@ router.patch(
       .from(contentFieldsTable)
       .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
     const field = existing[0];
-    if (!field) return res.status(404).json({ error: "Field not found" });
+    if (!field) { res.status(404).json({ error: "Field not found" }); return; }
 
     if (field.isLocked && data.draftValue !== undefined && !["owner", "admin"].includes(role)) {
-      return res.status(403).json({ error: "This field is locked" });
-    }
+      res.status(403).json({ error: "This field is locked" }); return;    }
 
     const updatePayload: Partial<typeof contentFieldsTable.$inferInsert> = {};
     if (data.isLocked !== undefined) updatePayload.isLocked = data.isLocked;
@@ -224,15 +222,15 @@ router.delete(
   requireProjectAccess("admin"),
   async (req: AuthRequest, res) => {
     const fieldId = parseIdParam(req.params.fieldId);
-    const projectId = parseInt(req.params.projectId);
-    if (!fieldId) return res.status(400).json({ error: "Invalid field ID" });
+    const projectId = parseIdParam(req.params.projectId)!;
+    if (!fieldId) { res.status(400).json({ error: "Invalid field ID" }); return; }
 
     const existing = await db
       .select()
       .from(contentFieldsTable)
       .where(and(eq(contentFieldsTable.id, fieldId), eq(contentFieldsTable.projectId, projectId)));
     const field = existing[0];
-    if (!field) return res.status(404).json({ error: "Field not found" });
+    if (!field) { res.status(404).json({ error: "Field not found" }); return; }
 
     await db
       .delete(contentFieldsTable)
@@ -258,7 +256,7 @@ router.post(
   requireAuth,
   requireProjectAccess("admin"),
   async (req: AuthRequest, res) => {
-    const projectId = parseInt(req.params.projectId);
+    const projectId = parseIdParam(req.params.projectId)!;
 
     const rows = await db
       .select()

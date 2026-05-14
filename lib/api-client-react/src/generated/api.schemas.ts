@@ -12,6 +12,11 @@ export interface UploadUrlRequest {
   size: number;
   /** @minLength 1 */
   contentType: string;
+  /**
+   * Project this upload belongs to. Caller must be an editor or higher in this project.
+   * @minimum 1
+   */
+  projectId: number;
 }
 
 export interface UploadUrlResponse {

@@ -31,7 +31,7 @@ function memberToResponse(m: {
 
 // GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const members = await db
     .select({
       id: projectUsersTable.id,
@@ -54,16 +54,15 @@ router.patch(
   requireAuth,
   requireProjectAccess("owner"),
   async (req: AuthRequest, res) => {
-    const projectId = parseInt(req.params.projectId);
+    const projectId = parseIdParam(req.params.projectId)!;
     const targetUserId = parseIdParam(req.params.userId);
-    if (!targetUserId) return res.status(400).json({ error: "Invalid user ID" });
+    if (!targetUserId) { res.status(400).json({ error: "Invalid user ID" }); return; }
 
     const shape = UpdateUserRoleBody.safeParse(req.body);
-    if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+    if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
     const parsed = StrictUpdateRole.safeParse(shape.data);
     if (!parsed.success) {
-      return res.status(400).json({ error: "Role must be admin, editor, or viewer" });
-    }
+      res.status(400).json({ error: "Role must be admin, editor, or viewer" }); return;    }
 
     const target = await db
       .select()
@@ -71,10 +70,9 @@ router.patch(
       .where(
         and(eq(projectUsersTable.projectId, projectId), eq(projectUsersTable.userId, targetUserId)),
       );
-    if (!target[0]) return res.status(404).json({ error: "Member not found" });
+    if (!target[0]) { res.status(404).json({ error: "Member not found" }); return; }
     if (target[0].role === "owner") {
-      return res.status(403).json({ error: "Cannot change the project owner's role" });
-    }
+      res.status(403).json({ error: "Cannot change the project owner's role" }); return;    }
 
     const [updated] = await db
       .update(projectUsersTable)
@@ -113,16 +111,15 @@ router.delete(
   requireAuth,
   requireProjectAccess("viewer"),
   async (req: AuthRequest, res) => {
-    const projectId = parseInt(req.params.projectId);
+    const projectId = parseIdParam(req.params.projectId)!;
     const targetUserId = parseIdParam(req.params.userId);
-    if (!targetUserId) return res.status(400).json({ error: "Invalid user ID" });
+    if (!targetUserId) { res.status(400).json({ error: "Invalid user ID" }); return; }
 
     const requesterId = req.userId!;
     const requesterRole = req.projectRole!;
 
     if (targetUserId !== requesterId && requesterRole !== "owner") {
-      return res.status(403).json({ error: "Only the project owner can remove other members" });
-    }
+      res.status(403).json({ error: "Only the project owner can remove other members" }); return;    }
 
     const target = await db
       .select()
@@ -130,10 +127,9 @@ router.delete(
       .where(
         and(eq(projectUsersTable.projectId, projectId), eq(projectUsersTable.userId, targetUserId)),
       );
-    if (!target[0]) return res.status(404).json({ error: "Member not found" });
+    if (!target[0]) { res.status(404).json({ error: "Member not found" }); return; }
     if (target[0].role === "owner") {
-      return res.status(403).json({ error: "Cannot remove the project owner" });
-    }
+      res.status(403).json({ error: "Cannot remove the project owner" }); return;    }
 
     const users = await db.select().from(usersTable).where(eq(usersTable.id, targetUserId));
     const targetEmail = users[0]?.email ?? `user ${targetUserId}`;

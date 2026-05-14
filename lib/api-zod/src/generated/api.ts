@@ -493,6 +493,12 @@ export const RequestUploadUrlBody = zod.object({
   name: zod.string().min(1),
   size: zod.number().min(1),
   contentType: zod.string().min(1),
+  projectId: zod
+    .number()
+    .min(1)
+    .describe(
+      "Project this upload belongs to. Caller must be an editor or higher in this project.",
+    ),
 });
 
 export const RequestUploadUrlResponse = zod.object({
@@ -503,6 +509,12 @@ export const RequestUploadUrlResponse = zod.object({
       name: zod.string().min(1),
       size: zod.number().min(1),
       contentType: zod.string().min(1),
+      projectId: zod
+        .number()
+        .min(1)
+        .describe(
+          "Project this upload belongs to. Caller must be an editor or higher in this project.",
+        ),
     })
     .optional(),
 });

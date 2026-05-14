@@ -62,24 +62,23 @@ const StrictLogin = z.object({ email: Email, password: Password });
 router.get("/me", requireAuth, async (req: AuthRequest, res) => {
   const users = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   const user = users[0];
-  if (!user) return res.status(401).json({ error: "Not authenticated" });
+  if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
   res.json(userToResponse(user));
 });
 
 // POST /signup
 router.post("/signup", authLimiter, async (req, res) => {
   const shape = SignupBody.safeParse(req.body);
-  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
 
   const parsed = StrictSignup.safeParse(shape.data);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" });
-  }
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }); return;  }
 
   const { email, password, name } = parsed.data;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email));
-  if (existing.length > 0) return res.status(409).json({ error: "Email already in use" });
+  if (existing.length > 0) { res.status(409).json({ error: "Email already in use" }); return; }
 
   const passwordHash = await hashPassword(password);
   const [user] = await db
@@ -104,10 +103,10 @@ router.post("/signup", authLimiter, async (req, res) => {
 // POST /login
 router.post("/login", authLimiter, async (req, res) => {
   const shape = LoginBody.safeParse(req.body);
-  if (!shape.success) return res.status(400).json({ error: "Validation failed" });
+  if (!shape.success) { res.status(400).json({ error: "Validation failed" }); return; }
 
   const parsed = StrictLogin.safeParse(shape.data);
-  if (!parsed.success) return res.status(401).json({ error: "Invalid credentials" });
+  if (!parsed.success) { res.status(401).json({ error: "Invalid credentials" }); return; }
 
   const { email, password } = parsed.data;
 
@@ -121,8 +120,7 @@ router.post("/login", authLimiter, async (req, res) => {
   const verdict = await verifyPassword(password, stored);
 
   if (!user || !verdict.ok) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
+    res.status(401).json({ error: "Invalid credentials" }); return;  }
 
   // Migrate legacy SHA-256 hashes to scrypt on successful login.
   if (verdict.needsRehash) {
@@ -258,8 +256,7 @@ router.post("/forgot-password", authLimiter, async (req, res) => {
 router.post("/reset-password", authLimiter, async (req, res) => {
   const parsed = ResetPasswordBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid request" });
-  }
+    res.status(400).json({ error: "Invalid request" }); return;  }
   const { token, password } = parsed.data;
 
   const tokenHash = hashSessionToken(token);
@@ -301,8 +298,7 @@ router.post("/reset-password", authLimiter, async (req, res) => {
   });
 
   if (!consumedUserId) {
-    return res.status(400).json({ error: "This link has expired or has already been used. Request a new one." });
-  }
+    res.status(400).json({ error: "This link has expired or has already been used. Request a new one." }); return;  }
 
   logger.info({ audit: true, userId: consumedUserId, action: "password_reset_completed" }, "audit");
   res.json({ ok: true });

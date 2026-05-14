@@ -49,7 +49,7 @@ export async function resolveSessionUser(req: Request) {
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const user = await resolveSessionUser(req);
-  if (!user) return res.status(401).json({ error: "Not authenticated" });
+  if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
   req.userId = user.id;
   req.userName = user.name;
   req.userEmail = user.email;
@@ -72,8 +72,8 @@ export function requireProjectAccess(
 ) {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     const projectId = parseIdParam(req.params.projectId);
-    if (!projectId) return res.status(400).json({ error: "Invalid project ID" });
-    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+    if (!projectId) { res.status(400).json({ error: "Invalid project ID" }); return; }
+    if (!req.userId) { res.status(401).json({ error: "Not authenticated" }); return; }
 
     const memberships = await db
       .select()
@@ -87,13 +87,12 @@ export function requireProjectAccess(
     const membership = memberships[0];
 
     // Same response for "doesn't exist" and "no access" — never leak existence.
-    if (!membership) return res.status(403).json({ error: "Access denied" });
+    if (!membership) { res.status(403).json({ error: "Access denied" }); return; }
 
     const userRank = ROLE_RANK[membership.role] ?? 0;
     const requiredRank = ROLE_RANK[minRole] ?? 0;
     if (userRank < requiredRank) {
-      return res.status(403).json({ error: `Requires ${minRole} access or higher` });
-    }
+      res.status(403).json({ error: `Requires ${minRole} access or higher` }); return;    }
 
     req.projectRole = membership.role as AuthRequest["projectRole"];
     next();

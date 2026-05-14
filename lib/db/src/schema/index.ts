@@ -11,3 +11,4 @@ export * from "./sessions";
 export * from "./password_reset_tokens";
 export * from "./content_snapshots";
 export * from "./mcp_call_log";
+export * from "./uploaded_objects";

@@ -29,7 +29,7 @@ function keyToResponse(k: typeof projectKeysTable.$inferSelect) {
 
 // GET / — admin+ (keys are sensitive, viewers don't need them)
 router.get("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
   const keys = await db
     .select()
     .from(projectKeysTable)
@@ -39,7 +39,7 @@ router.get("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequ
 
 // POST / — admin+. Returns the raw key exactly once.
 router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthRequest, res) => {
-  const projectId = parseInt(req.params.projectId);
+  const projectId = parseIdParam(req.params.projectId)!;
 
   const parsed = StrictCreateKey.safeParse(req.body ?? {});
   const name = parsed.success && parsed.data.name ? parsed.data.name : "Project key";
@@ -71,15 +71,15 @@ router.delete(
   requireProjectAccess("owner"),
   async (req: AuthRequest, res) => {
     const keyId = parseIdParam(req.params.keyId);
-    const projectId = parseInt(req.params.projectId);
-    if (!keyId) return res.status(400).json({ error: "Invalid key ID" });
+    const projectId = parseIdParam(req.params.projectId)!;
+    if (!keyId) { res.status(400).json({ error: "Invalid key ID" }); return; }
 
     const keys = await db
       .select()
       .from(projectKeysTable)
       .where(and(eq(projectKeysTable.id, keyId), eq(projectKeysTable.projectId, projectId)));
     const key = keys[0];
-    if (!key) return res.status(404).json({ error: "Key not found" });
+    if (!key) { res.status(404).json({ error: "Key not found" }); return; }
 
     await db
       .update(projectKeysTable)
