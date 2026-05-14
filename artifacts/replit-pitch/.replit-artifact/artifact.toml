@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/replit-pitch/"
+title = "Replit Partnership Pitch"
+version = "1.0.0"
+id = "artifacts/replit-pitch"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/replit-pitch/" ]
+localPort = 19233
+
+[services.development]
+run = "pnpm --filter @workspace/replit-pitch run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/replit-pitch", "run", "build" ]
+publicDir = "artifacts/replit-pitch/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19233"
+BASE_PATH = "/replit-pitch/"
