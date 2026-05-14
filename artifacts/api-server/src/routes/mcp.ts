@@ -431,7 +431,10 @@ async function tool_get_install_snippet(
   //     shown to the user, who pastes it locally into the placeholder
   // This keeps the no-copy-paste UX for everything except the one secret
   // value, which is the only piece that has to traverse a trust boundary.
-  const keysUrl = `${base}/app/projects/${ctx.projectId}/keys`;
+  // The dashboard route is /app/projects/:id with tab state driven by
+  // the ?tab= query param (see project-detail.tsx). ?tab=keys lands
+  // the user directly on the Connect tab where their key is shown.
+  const keysUrl = `${base}/app/projects/${ctx.projectId}?tab=keys`;
   const snippet =
     `<!-- Paste just before </body> in your main HTML file. -->\n` +
     `<script\n` +

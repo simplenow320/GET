@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useParams, Link } from "wouter";
+import { useLocation, useParams, useSearch, Link } from "wouter";
 import { format } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -343,6 +343,13 @@ export default function ProjectDetail() {
   const { data: project, isLoading } = useGetProject(projectId, {
     query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) },
   });
+  // Hooks must be called BEFORE any early-return guards. wouter's
+  // useSearch installs a subscription, so calling it conditionally
+  // produces "Rendered more hooks than during the previous render".
+  // We capture the raw ?tab= here and validate it against the tabs
+  // list further down (after `isOwner` is known).
+  const search = useSearch();
+  const requestedTab = new URLSearchParams(search).get("tab");
 
   if (isLoading) {
     return (
@@ -387,6 +394,11 @@ export default function ProjectDetail() {
     // Settings holds rename + delete; owners only.
     ...(isOwner ? [{ value: "settings", icon: Settings, label: "Settings" }] : []),
   ];
+
+  // Resolve the ?tab= deep link captured at the top of the component
+  // against the now-known tabs list. Falls back to "content" for any
+  // unknown / missing value (e.g. ?tab=settings on a non-owner role).
+  const initialTab = tabs.some((t) => t.value === requestedTab) ? requestedTab! : "content";
 
   return (
     <AppLayout>
@@ -494,8 +506,10 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="content">
+        {/* Tabs — defaultValue can be set via ?tab= so deep links from
+            the MCP install snippet (which sends users to ?tab=keys) land
+            on the right tab instead of always showing Content. */}
+        <Tabs defaultValue={initialTab}>
           <div className="no-scrollbar" style={{ overflowX: "auto", marginRight: -16, paddingRight: 16 }}>
             <TabsList
               style={{
