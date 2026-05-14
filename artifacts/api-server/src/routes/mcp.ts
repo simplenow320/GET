@@ -6,8 +6,68 @@ import {
   projectsTable,
   contentFieldsTable,
   domainsTable,
+  mcpCallLogTable,
 } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
+
+// ── Invisible safety controls ───────────────────────────────────────────────
+// Three protections that the user / vibe coder never sees but a security
+// reviewer expects to find:
+//   1) Per-key rate limit  — caps a single key at RATE_LIMIT_MAX requests
+//      per RATE_LIMIT_WINDOW_MS. Stops a leaked key from being weaponised
+//      for scraping or DoS. Pure in-memory; resets on process restart,
+//      which is fine because Replit fronts us with a single process.
+//   2) Auto-expire stale keys — any key not used in EXPIRY_DAYS days is
+//      auto-revoked on its next attempted use. Eliminates the biggest
+//      real-world leak source (keys forgotten in old laptops/repos)
+//      without ever asking the user to rotate.
+//   3) Audit log — every MCP call writes a row to mcp_call_log so we can
+//      answer "what did this key do?" after the fact. Best-effort insert,
+//      never blocks the response.
+const RATE_LIMIT_MAX = 60;                    // requests
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;       // per minute
+const EXPIRY_DAYS = 90;
+const EXPIRY_MS = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+// keyId → ring of recent timestamps (ms). Trimmed on each check so memory
+// stays O(active keys × RATE_LIMIT_MAX).
+const rateBuckets = new Map<number, number[]>();
+
+function rateLimitOk(keyId: number): boolean {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const ring = rateBuckets.get(keyId) ?? [];
+  // Drop expired timestamps in place.
+  let firstFresh = 0;
+  while (firstFresh < ring.length && ring[firstFresh]! < cutoff) firstFresh++;
+  const fresh = firstFresh > 0 ? ring.slice(firstFresh) : ring;
+  if (fresh.length >= RATE_LIMIT_MAX) {
+    rateBuckets.set(keyId, fresh);
+    return false;
+  }
+  fresh.push(now);
+  rateBuckets.set(keyId, fresh);
+  return true;
+}
+
+function clientIp(req: Request): string | null {
+  const xf = (req.headers["x-forwarded-for"] || "").toString().split(",")[0]?.trim();
+  return xf || req.ip || req.socket?.remoteAddress || null;
+}
+
+// Best-effort audit insert. Never throws; never awaited from the hot path.
+function logCall(opts: {
+  projectId: number;
+  projectKeyId: number;
+  method: string;
+  toolName: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  ok: boolean;
+  errorCode: number | null;
+}): void {
+  void db.insert(mcpCallLogTable).values(opts).catch(() => {});
+}
 
 // ── Origin allowlist helpers (mirror middlewares/project-key-auth.ts) ───────
 // Kept in sync with requireProjectKey so that an attacker who steals a key
@@ -68,8 +128,8 @@ interface AuthedRequest extends Request {
 // usually does not see the Authorization header itself). `forbidden`
 // signals an Origin-allowlist failure so the JSON-RPC layer can return a
 // distinct error code from "missing/invalid key".
-type AuthOk = { ok: true; projectId: number; keyPrefix: string; rawKey: string };
-type AuthFail = { ok: false; reason: "unauth" | "forbidden" };
+type AuthOk = { ok: true; projectId: number; projectKeyId: number; keyPrefix: string; rawKey: string };
+type AuthFail = { ok: false; reason: "unauth" | "forbidden" | "rate_limited" };
 type AuthResult = AuthOk | AuthFail;
 
 function hashKey(raw: string): string {
@@ -95,6 +155,8 @@ async function authenticate(req: AuthedRequest): Promise<AuthResult> {
       projectId: projectKeysTable.projectId,
       keyPrefix: projectKeysTable.keyPrefix,
       id: projectKeysTable.id,
+      createdAt: projectKeysTable.createdAt,
+      lastUsedAt: projectKeysTable.lastUsedAt,
     })
     .from(projectKeysTable)
     .where(
@@ -105,6 +167,25 @@ async function authenticate(req: AuthedRequest): Promise<AuthResult> {
     );
   const k = rows[0];
   if (!k) return { ok: false, reason: "unauth" };
+
+  // Auto-expire: if the key has been silent for >EXPIRY_DAYS days, revoke
+  // it now and reject. Active users never trip this; forgotten keys in old
+  // laptops / repos quietly stop working without anyone needing to rotate.
+  // We use lastUsedAt when present, otherwise createdAt for keys that were
+  // generated but never used.
+  const lastTouchMs = (k.lastUsedAt ?? k.createdAt).getTime();
+  if (Date.now() - lastTouchMs > EXPIRY_MS) {
+    void db
+      .update(projectKeysTable)
+      .set({ revokedAt: new Date() })
+      .where(eq(projectKeysTable.id, k.id))
+      .catch(() => {});
+    req.log?.warn?.(
+      { projectKeyId: k.id, projectId: k.projectId, ageDays: Math.round((Date.now() - lastTouchMs) / (24 * 60 * 60 * 1000)) },
+      "MCP key auto-expired after inactivity",
+    );
+    return { ok: false, reason: "unauth" };
+  }
 
   // Origin allowlist — same policy as requireProjectKey middleware:
   //   - no domains configured  → accept any origin (back-compat)
@@ -142,7 +223,13 @@ async function authenticate(req: AuthedRequest): Promise<AuthResult> {
     .set({ lastUsedAt: new Date() })
     .where(eq(projectKeysTable.id, k.id))
     .catch(() => {});
-  return { ok: true, projectId: k.projectId, keyPrefix: k.keyPrefix, rawKey: raw };
+  return {
+    ok: true,
+    projectId: k.projectId,
+    projectKeyId: k.id,
+    keyPrefix: k.keyPrefix,
+    rawKey: raw,
+  };
 }
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
@@ -350,7 +437,7 @@ function rpcError(id: JsonRpcRequest["id"], code: number, message: string) {
 async function dispatch(
   req: Request,
   body: JsonRpcRequest,
-  auth: { projectId: number; keyPrefix: string; rawKey: string },
+  auth: { projectId: number; projectKeyId: number; keyPrefix: string; rawKey: string },
   res: Response,
 ): Promise<void> {
   const { method, params, id } = body;
@@ -440,6 +527,9 @@ router.get("/", (_req, res) => {
 
 // POST /api/mcp — JSON-RPC entry point.
 router.post("/", async (req: AuthedRequest, res) => {
+  const ip = clientIp(req);
+  const ua = (req.headers["user-agent"] || "").toString().slice(0, 255) || null;
+
   const auth = await authenticate(req);
   if (!auth.ok) {
     if (auth.reason === "forbidden") {
@@ -456,6 +546,27 @@ router.post("/", async (req: AuthedRequest, res) => {
     });
   }
 
+  // Per-key rate limit. Logged so abuse leaves a paper trail even if the
+  // attacker never gets a successful response.
+  if (!rateLimitOk(auth.projectKeyId)) {
+    logCall({
+      projectId: auth.projectId,
+      projectKeyId: auth.projectKeyId,
+      method: "rate_limited",
+      toolName: null,
+      ip,
+      userAgent: ua,
+      ok: false,
+      errorCode: -32004,
+    });
+    res.setHeader("Retry-After", "60");
+    return res.status(429).json({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32004, message: "Rate limit exceeded — try again in a minute" },
+    });
+  }
+
   const body = req.body as JsonRpcRequest | JsonRpcRequest[] | undefined;
   if (!body) {
     return res.status(400).json({
@@ -465,29 +576,68 @@ router.post("/", async (req: AuthedRequest, res) => {
     });
   }
 
-  // MCP allows batched requests. Dispatch each and combine results — but
-  // the dispatcher writes directly to res for the single-request path,
-  // so for batches we collect responses manually.
+  // Capture-shim wraps res so we can both inspect what the dispatcher
+  // wrote (for the audit log) and forward it to the real response.
+  // For single requests we write straight to res; for batches we never
+  // forward (we accumulate). Either way, audit each item once.
+  const auditOne = (item: JsonRpcRequest, payload: unknown) => {
+    const isErr = !!(payload && typeof payload === "object" && "error" in (payload as object));
+    const errCode = isErr
+      ? Number(((payload as { error?: { code?: number } }).error?.code) ?? null) || null
+      : null;
+    const toolName =
+      item.method === "tools/call"
+        ? ((item.params as { name?: string } | undefined)?.name ?? null)
+        : null;
+    logCall({
+      projectId: auth.projectId,
+      projectKeyId: auth.projectKeyId,
+      method: item.method,
+      toolName,
+      ip,
+      userAgent: ua,
+      ok: !isErr,
+      errorCode: errCode,
+    });
+  };
+
   if (Array.isArray(body)) {
     const out: unknown[] = [];
     for (const item of body) {
-      // Reuse dispatch logic by building a tiny capture-shim res.
       let captured: unknown = null;
       let statusCode = 200;
       const shim = {
         status(code: number) { statusCode = code; return shim; },
         json(payload: unknown) { captured = payload; return shim; },
         end() { captured = null; return shim; },
+        setHeader() { return shim; },
       } as unknown as Response;
       await dispatch(req, item, auth, shim);
-      // 202 (notification) → omit from batch response per JSON-RPC spec.
       if (statusCode !== 202 && captured !== null) out.push(captured);
+      auditOne(item, captured);
     }
     res.json(out);
     return;
   }
 
-  await dispatch(req, body, auth, res);
+  // Single request: capture the dispatcher's payload via a shim, then
+  // forward to the real response so the wire behaviour is unchanged.
+  let captured: unknown = null;
+  let statusCode = 200;
+  const shim = {
+    status(code: number) { statusCode = code; return shim; },
+    json(payload: unknown) { captured = payload; return shim; },
+    end() { captured = null; return shim; },
+    setHeader() { return shim; },
+  } as unknown as Response;
+  await dispatch(req, body, auth, shim);
+  auditOne(body, captured);
+  if (statusCode === 202) {
+    res.status(202).end();
+  } else {
+    res.status(statusCode).json(captured);
+  }
+  return;
 });
 
 export default router;
