@@ -395,7 +395,21 @@ const SCANNER_SCRIPT = /* javascript */ `
     fetch(CONTENT_URL, {
       headers: { 'Authorization': 'Bearer ' + key }
     })
-    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(r) {
+      if (r.status === 401) {
+        console.error('[get] Project key rejected (401). Check that data-key in your script tag is the full key (not a placeholder). Go to your get dashboard → Keys tab to create or copy a key.');
+        return null;
+      }
+      if (r.status === 403) {
+        console.error('[get] Origin not allowed (403). Add your site domain in your get dashboard → Domains tab.');
+        return null;
+      }
+      if (!r.ok) {
+        console.warn('[get] Content fetch failed (' + r.status + '). Your edits may not appear on this page.');
+        return null;
+      }
+      return r.json();
+    })
     .then(function(data) {
       if (data && data.content) applyContent(data.content);
     })

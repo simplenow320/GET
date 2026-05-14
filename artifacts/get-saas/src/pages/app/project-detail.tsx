@@ -594,9 +594,7 @@ function ScannerSetupCard({
 
   const firstKey = keys[0];
   const scannerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}${BASE}/api/public/scanner.js`;
-  const snippet = firstKey
-    ? `<!-- Paste just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="${firstKey.keyPrefix}YOUR_FULL_KEY_HERE"\n  defer\n></script>`
-    : `<!-- Paste just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="YOUR_PROJECT_KEY"\n  defer\n></script>`;
+  const snippet = `<!-- Paste just before </body> in your main HTML file -->\n<script\n  src="${scannerUrl}"\n  data-key="YOUR_PROJECT_KEY"\n  defer\n></script>`;
 
   const fieldLines = fields.length > 0
     ? fields.map(f => {
@@ -945,7 +943,8 @@ function ScannerSetupCard({
                   </p>
                   <CodeBlock text={snippet} which="snippet" />
                   <p style={{ fontSize: 11.5, color: tone[500], margin: 0, lineHeight: 1.55 }}>
-                    Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>YOUR_FULL_KEY_HERE</code> with your full key from the <strong>Connect</strong> tab.
+                    Replace <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>YOUR_PROJECT_KEY</code> with your full project key — it looks like <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{firstKey ? `${firstKey.keyPrefix}…` : "pk_live_…"}</code> and was shown in full when you created it.{" "}
+                    {firstKey ? <>Don't have it? Go to the <strong>Keys</strong> tab to create a new one.</> : <>Create one in the <strong>Keys</strong> tab first.</>}
                   </p>
 
                   {/* Where to put it — by platform */}
