@@ -21,12 +21,18 @@ export default function SecuritySlide() {
         style={{ padding: "6vh 6vw", zIndex: 1 }}
       >
         <div
-          className="flex justify-end items-center"
+          className="flex justify-between items-center"
           style={{
             paddingBottom: "4vh",
             borderBottom: "0.15vh solid var(--slide-divider)",
           }}
         >
+          <img
+            src={`${import.meta.env.BASE_URL}get-logo.png`}
+            crossOrigin="anonymous"
+            alt="get"
+            style={{ height: "5vh", width: "auto", display: "block" }}
+          />
           <div
             className="font-body font-semibold text-muted uppercase"
             style={{ fontSize: "1vw", letterSpacing: "0.18em" }}
