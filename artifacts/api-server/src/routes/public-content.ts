@@ -197,8 +197,15 @@ const SCANNER_SCRIPT = /* javascript */ `
   // Populated by applyContent so the inline-editor can gate by field type
   // (image / url / boolean → redirect to field panel, not contenteditable).
   var contentTypeMap = {};
+  // Cached latest content payload — kept around so the Smart Watcher
+  // (MutationObserver below) can re-apply values to elements that show
+  // up *after* the initial fetch (React/Vue/Svelte hydration, route
+  // changes, lazy components). Without this cache the observer would
+  // have nothing to apply.
+  var latestContent = null;
 
   function applyContent(content) {
+    latestContent = content;
     for (var label in content) {
       var field = content[label];
       var value = field.value;
@@ -1344,6 +1351,67 @@ const SCANNER_SCRIPT = /* javascript */ `
         setupClickToEdit();
       }
     }
+
+    // ── Smart Watcher (SPA-aware) ────────────────────────────────────────
+    // The original scanner ran applyContent() once on page load. That
+    // breaks every modern SPA (React/Vue/Svelte/etc) because the elements
+    // tagged with data-get-key don't exist yet at DOMContentLoaded — they
+    // mount milliseconds later when the framework hydrates, and the
+    // scanner has already given up by then.
+    //
+    // The MutationObserver below watches the document for *any* new
+    // [data-get-key] elements appearing (or existing ones being replaced)
+    // and re-applies the cached content. Debounced ~150ms so a burst of
+    // React renders only triggers one re-apply.
+    function startSmartWatcher() {
+      if (typeof MutationObserver === 'undefined') return;
+      var pending = false;
+      // Self-trigger guard: applyContent() mutates the DOM (textContent /
+      // innerHTML on tagged elements). Without this flag, the observer
+      // would see those mutations, schedule another reapply, mutate again,
+      // and loop forever (debounced but still wasteful). We disconnect
+      // before applying, then take and discard the noise records before
+      // reconnecting so we never observe our own writes.
+      function reapply() {
+        pending = false;
+        if (!latestContent) return;
+        try { observer.disconnect(); } catch (e) {}
+        try { applyContent(latestContent); } catch (e) {}
+        try { observer.takeRecords(); } catch (e) {}
+        attach();
+      }
+      var observer = new MutationObserver(function(mutations) {
+        if (pending || !latestContent) return;
+        // Pre-filter: only schedule when a tagged element could be
+        // newly present. We check addedNodes for [data-get-key] descendants
+        // and attribute changes on tagged elements. Plain text edits
+        // inside an already-tagged element are ignored — they never need
+        // a reapply.
+        for (var i = 0; i < mutations.length; i++) {
+          var m = mutations[i];
+          if (m.type === 'attributes') { pending = true; break; }
+          if (m.addedNodes && m.addedNodes.length > 0) {
+            for (var j = 0; j < m.addedNodes.length; j++) {
+              var n = m.addedNodes[j];
+              if (n.nodeType !== 1) continue; // skip text/comment
+              if (n.hasAttribute && n.hasAttribute('data-get-key')) { pending = true; break; }
+              if (n.querySelector && n.querySelector('[data-get-key]')) { pending = true; break; }
+            }
+            if (pending) break;
+          }
+        }
+        if (pending) setTimeout(reapply, 150);
+      });
+      function attach() {
+        if (!document.body) { setTimeout(attach, 50); return; }
+        observer.observe(document.body, {
+          childList: true, subtree: true,
+          attributes: true, attributeFilter: ['data-get-key'],
+        });
+      }
+      attach();
+    }
+    startSmartWatcher();
   })();
 
 })();

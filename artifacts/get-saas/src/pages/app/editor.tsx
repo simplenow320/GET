@@ -355,6 +355,69 @@ export default function ClientEditor() {
     () => localStorage.getItem(SKIP_WARN_KEY) === "true",
   );
 
+  // ── Install check ──────────────────────────────────────────────────────
+  // Background "is this actually wired up on the live site?" check.
+  // Runs once on mount and on demand. Drives the per-field health dot and
+  // the honest header badge ("Live on site" vs "Saved — not visible yet").
+  // Failures are silent — the editor must keep working even if the user's
+  // site is offline or the install-check endpoint 500s.
+  type InstallCheck = {
+    siteUrl: string | null;
+    fetched: boolean;
+    scannerFound: boolean;
+    scannerKeyMatches: boolean;
+    tagsFound: string[];
+    fieldStatuses: Array<{ label: string; status: "wired" | "missing" }>;
+  };
+  const [installCheck, setInstallCheck] = useState<InstallCheck | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    fetch(`/api/projects/${projectId}/install-check`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setInstallCheck(data as InstallCheck);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  // Resolve a single field's wiring status by label. Returns a small
+  // descriptor used for both the dot color and tooltip text.
+  function statusForField(label: string): {
+    color: string;
+    tip: string;
+    tone: "ok" | "warn" | "bad" | "unknown";
+  } {
+    if (!installCheck || !installCheck.fetched) {
+      return { color: tone[300], tip: "Checking your site…", tone: "unknown" };
+    }
+    if (!installCheck.scannerFound) {
+      return {
+        color: "#ef4444",
+        tip: "Scanner script not installed on your site — saves won't show.",
+        tone: "bad",
+      };
+    }
+    const fs = installCheck.fieldStatuses.find((f) => f.label === label);
+    if (fs && fs.status === "wired") {
+      return { color: "#22c55e", tip: "Wired up — changes will show on your site.", tone: "ok" };
+    }
+    return {
+      color: "#f59e0b",
+      tip:
+        "This field isn't tagged on your site yet. Add data-get-key=\"" +
+        label +
+        "\" to the element you want to update.",
+      tone: "warn",
+    };
+  }
+
   // Live preview iframe
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [windowWidth, setWindowWidth] = useState(
@@ -1038,9 +1101,40 @@ export default function ClientEditor() {
           </button>
           {/* Status badge — hidden on very narrow screens */}
           {windowWidth >= 500 && (() => {
+            // Honest live badge: only claim "Live on site" when the install
+            // check has actually confirmed the scanner is present and at
+            // least one field is wired. Otherwise tell the user exactly what
+            // we found ("Saved — scanner not installed", etc).
             const anyPending = fields?.some((f) => f.draftValue != null);
+            let dot = "#4ade80";
+            let label = "All changes live";
+            if (anyPending) {
+              dot = BRAND.yellow;
+              label = "Changes pending review";
+            } else if (!installCheck || !installCheck.fetched) {
+              dot = tone[300];
+              label = "Saved";
+            } else if (!installCheck.scannerFound) {
+              dot = "#ef4444";
+              label = "Saved — scanner not installed";
+            } else {
+              const wired = installCheck.fieldStatuses.filter((f) => f.status === "wired").length;
+              const total = installCheck.fieldStatuses.length;
+              if (total > 0 && wired === 0) {
+                dot = "#ef4444";
+                label = "Saved — no fields tagged on site";
+              } else if (wired < total) {
+                dot = "#f59e0b";
+                label = `Live on site (${wired}/${total} fields wired)`;
+              } else {
+                dot = "#22c55e";
+                label = "Live on site";
+              }
+            }
             return (
               <span
+                data-testid="badge-live-status"
+                title={installCheck?.siteUrl ? `Checked: ${installCheck.siteUrl}` : undefined}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1056,12 +1150,12 @@ export default function ClientEditor() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: anyPending ? BRAND.yellow : "#4ade80",
+                    background: dot,
                     flexShrink: 0,
                     display: "inline-block",
                   }}
                 />
-                {anyPending ? "Changes pending review" : "All changes live"}
+                {label}
               </span>
             );
           })()}
@@ -1143,6 +1237,26 @@ export default function ClientEditor() {
                       minWidth: 0,
                     }}
                   >
+                    {/* Health dot: green wired, yellow tag missing, red no
+                        scanner, gray still checking. Driven by install-check. */}
+                    {(() => {
+                      const s = statusForField(field.label);
+                      return (
+                        <span
+                          data-testid={`field-health-${field.label}`}
+                          data-health-tone={s.tone}
+                          title={s.tip}
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: s.color,
+                            flexShrink: 0,
+                            display: "inline-block",
+                          }}
+                        />
+                      );
+                    })()}
                     <span style={{ fontSize: type.base, fontWeight: 600 }}>
                       {field.label}
                     </span>

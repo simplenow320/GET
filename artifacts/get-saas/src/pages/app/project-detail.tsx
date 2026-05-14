@@ -64,6 +64,271 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
   return r.json();
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Check Setup — diagnostic button + modal
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Why this exists:
+//   When a client saves a field and "nothing happens" on their site, the
+//   real cause is almost always one of: scanner script not installed, wrong
+//   data-key, or the field's data-get-key tag is missing. Until now there
+//   was no way to see this without manually viewing the site source.
+//
+// This button calls POST /api/projects/:id/install-check which fetches the
+// site server-side and reports each field's wiring status in plain English.
+// The modal renders a colored row per field plus an explicit copy-paste
+// snippet for any field that's missing its tag.
+
+type InstallCheckResult = {
+  siteUrl: string | null;
+  fetched: boolean;
+  status: number;
+  scannerFound: boolean;
+  scannerKeyMatches: boolean;
+  tagsFound: string[];
+  fieldStatuses: Array<{ label: string; status: "wired" | "missing" }>;
+  message?: string;
+};
+
+function CheckSetupButton({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<InstallCheckResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiFetch(`/api/projects/${projectId}/install-check`, {
+        method: "POST",
+        body: "{}",
+      });
+      setResult(data as InstallCheckResult);
+    } catch (e) {
+      setError((e as Error).message ?? "Check failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleClick() {
+    setOpen(true);
+    void run();
+  }
+
+  return (
+    <>
+      <button
+        data-testid="button-check-setup"
+        onClick={handleClick}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          background: "transparent",
+          color: BRAND.ink,
+          border: `1px solid ${line.base}`,
+          borderRadius: 10,
+          fontSize: type.sm,
+          fontWeight: 600,
+          cursor: "pointer",
+          transition: `background 0.15s ${ease}`,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = tone[100]; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+      >
+        Check setup
+      </button>
+
+      {open && (
+        <div
+          data-testid="modal-check-setup"
+          onClick={() => setOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.45)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: 14,
+              maxWidth: 640,
+              width: "100%",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ padding: "20px 24px", borderBottom: `1px solid ${line.faint}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Setup check</h2>
+                  <p style={{ fontSize: type.sm, color: tone[500], lineHeight: 1.5 }}>
+                    We loaded your live site and checked what we found.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setOpen(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: tone[500], lineHeight: 1 }}
+                  aria-label="Close"
+                >×</button>
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px" }}>
+              {loading && <div style={{ color: tone[500], fontSize: type.sm }}>Checking your site…</div>}
+
+              {!loading && error && (
+                <div style={{ color: "#b91c1c", fontSize: type.sm }}>{error}</div>
+              )}
+
+              {!loading && result && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {!result.siteUrl && (
+                    <div style={{ background: "#fef3c7", padding: 12, borderRadius: 8, fontSize: type.sm, color: "#854d0e" }}>
+                      We don't know your site URL yet. Install the scanner script and load your site once — then come back here.
+                    </div>
+                  )}
+
+                  {result.siteUrl && (
+                    <>
+                      <div style={{ fontSize: type.xs, color: tone[500] }}>
+                        Checked: <a href={result.siteUrl} target="_blank" rel="noreferrer" style={{ color: BRAND.ink, textDecoration: "underline" }}>{result.siteUrl}</a>
+                      </div>
+
+                      <SetupRow
+                        ok={result.fetched}
+                        title={result.fetched ? "Site is reachable" : "Couldn't reach your site"}
+                        detail={result.fetched ? `Loaded with status ${result.status}` : "We tried but got no response. Is the URL right?"}
+                      />
+                      <SetupRow
+                        ok={result.scannerFound}
+                        title={result.scannerFound ? "Scanner script is installed" : "Scanner script is missing"}
+                        detail={result.scannerFound
+                          ? (result.scannerKeyMatches ? "Key matches this project." : "Script found, but the key doesn't look right.")
+                          : "Add the install snippet from the API Keys tab to your site's <head>."}
+                      />
+                    </>
+                  )}
+
+                  {/* Field rows render regardless of siteUrl so a fresh
+                      project (no scanner load yet) still sees its field
+                      list — every row labeled "missing" until the scanner
+                      runs at least once. */}
+                  {result.fieldStatuses.length > 0 && (
+                    <div>
+                        <div style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 8 }}>
+                          Field tags ({result.fieldStatuses.filter(f => f.status === "wired").length}/{result.fieldStatuses.length} wired)
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {result.fieldStatuses.length === 0 && (
+                            <div style={{ fontSize: type.sm, color: tone[500] }}>No fields configured yet.</div>
+                          )}
+                          {result.fieldStatuses.map((f) => (
+                            <div
+                              key={f.label}
+                              data-testid={`setup-field-${f.label}`}
+                              data-status={f.status}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                padding: "8px 10px",
+                                borderRadius: 8,
+                                background: f.status === "wired" ? "#f0fdf4" : "#fffbeb",
+                                fontSize: type.sm,
+                              }}
+                            >
+                              <span style={{
+                                width: 8, height: 8, borderRadius: "50%",
+                                background: f.status === "wired" ? "#22c55e" : "#f59e0b",
+                                flexShrink: 0,
+                              }} />
+                              <span style={{ fontWeight: 600, flex: "0 0 auto" }}>{f.label}</span>
+                              <span style={{ color: tone[500], fontSize: type.xs, marginLeft: "auto" }}>
+                                {f.status === "wired" ? "wired up" : "tag not found on page"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                    </div>
+                  )}
+
+                  {result.fieldStatuses.some(f => f.status === "missing") && (
+                    <div style={{ background: tone[100], padding: 12, borderRadius: 8, fontSize: type.xs, color: tone[600], lineHeight: 1.6 }}>
+                      <strong>Fix:</strong> on your site, add <code style={{ background: "white", padding: "1px 5px", borderRadius: 4 }}>data-get-key="Field Name"</code> to the element you want to update. Example:
+                      <pre style={{ marginTop: 8, background: "white", padding: 10, borderRadius: 6, overflowX: "auto", fontSize: 12 }}>
+{`<h1 data-get-key="${result.fieldStatuses.find(f => f.status === "missing")?.label ?? "Hero Title"}">Default text</h1>`}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: "12px 24px", borderTop: `1px solid ${line.faint}`, display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <button
+                onClick={() => void run()}
+                disabled={loading}
+                style={{
+                  padding: "8px 14px",
+                  background: "transparent",
+                  color: BRAND.ink,
+                  border: `1px solid ${line.base}`,
+                  borderRadius: 8,
+                  fontSize: type.sm,
+                  fontWeight: 600,
+                  cursor: loading ? "default" : "pointer",
+                  opacity: loading ? 0.5 : 1,
+                }}
+              >Re-check</button>
+              <button
+                onClick={() => setOpen(false)}
+                style={{
+                  padding: "8px 14px",
+                  background: BRAND.ink,
+                  color: BRAND.paper,
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: type.sm,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SetupRow({ ok, title, detail }: { ok: boolean; title: string; detail: string }) {
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <span style={{
+        width: 10, height: 10, borderRadius: "50%",
+        background: ok ? "#22c55e" : "#ef4444",
+        flexShrink: 0, marginTop: 5,
+      }} />
+      <div>
+        <div style={{ fontSize: type.sm, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: type.xs, color: tone[500] }}>{detail}</div>
+      </div>
+    </div>
+  );
+}
+
 const rowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -198,32 +463,35 @@ export default function ProjectDetail() {
           {/* Primary CTA — opens the side-by-side live editor for this project.
               Available to every role, including viewers (the editor itself
               gates write actions by myRole). */}
-          <Link href={`/app/editor/${projectId}`}>
-            <button
-              data-testid="button-open-editor"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "10px 18px",
-                background: BRAND.ink,
-                color: BRAND.paper,
-                border: "none",
-                borderRadius: 10,
-                fontSize: type.sm,
-                fontWeight: 600,
-                cursor: "pointer",
-                flexShrink: 0,
-                marginTop: 2,
-                transition: `opacity 0.15s ${ease}`,
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-            >
-              <FileEdit style={{ width: 15, height: 15 }} />
-              Open editor
-            </button>
-          </Link>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, marginTop: 2 }}>
+            {/* Check setup hits an editor+ endpoint — hide the button for
+                viewers so they don't get a 403 toast on click. */}
+            {myRole !== "viewer" && <CheckSetupButton projectId={projectId} />}
+            <Link href={`/app/editor/${projectId}`}>
+              <button
+                data-testid="button-open-editor"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 18px",
+                  background: BRAND.ink,
+                  color: BRAND.paper,
+                  border: "none",
+                  borderRadius: 10,
+                  fontSize: type.sm,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: `opacity 0.15s ${ease}`,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+              >
+                <FileEdit style={{ width: 15, height: 15 }} />
+                Open editor
+              </button>
+            </Link>
+          </div>
         </div>
 
         {/* Tabs */}
