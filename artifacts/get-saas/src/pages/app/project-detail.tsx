@@ -2611,6 +2611,7 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mcpCopied, setMcpCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
@@ -2868,6 +2869,81 @@ const { content } = await res.json();
         </pre>
         <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.65, marginTop: 10 }}>
           Server use only — never put this key in code that runs in the browser.
+        </p>
+      </Card>
+
+      {/* ── AI Assistant (MCP) ───────────────────────────────────────────
+          Lets the user wire any MCP-capable AI assistant (Claude Desktop,
+          Cursor, Replit Agent) directly to this project so the assistant
+          can read fields, return the install snippet, and check status
+          without copy-pasted prompts. The key in the JSON is a placeholder
+          — we don't echo the real key here because it's only displayed
+          once at generation time and we don't want to teach users to
+          screenshot it.                                                  */}
+      <Card style={{ padding: 18, background: tone[50], border: `1px solid ${line.faint}` }}>
+        <p style={{ fontSize: type.sm, fontWeight: 600, marginBottom: 8, color: BRAND.ink }}>
+          Use from an AI assistant (MCP)
+        </p>
+        <p style={{ fontSize: type.sm, color: tone[600], lineHeight: 1.65, marginBottom: 12 }}>
+          Add this to your <code style={{ background: tone[100], padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>mcp.json</code> in Claude Desktop, Cursor, Replit Agent, or any MCP-capable client. The assistant can then fetch the install snippet, list your fields, and verify your install — no prompts needed.
+        </p>
+        {(() => {
+          const mcpUrl = `${typeof window !== "undefined" ? window.location.origin : "https://your-host"}/api/mcp`;
+          const mcpJson =
+`{
+  "mcpServers": {
+    "get-cms": {
+      "url": "${mcpUrl}",
+      "headers": {
+        "Authorization": "Bearer YOUR_FULL_KEY_HERE"
+      }
+    }
+  }
+}`;
+          const handleMcpCopy = async () => {
+            await navigator.clipboard.writeText(mcpJson);
+            setMcpCopied(true);
+            setTimeout(() => setMcpCopied(false), 2000);
+          };
+          return (
+            <div style={{ position: "relative" }} data-testid="mcp-config-block">
+              <pre
+                style={{
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontSize: 12.5,
+                  lineHeight: 1.6,
+                  background: BRAND.ink,
+                  color: BRAND.paper,
+                  padding: "14px 52px 14px 16px",
+                  borderRadius: 10,
+                  overflowX: "auto",
+                  margin: 0,
+                  whiteSpace: "pre",
+                }}
+              >
+{mcpJson}
+              </pre>
+              <button
+                onClick={handleMcpCopy}
+                data-testid="mcp-copy-button"
+                style={{
+                  position: "absolute", top: 10, right: 10,
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  padding: "6px 10px", borderRadius: 8,
+                  background: mcpCopied ? "#10b981" : "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  cursor: "pointer", fontSize: type.xs, fontWeight: 600, color: "#f9fafb",
+                }}
+              >
+                {mcpCopied
+                  ? <><Check style={{ width: 12, height: 12 }} /> Copied!</>
+                  : <><Copy style={{ width: 12, height: 12 }} /> Copy</>}
+              </button>
+            </div>
+          );
+        })()}
+        <p style={{ fontSize: type.xs, color: tone[500], lineHeight: 1.65, marginTop: 10 }}>
+          Replace <code style={{ fontFamily: "monospace" }}>YOUR_FULL_KEY_HERE</code> with the full project key (generated above). Restart your AI client after editing <code style={{ fontFamily: "monospace" }}>mcp.json</code>.
         </p>
       </Card>
     </div>

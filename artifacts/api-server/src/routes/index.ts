@@ -12,6 +12,7 @@ import activityRouter from "./activity";
 import draftsRouter from "./drafts";
 import projectKeysRouter from "./project-keys";
 import publicContentRouter from "./public-content";
+import mcpRouter from "./mcp";
 import storageRouter from "./storage";
 
 const router: IRouter = Router();
@@ -21,6 +22,7 @@ router.use(storageRouter);
 router.use("/auth", authRouter);
 router.use("/auth", oauthGoogleRouter);
 router.use("/public", publicContentRouter);
+router.use("/mcp", mcpRouter);
 router.use("/invites", inviteAcceptRouter);
 router.use("/projects", projectsRouter);
 router.use("/projects/:projectId/content", contentRouter);
