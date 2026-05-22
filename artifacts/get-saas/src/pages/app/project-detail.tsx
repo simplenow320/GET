@@ -580,7 +580,7 @@ function ScannerSetupCard({
   onDismiss,
 }: {
   projectId: string;
-  onDismiss: () => void;
+  onDismiss?: () => void;
 }) {
   const [openSection, setOpenSection] = useState<"selfhost" | "ai" | "manual" | null>("selfhost");
   const [copied, setCopied] = useState<"snippet" | "prompt" | null>(null);
@@ -2791,6 +2791,12 @@ function KeysTab({ projectId, canManage }: { projectId: string; canManage: boole
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 640 }}>
+      {/* Install / Self-host download — mirrored here from the Content tab so
+          users who land on the tab literally called "Connect" can actually
+          find the connect-your-site flow. (UX fix for Erin-style stuckness.)
+          No onDismiss prop = no X button; the card stays put on this tab. */}
+      <ScannerSetupCard projectId={projectId} />
+
       {generatedKey && (
         <Card
           padded
