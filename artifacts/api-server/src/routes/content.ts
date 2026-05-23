@@ -21,6 +21,12 @@ const StrictCreateField = z.object({
   label: FieldLabel,
   type: z.enum(FIELD_TYPES),
   selector: SelectorString,
+  // Ordered, layered CSS selectors captured by click-to-tag. Capped at 8 entries
+  // / 500 chars each — generous for #id + [testid] + structural + fallbacks.
+  selectors: z.array(z.string().min(1).max(500)).max(8).optional(),
+  // FNV-1a hex hash, 8 chars. Untrusted text, but hex is safe and the field
+  // is only ever compared, never rendered, so no sanitization needed.
+  textFp: z.string().regex(/^[a-f0-9]{1,16}$/i).optional(),
   value: ContentValue.optional().nullable(),
 });
 
@@ -38,6 +44,8 @@ function fieldToResponse(f: typeof contentFieldsTable.$inferSelect) {
     label: f.label,
     type: f.type,
     selector: f.selector ?? undefined,
+    selectors: f.selectors ?? undefined,
+    textFp: f.textFp ?? undefined,
     value: f.value ?? undefined,
     draftValue: f.draftValue ?? undefined,
     isLocked: f.isLocked,
@@ -71,6 +79,8 @@ router.post("/", requireAuth, requireProjectAccess("admin"), async (req: AuthReq
       label: parsed.data.label,
       type: parsed.data.type,
       selector: parsed.data.selector ?? null,
+      selectors: parsed.data.selectors && parsed.data.selectors.length > 0 ? parsed.data.selectors : null,
+      textFp: parsed.data.textFp ?? null,
       value: parsed.data.value ? sanitizeForType(parsed.data.value, parsed.data.type) : null,
     })
     .returning();

@@ -84,13 +84,27 @@ const SnapshotBody = z.object({
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildContentMap(fields: typeof contentFieldsTable.$inferSelect[]) {
-  // `selector` is included so the scanner can use a stored CSS selector to
-  // re-find click-to-tagged elements on subsequent page loads (Fix B —
-  // visual "Make this editable" flow). Field shape stays back-compat: the
-  // selector is optional and pre-existing scanners simply ignore it.
-  const content: Record<string, { value: string | null; type: string; selector: string | null }> = {};
+  // `selector` / `selectors` / `textFp` are included so the scanner's
+  // resolveTags() pass can write data-get-key onto matching elements BEFORE
+  // applyContent runs — making click-to-tagged fields durable across page
+  // loads (and live on production) without any source-code edits or redeploys.
+  // Field shape stays back-compat: all three are optional and pre-existing
+  // scanners simply ignore them.
+  const content: Record<string, {
+    value: string | null;
+    type: string;
+    selector: string | null;
+    selectors: string[] | null;
+    textFp: string | null;
+  }> = {};
   for (const f of fields) {
-    content[f.label] = { value: f.value ?? null, type: f.type, selector: f.selector ?? null };
+    content[f.label] = {
+      value: f.value ?? null,
+      type: f.type,
+      selector: f.selector ?? null,
+      selectors: f.selectors ?? null,
+      textFp: f.textFp ?? null,
+    };
   }
   return content;
 }
@@ -437,6 +451,79 @@ const SCANNER_SCRIPT = /* javascript */ `
     }
   }
 
+  // ── Runtime tag resolution (spec step 1) ───────────────────────────────
+  // For every field that carries selectors (ordered list captured at
+  // click-to-tag time) or selector (legacy single), walk them and write
+  // data-get-key onto the first uniquely-matching element. This runs BEFORE
+  // applyContent so the existing tagged-element pipeline picks the tag up
+  // without any source-code edits or redeploys on the live site.
+  //
+  // Failure modes (per spec):
+  //   - selector matches 0 elements   → try next selector
+  //   - selector matches >1 elements  → skip (ambiguous)
+  //   - nothing resolves              → fall back to text-fingerprint walk
+  function fnv1aHex(s) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return ('00000000' + h.toString(16)).slice(-8);
+  }
+  function fpOfText(t) {
+    return fnv1aHex(String(t || '').replace(/\\s+/g, ' ').trim().toLowerCase());
+  }
+  function resolveOneTag(label, selectors, textFp) {
+    if (selectors && selectors.length) {
+      for (var i = 0; i < selectors.length; i++) {
+        var sel = selectors[i];
+        if (!sel) continue;
+        var hits;
+        try { hits = document.querySelectorAll(sel); } catch (e) { continue; }
+        if (hits.length === 1) return hits[0];
+        // length === 0 → try next selector; length > 1 → ambiguous, try next
+      }
+    }
+    if (textFp) {
+      // Last-resort: hash visible text of likely-content elements and pick
+      // the first uniquely-matching one. Cheap because we only walk a small
+      // set of tags that carry user-visible text.
+      var nodes = document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,a,button,span,li,td,th,figcaption,blockquote,img');
+      var found = null;
+      for (var j = 0; j < nodes.length; j++) {
+        var n = nodes[j];
+        var sample = n.tagName === 'IMG' ? (n.getAttribute('alt') || '') : (n.textContent || '');
+        if (!sample) continue;
+        if (fpOfText(sample) === textFp) {
+          if (found) return null; // ambiguous
+          found = n;
+        }
+      }
+      if (found) return found;
+    }
+    return null;
+  }
+  function resolveTags(content) {
+    for (var label in content) {
+      var field = content[label];
+      if (!field) continue;
+      // Skip if any element on the page already carries this tag — the
+      // developer-installed source-of-truth wins.
+      var escapedLabel = label.replace(/"/g, '\\\\"');
+      var hasTagged = false;
+      try { hasTagged = !!document.querySelector('[data-get-key="' + escapedLabel + '"]'); } catch (e) {}
+      if (hasTagged) continue;
+      var sels = field.selectors;
+      // Back-compat: promote legacy single \`selector\` into the layered list.
+      if ((!sels || !sels.length) && field.selector) sels = [field.selector];
+      var el = resolveOneTag(label, sels, field.textFp);
+      if (el) {
+        try { el.setAttribute('data-get-key', label); } catch (e) {}
+        labelToElement[label] = el;
+      }
+    }
+  }
+
   function applyContent(content) {
     latestContent = content;
     for (var label in content) {
@@ -478,22 +565,13 @@ const SCANNER_SCRIPT = /* javascript */ `
           }
           if (!fallbackEl && firstMatch) fallbackEl = labelToElement[firstMatch];
         }
-        // Last-resort: a stored CSS selector from a click-to-tag (Fix B).
-        // When the user tagged this field by clicking an element in the
-        // editor preview, we stored that element's CSS path in field.selector.
-        // If neither [data-get-key] nor the heuristic found a match, try it.
-        // If it finds an element, also write the data-get-key attribute back
-        // so the highlight + click-to-edit pipeline picks it up.
-        if (!fallbackEl && field.selector) {
-          try {
-            var byStored = document.querySelector(field.selector);
-            if (byStored) {
-              try { byStored.setAttribute('data-get-key', label); } catch (e) {}
-              labelToElement[label] = byStored;
-              fallbackEl = byStored;
-            }
-          } catch (e) {}
-        }
+        // (Legacy: a single-selector last-resort that called
+        // document.querySelector(field.selector) used to live here. It was
+        // removed because it ignored the "ambiguous match → skip" rule that
+        // resolveTags() enforces. All selector-based matching now flows
+        // through resolveTags() before applyContent runs, which promotes
+        // legacy field.selector into a one-element selectors array and
+        // applies the same uniqueness check used for the layered list.)
         if (fallbackEl) applyToEl(fallbackEl, type, value);
       }
     }
@@ -529,7 +607,10 @@ const SCANNER_SCRIPT = /* javascript */ `
       return r.json();
     })
     .then(function(data) {
-      if (data && data.content) applyContent(data.content);
+      if (data && data.content) {
+        try { resolveTags(data.content); } catch (e) {}
+        applyContent(data.content);
+      }
     })
     .catch(function() {})
     .finally(function() {
@@ -1256,6 +1337,29 @@ const SCANNER_SCRIPT = /* javascript */ `
       e.preventDefault(); e.stopPropagation();
     }
 
+    // Build an ordered, layered list of selectors per the spec — first stable
+    // anchors (id, data-testid), then the structural cssPath. The scanner's
+    // resolveTags() tries them in order and uses the first uniquely-matching
+    // one. Layering is what lets click-to-tagged elements survive ordinary
+    // markup churn.
+    function buildSelectors(el) {
+      var out = [];
+      try {
+        if (el.id) out.push('#' + CSS.escape(el.id));
+        var testid = el.getAttribute && el.getAttribute('data-testid');
+        if (testid) out.push('[data-testid="' + String(testid).replace(/"/g, '\\\\"') + '"]');
+        var struct = cssPath(el);
+        if (struct) out.push(struct);
+      } catch (e) {}
+      // Dedupe while preserving order.
+      var seen = {}; var result = [];
+      for (var i = 0; i < out.length; i++) {
+        if (!out[i] || seen[out[i]]) continue;
+        seen[out[i]] = true; result.push(out[i]);
+      }
+      return result.slice(0, 8);
+    }
+
     function sendTagRequest() {
       var el = editHoverEl;
       if (!el) return;
@@ -1269,15 +1373,20 @@ const SCANNER_SCRIPT = /* javascript */ `
       }
       var imageSrc = null;
       if (type === 'image') { try { imageSrc = el.currentSrc || el.src || null; } catch(e){} }
-      var sel = '';
-      try { sel = cssPath(el); } catch (e) {}
+      var sels = [];
+      try { sels = buildSelectors(el); } catch (e) {}
+      var primary = sels[sels.length - 1] || ''; // structural path = legacy single selector
+      var fp = '';
+      try { fp = fpOfText(type === 'image' ? (el.getAttribute('alt') || '') : (el.textContent || '')); } catch(e){}
       postToParent({
         type: 'get:tag-request',
         tagName: el.tagName,
         text: text,
         imageSrc: imageSrc,
         suggestedType: type,
-        selector: sel,
+        selector: primary,
+        selectors: sels,
+        textFp: fp,
       });
       clearHover();
     }

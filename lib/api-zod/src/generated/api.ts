@@ -222,6 +222,18 @@ export const ListContentFieldsResponseItem = zod.object({
   label: zod.string(),
   type: zod.enum(["text", "richtext", "image", "url", "number", "boolean"]),
   selector: zod.string().optional(),
+  selectors: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Ordered CSS selectors tried by the scanner in resolveTags() before applyContent. First unique match wins. Optional.",
+    ),
+  textFp: zod
+    .string()
+    .optional()
+    .describe(
+      "FNV-1a hex hash of the element's visible text at tag time. Last-resort anchor when no selector resolves. Optional.",
+    ),
   value: zod.string().optional(),
   draftValue: zod.string().optional(),
   isLocked: zod.boolean(),
@@ -242,6 +254,8 @@ export const CreateContentFieldBody = zod.object({
   label: zod.string(),
   type: zod.enum(["text", "richtext", "image", "url", "number", "boolean"]),
   selector: zod.string().optional(),
+  selectors: zod.array(zod.string()).optional(),
+  textFp: zod.string().optional(),
   value: zod.string().optional(),
 });
 
@@ -266,6 +280,18 @@ export const UpdateContentFieldResponse = zod.object({
   label: zod.string(),
   type: zod.enum(["text", "richtext", "image", "url", "number", "boolean"]),
   selector: zod.string().optional(),
+  selectors: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Ordered CSS selectors tried by the scanner in resolveTags() before applyContent. First unique match wins. Optional.",
+    ),
+  textFp: zod
+    .string()
+    .optional()
+    .describe(
+      "FNV-1a hex hash of the element's visible text at tag time. Last-resort anchor when no selector resolves. Optional.",
+    ),
   value: zod.string().optional(),
   draftValue: zod.string().optional(),
   isLocked: zod.boolean(),

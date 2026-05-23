@@ -157,6 +157,10 @@ export interface ContentField {
   label: string;
   type: ContentFieldType;
   selector?: string;
+  /** Ordered CSS selectors tried by the scanner in resolveTags() before applyContent. First unique match wins. Optional. */
+  selectors?: string[];
+  /** FNV-1a hex hash of the element's visible text at tag time. Last-resort anchor when no selector resolves. Optional. */
+  textFp?: string;
   value?: string;
   draftValue?: string;
   isLocked: boolean;
@@ -179,6 +183,8 @@ export interface CreateContentFieldBody {
   label: string;
   type: CreateContentFieldBodyType;
   selector?: string;
+  selectors?: string[];
+  textFp?: string;
   value?: string;
 }
 

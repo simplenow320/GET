@@ -862,6 +862,14 @@ components:
           enum: [text, richtext, image, url, number, boolean]
         selector:
           type: string
+        selectors:
+          type: array
+          items:
+            type: string
+          description: Ordered CSS selectors tried by the scanner in resolveTags() before applyContent. First unique match wins. Optional.
+        textFp:
+          type: string
+          description: FNV-1a hex hash of the element's visible text at tag time. Last-resort anchor when no selector resolves. Optional.
         value:
           type: string
         draftValue:
@@ -882,6 +890,12 @@ components:
           type: string
           enum: [text, richtext, image, url, number, boolean]
         selector:
+          type: string
+        selectors:
+          type: array
+          items:
+            type: string
+        textFp:
           type: string
         value:
           type: string

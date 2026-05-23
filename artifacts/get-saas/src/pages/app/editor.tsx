@@ -722,6 +722,8 @@ export default function ClientEditor() {
             imageSrc?: string | null;
             suggestedType?: string;
             selector?: string;
+            selectors?: string[];
+            textFp?: string;
             tagName?: string;
           };
           // Owner/admin only — viewers and editors can't create fields.
@@ -772,6 +774,8 @@ export default function ClientEditor() {
                 label: trimmed,
                 type: fieldType,
                 selector: m.selector || undefined,
+                selectors: m.selectors && m.selectors.length > 0 ? m.selectors : undefined,
+                textFp: m.textFp || undefined,
                 value: initialValue || undefined,
               },
             },
