@@ -3,16 +3,19 @@ import { useParams } from "wouter";
 import {
   useListContentFields,
   useUpdateContentField,
+  useCreateContentField,
   useGetProject,
   getGetProjectQueryKey,
+  getListContentFieldsQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@workspace/object-storage-web";
 import {
   Loader2, Save, FileEdit, Lock, Check, RefreshCw, Undo2, AlertTriangle, X,
-  HelpCircle, ArrowRight, ExternalLink,
+  HelpCircle, ArrowRight, ExternalLink, MousePointerClick,
 } from "lucide-react";
 import {
   BRAND, tone, line, type, ease, r,
@@ -534,6 +537,30 @@ export default function ClientEditor() {
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
 
+  // ── Edit-mode (Fix B: visual click-to-tag) ────────────────────────────────
+  // When ON, postMessages a get:edit-mode toggle into the iframe so the
+  // scanner shows a "+ Make editable" button on any element the user hovers.
+  // The scanner replies with get:tag-request; we create the field via the
+  // normal admin endpoint and post get:tag-applied back so the scanner
+  // writes data-get-key into the clicked element without a page reload.
+  const [editMode, setEditMode] = useState(false);
+  const createFieldMutation = useCreateContentField();
+  const queryClient = useQueryClient();
+
+  function postEditMode(on: boolean) {
+    if (!expectedIframeOrigin) return;
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "get:edit-mode", on, nonce: bridgeNonceRef.current },
+        expectedIframeOrigin,
+      );
+    } catch {}
+  }
+  // Re-emit edit-mode whenever it changes — and re-emit after iframe loads
+  // (handleIframeLoad does the handshake; we don't need to track it here
+  // because the user will toggle again if they reload mid-session).
+  useEffect(() => { postEditMode(editMode); }, [editMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleIframeLoad = () => {
     try {
       // If we can access contentDocument without a SecurityError, the frame
@@ -680,6 +707,102 @@ export default function ClientEditor() {
         } | null;
         if (!msg || typeof msg.type !== "string") return;
         if (msg.nonce !== bridgeNonceRef.current) return;
+
+        // ── get:tag-request: scanner asks editor to create a new field
+        // for an element the owner clicked in edit-mode. We prompt for a
+        // label, POST to the admin create endpoint, then post tag-applied
+        // back so the scanner writes data-get-key into the clicked element.
+        if (msg.type === "get:tag-request") {
+          const m = msg as unknown as {
+            text?: string;
+            imageSrc?: string | null;
+            suggestedType?: string;
+            selector?: string;
+            tagName?: string;
+          };
+          // Owner/admin only — viewers and editors can't create fields.
+          if (!["owner", "admin"].includes(myRoleRef.current ?? "")) {
+            toast({
+              variant: "destructive",
+              title: "Not allowed",
+              description: "Only project owners and admins can tag new fields.",
+            });
+            return;
+          }
+          const suggested =
+            (m.text && m.text.length > 0
+              ? m.text
+              : m.tagName === "IMG"
+                ? "Image"
+                : "Field")
+              .slice(0, 40);
+          const label = window.prompt(
+            "Name this field (clients will see this label):",
+            suggested,
+          );
+          if (!label || !label.trim()) return;
+          const trimmed = label.trim();
+          // Dedupe against existing labels — POST would 500 otherwise.
+          if (fieldsRef.current?.some((f) => f.label === trimmed)) {
+            toast({
+              variant: "destructive",
+              title: "Field already exists",
+              description: `A field named "${trimmed}" already exists.`,
+            });
+            return;
+          }
+          const fieldType =
+            m.suggestedType === "image" ||
+            m.suggestedType === "url" ||
+            m.suggestedType === "richtext"
+              ? m.suggestedType
+              : "text";
+          const initialValue =
+            fieldType === "image"
+              ? (m.imageSrc ?? "")
+              : (m.text ?? "");
+          createFieldMutation.mutate(
+            {
+              projectId,
+              data: {
+                label: trimmed,
+                type: fieldType,
+                selector: m.selector || undefined,
+                value: initialValue || undefined,
+              },
+            },
+            {
+              onSuccess: () => {
+                queryClient.invalidateQueries({
+                  queryKey: getListContentFieldsQueryKey(projectId),
+                });
+                if (expectedIframeOrigin) {
+                  try {
+                    iframeRef.current?.contentWindow?.postMessage(
+                      {
+                        type: "get:tag-applied",
+                        label: trimmed,
+                        nonce: bridgeNonceRef.current,
+                      },
+                      expectedIframeOrigin,
+                    );
+                  } catch {}
+                }
+                toast({
+                  title: "Field added",
+                  description: `"${trimmed}" is now editable.`,
+                });
+              },
+              onError: (err) =>
+                toast({
+                  variant: "destructive",
+                  title: "Couldn't add field",
+                  description: err.message,
+                }),
+            },
+          );
+          return;
+        }
 
         // ── get:field-input: mirror inline keystrokes ─────────────────
         if (msg.type === "get:field-input") {
@@ -1148,6 +1271,34 @@ export default function ClientEditor() {
             >
               <ExternalLink style={{ width: 14, height: 14 }} />
             </a>
+          )}
+          {/* Edit-mode toggle (Fix B: click-to-tag any element in preview).
+              Only meaningful when the preview iframe is shown — hidden on
+              narrow widths where the preview isn't rendered. */}
+          {showPreviewPanel && siteUrl && ["owner", "admin"].includes(myRole ?? "") && (
+            <button
+              onClick={() => setEditMode((v) => !v)}
+              title={editMode ? "Exit tag mode" : "Click an element in preview to make it editable"}
+              data-testid="btn-edit-mode"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: windowWidth < 500 ? "7px" : "5px 10px",
+                borderRadius: 8,
+                border: `1px solid ${editMode ? "#22c55e" : line.base}`,
+                background: editMode ? "#22c55e" : "transparent",
+                cursor: "pointer",
+                fontSize: type.xs,
+                fontWeight: 600,
+                flexShrink: 0,
+                color: editMode ? "#fff" : tone[500],
+                transition: `all 0.15s ${ease}`,
+              }}
+            >
+              <MousePointerClick style={{ width: 12, height: 12 }} />
+              {windowWidth >= 500 && (editMode ? "Tagging…" : "Tag element")}
+            </button>
           )}
           {/* Refresh button — icon-only on narrow screens */}
           <button

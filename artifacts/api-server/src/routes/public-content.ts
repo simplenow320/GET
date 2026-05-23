@@ -84,9 +84,13 @@ const SnapshotBody = z.object({
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildContentMap(fields: typeof contentFieldsTable.$inferSelect[]) {
-  const content: Record<string, { value: string | null; type: string }> = {};
+  // `selector` is included so the scanner can use a stored CSS selector to
+  // re-find click-to-tagged elements on subsequent page loads (Fix B —
+  // visual "Make this editable" flow). Field shape stays back-compat: the
+  // selector is optional and pre-existing scanners simply ignore it.
+  const content: Record<string, { value: string | null; type: string; selector: string | null }> = {};
   for (const f of fields) {
-    content[f.label] = { value: f.value ?? null, type: f.type };
+    content[f.label] = { value: f.value ?? null, type: f.type, selector: f.selector ?? null };
   }
   return content;
 }
@@ -438,6 +442,22 @@ const SCANNER_SCRIPT = /* javascript */ `
             if (k === prefix + preferred) { fallbackEl = labelToElement[k]; break; }
           }
           if (!fallbackEl && firstMatch) fallbackEl = labelToElement[firstMatch];
+        }
+        // Last-resort: a stored CSS selector from a click-to-tag (Fix B).
+        // When the user tagged this field by clicking an element in the
+        // editor preview, we stored that element's CSS path in field.selector.
+        // If neither [data-get-key] nor the heuristic found a match, try it.
+        // If it finds an element, also write the data-get-key attribute back
+        // so the highlight + click-to-edit pipeline picks it up.
+        if (!fallbackEl && field.selector) {
+          try {
+            var byStored = document.querySelector(field.selector);
+            if (byStored) {
+              try { byStored.setAttribute('data-get-key', label); } catch (e) {}
+              labelToElement[label] = byStored;
+              fallbackEl = byStored;
+            }
+          } catch (e) {}
         }
         if (fallbackEl) applyToEl(fallbackEl, type, value);
       }
@@ -1038,6 +1058,39 @@ const SCANNER_SCRIPT = /* javascript */ `
         if (!parentOrigin || evt.origin !== parentOrigin) return;
         if (msg.nonce !== bridgeNonce) return;
 
+        // ── get:edit-mode: toggle the "Make editable" hover UI ────────────
+        if (msg.type === 'get:edit-mode') {
+          if (msg.on) { try { startEditMode(); } catch (e) {} }
+          else        { try { stopEditMode();  } catch (e) {} }
+          return;
+        }
+
+        // ── get:tag-applied: editor confirmed a new field was created ────
+        // Write data-get-key into the previously-clicked element so the
+        // existing highlight / click-to-edit / apply pipeline picks it up
+        // without a page reload.
+        if (msg.type === 'get:tag-applied') {
+          try {
+            var lblA = String(msg.label || '');
+            if (lblA && lastTaggedEl && lastTaggedEl.isConnected) {
+              lastTaggedEl.setAttribute('data-get-key', lblA);
+              labelToElement[lblA] = lastTaggedEl;
+              // Brief green flash so the user sees their tag landed.
+              try {
+                lastTaggedEl.style.transition = 'outline-color 0.6s';
+                lastTaggedEl.style.outline = '2px solid #22c55e';
+                lastTaggedEl.style.outlineOffset = '2px';
+                setTimeout(function(el){ return function(){
+                  try { el.style.outline = ''; el.style.outlineOffset = ''; } catch(e){}
+                }; }(lastTaggedEl), 1200);
+              } catch (e) {}
+            }
+            lastTaggedEl = null;
+            if (latestContent) { try { applyContent(latestContent); } catch (e) {} }
+          } catch (e) {}
+          return;
+        }
+
         if (msg.type !== 'get:highlight') return;
         // Remove any existing highlights.
         var prev = document.querySelectorAll('.get-highlight');
@@ -1057,6 +1110,183 @@ const SCANNER_SCRIPT = /* javascript */ `
         }
       } catch (e2) {}
     });
+
+    // ── Edit-mode (Fix B: visual click-to-tag) ───────────────────────────
+    // When the editor sends get:edit-mode {on:true}, we let the user hover
+    // ANY visible element on the page, show a green dashed outline + a
+    // floating "+ Make editable" button. Clicking that button computes a
+    // CSS selector + visible text + type hint and posts get:tag-request to
+    // the editor, which prompts the owner for a field label and creates
+    // the field via the normal admin endpoint. We then wait for
+    // get:tag-applied to write data-get-key into the element.
+    var lastTaggedEl = null;
+    var editModeOn = false;
+    var editHoverEl = null;
+    var editStyle = null;
+    var editBtn = null;
+    var editOverlay = null;
+
+    function cssPath(el) {
+      // Short, robust CSS path: walk up max 6 levels using
+      // tag + (#id | .class | :nth-of-type(n)). Anchors at the nearest
+      // ancestor with an id when one exists.
+      if (!el || el.nodeType !== 1) return '';
+      var parts = [];
+      var cur = el;
+      for (var depth = 0; cur && cur.nodeType === 1 && depth < 6; depth++) {
+        var tag = cur.tagName.toLowerCase();
+        if (cur.id) { parts.unshift(tag + '#' + CSS.escape(cur.id)); break; }
+        var sib = cur;
+        var nth = 1;
+        while ((sib = sib.previousElementSibling)) {
+          if (sib.tagName === cur.tagName) nth++;
+        }
+        var seg = tag;
+        var cls = (cur.className && typeof cur.className === 'string')
+          ? cur.className.trim().split(/\\s+/).filter(function(c){
+              // Skip our own outline class, hover states, and randomised
+              // CSS-Modules / Tailwind-arbitrary-value classes.
+              return c && c.indexOf('get-') !== 0 && c.length < 40 && c.indexOf('[') < 0;
+            }).slice(0, 2)
+          : [];
+        if (cls.length) seg += '.' + cls.map(function(c){ return CSS.escape(c); }).join('.');
+        seg += ':nth-of-type(' + nth + ')';
+        parts.unshift(seg);
+        if (cur === document.body) break;
+        cur = cur.parentElement;
+      }
+      return parts.join(' > ');
+    }
+
+    function suggestType(el) {
+      var t = el.tagName;
+      if (t === 'IMG')                                  return 'image';
+      if (t === 'A' && el.getAttribute('href'))         return 'url';
+      if (el.querySelector && el.querySelector('strong,em,br,b,i,a,span'))
+        return 'richtext';
+      return 'text';
+    }
+
+    function isEditCandidate(el) {
+      if (!el || el.nodeType !== 1) return false;
+      // Skip our own UI, scripts/styles, and anything inside the editor chrome
+      if (el === editBtn || el === editOverlay) return false;
+      if (editBtn && editBtn.contains(el)) return false;
+      var bad = { SCRIPT:1, STYLE:1, META:1, LINK:1, HEAD:1, HTML:1, BODY:1, IFRAME:1, NOSCRIPT:1, SVG:1, PATH:1 };
+      if (bad[el.tagName]) return false;
+      // Must have visible text content OR be an image
+      if (el.tagName === 'IMG') return true;
+      var txt = (el.textContent || '').trim();
+      if (!txt || txt.length > 400) return false;
+      return true;
+    }
+
+    function moveBtnTo(el) {
+      if (!editBtn) return;
+      var r = el.getBoundingClientRect();
+      editBtn.style.display = 'block';
+      editBtn.style.top  = Math.max(2, r.top - 30) + 'px';
+      editBtn.style.left = Math.max(2, r.left) + 'px';
+    }
+
+    function clearHover() {
+      if (editHoverEl) {
+        try { editHoverEl.style.outline = ''; editHoverEl.style.outlineOffset = ''; } catch(e){}
+        editHoverEl = null;
+      }
+      if (editBtn) editBtn.style.display = 'none';
+    }
+
+    function onEditMove(e) {
+      if (!editModeOn) return;
+      var t = e.target;
+      // Don't hijack hover when the cursor is on the button itself.
+      if (editBtn && (t === editBtn || editBtn.contains(t))) return;
+      if (!isEditCandidate(t)) { clearHover(); return; }
+      if (t === editHoverEl) { moveBtnTo(t); return; }
+      clearHover();
+      editHoverEl = t;
+      try {
+        t.style.outline = '2px dashed #22c55e';
+        t.style.outlineOffset = '2px';
+      } catch (e2) {}
+      moveBtnTo(t);
+    }
+
+    function onEditClick(e) {
+      // Suppress all native clicks while edit mode is on so we don't follow
+      // links or submit forms. Only the floating button is active.
+      if (!editModeOn) return;
+      if (editBtn && (e.target === editBtn || editBtn.contains(e.target))) return;
+      e.preventDefault(); e.stopPropagation();
+    }
+
+    function sendTagRequest() {
+      var el = editHoverEl;
+      if (!el) return;
+      lastTaggedEl = el;
+      var type = suggestType(el);
+      var text = '';
+      if (type === 'image') {
+        text = el.getAttribute('alt') || '';
+      } else {
+        text = (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 200);
+      }
+      var imageSrc = null;
+      if (type === 'image') { try { imageSrc = el.currentSrc || el.src || null; } catch(e){} }
+      var sel = '';
+      try { sel = cssPath(el); } catch (e) {}
+      postToParent({
+        type: 'get:tag-request',
+        tagName: el.tagName,
+        text: text,
+        imageSrc: imageSrc,
+        suggestedType: type,
+        selector: sel,
+      });
+      clearHover();
+    }
+
+    function startEditMode() {
+      if (editModeOn) return;
+      editModeOn = true;
+      if (!editStyle) {
+        editStyle = document.createElement('style');
+        editStyle.id = 'get-edit-mode-style';
+        editStyle.textContent =
+          '[data-get-edit-on] *{cursor:crosshair!important;}' +
+          '#get-edit-btn{font-family:system-ui,-apple-system,sans-serif;}';
+        (document.head || document.documentElement).appendChild(editStyle);
+      }
+      if (!editBtn) {
+        editBtn = document.createElement('button');
+        editBtn.id = 'get-edit-btn';
+        editBtn.type = 'button';
+        editBtn.textContent = '+ Make editable';
+        editBtn.setAttribute('style',
+          'position:fixed;z-index:2147483647;display:none;' +
+          'background:#22c55e;color:#fff;border:0;' +
+          'padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;' +
+          'cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.30);');
+        editBtn.addEventListener('mousedown', function(e){
+          e.preventDefault(); e.stopPropagation();
+          sendTagRequest();
+        }, true);
+        (document.body || document.documentElement).appendChild(editBtn);
+      }
+      try { document.body.setAttribute('data-get-edit-on', ''); } catch(e){}
+      document.addEventListener('mousemove', onEditMove, true);
+      document.addEventListener('click', onEditClick, true);
+    }
+
+    function stopEditMode() {
+      if (!editModeOn) return;
+      editModeOn = false;
+      clearHover();
+      try { document.body.removeAttribute('data-get-edit-on'); } catch(e){}
+      document.removeEventListener('mousemove', onEditMove, true);
+      document.removeEventListener('click', onEditClick, true);
+    }
 
     // ── Click-to-edit (active only when embedded as editor preview) ──────
     // Hovering a [data-get-key] element shows a blue ring + tooltip.
