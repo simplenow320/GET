@@ -266,7 +266,10 @@ router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyReques
  */
 router.get("/scanner.js", (req, res) => {
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader(
+    "Cache-Control",
+    process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store",
+  );
   res.send(buildScannerScript());
 });
 
@@ -1135,7 +1138,7 @@ const SCANNER_SCRIPT = /* javascript */ `
           var label = String(msg.label);
           var escaped = (typeof CSS !== 'undefined' && CSS.escape)
             ? CSS.escape(label)
-            : label.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+            : label.replace(/"/g, '\\\\"').replace(/\\\\/g, '\\\\\\\\');
           var sel = '[data-get-key="' + escaped + '"]';
           var el = document.querySelector(sel);
           if (el) el.classList.add('get-highlight');
