@@ -271,6 +271,38 @@ router.get("/scanner.js", (req, res) => {
 });
 
 /**
+ * GET /api/public/_test-site?key=pk_xxx
+ *
+ * Minimal synthetic customer site used by Fix B end-to-end tests. Loads
+ * the scanner with the provided key so the editor's preview iframe can
+ * exercise the full click-to-tag flow without a real external site.
+ * Dev-only — refuses to render in production.
+ */
+router.get("/_test-site", (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).type("text/plain").send("Not found");
+    return;
+  }
+  const rawKey = String(req.query.key ?? "");
+  if (!/^pk_[A-Za-z0-9_-]{6,80}$/.test(rawKey)) {
+    res.status(400).type("text/plain").send("Bad key");
+    return;
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Fix B Test Site</title>
+<style>body{font-family:system-ui;padding:40px;max-width:680px;margin:0 auto;color:#1a1a2e}
+h1{font-size:32px;margin:0 0 16px} p{font-size:16px;line-height:1.5;color:#444}
+.cta{display:inline-block;margin-top:16px;padding:10px 18px;background:#1a1a2e;color:#fff;border-radius:8px;text-decoration:none}</style>
+</head><body>
+<h1 id="logo">Eventory</h1>
+<p id="tagline">Plan events that don't suck.</p>
+<a class="cta" id="cta" href="#">Get started</a>
+<script src="/api/public/scanner.js" data-key="${rawKey}"></script>
+</body></html>`);
+});
+
+/**
  * GET /api/public/scanner-download?key=pk_xxx
  *
  * Self-hosted variant. Returns the same scanner with the project key + API

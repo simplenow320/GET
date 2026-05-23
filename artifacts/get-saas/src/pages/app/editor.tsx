@@ -474,7 +474,7 @@ export default function ClientEditor() {
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
       setManualUrlError("URL must start with http:// or https://"); return;
     }
-    const clean = parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname);
+    const clean = parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname) + parsed.search;
     try { localStorage.setItem(MANUAL_URL_KEY, clean); } catch {}
     setManualUrl(clean);
     setManualUrlError("");
@@ -550,6 +550,10 @@ export default function ClientEditor() {
   function postEditMode(on: boolean) {
     if (!expectedIframeOrigin) return;
     try {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "get:bridge-init", nonce: bridgeNonceRef.current },
+        expectedIframeOrigin,
+      );
       iframeRef.current?.contentWindow?.postMessage(
         { type: "get:edit-mode", on, nonce: bridgeNonceRef.current },
         expectedIframeOrigin,
