@@ -1,0 +1,169 @@
+GET
+
+The Missing Layer for Vibe Coding
+
+A Proposal for Replit
+
+⸻
+
+Page 1
+
+The Opportunity
+
+Replit has created something remarkable.
+
+People who never considered themselves developers are now building real applications, launching businesses, and serving paying clients.
+
+The next challenge begins after the app ships.
+
+Every client asks for updates.
+
+* Change this headline.
+* Swap this image.
+* Update our pricing.
+* Fix this typo.
+
+These aren’t coding problems.
+
+They’re content problems.
+
+Yet today, the vibe coder still has to open the project, make the change, and redeploy.
+
+Small requests become endless support work.
+
+The app is finished.
+
+The maintenance never is.
+
+⸻
+
+Page 2
+
+The Solution
+
+get
+
+get gives every Replit app a simple editing experience.
+
+The vibe coder builds the app once.
+
+The client safely edits their own content forever.
+
+No code.
+
+No prompts.
+
+No redeployments.
+
+Clients can edit only what the builder has approved.
+
+Everything else stays protected.
+
+Think of it as giving every Replit app a built in content layer without turning it into a CMS.
+
+⸻
+
+Page 3
+
+Why This Matters
+
+For Replit
+
+* Makes Replit even more valuable for freelancers and agencies.
+* Helps vibe coders serve more clients with less support.
+* Increases long term platform stickiness.
+* Creates another reason to build and stay on Replit.
+* Positions Replit as the easiest platform to build and maintain client applications.
+
+For the Vibe Coder
+
+* Build once.
+* Hand it off.
+* Stop making small edits every week.
+* Look like you built a professional editing system.
+* Spend more time building and less time maintaining.
+
+For the Client
+
+* Update content in seconds.
+* No technical knowledge required.
+* No fear of breaking the app.
+* No waiting for someone else to make simple changes.
+
+Everyone wins.
+
+⸻
+
+Page 4
+
+The Only Barrier
+
+The platform works.
+
+The runtime works.
+
+The editor works.
+
+The security model is in place.
+
+The only friction is installation.
+
+Today users must manually:
+
+* Download a scanner file.
+* Add it to their Replit project.
+* Insert a script.
+* Configure the project.
+
+For a platform built around vibe coding, this feels unnecessarily technical.
+
+The ideal workflow is one prompt.
+
+“Add get to my app.”
+
+Everything else should happen automatically.
+
+⸻
+
+Page 5
+
+Our Ask
+
+Option 1
+
+Allow us to work with your team to enable get as a trusted internal integration.
+
+This lets us validate:
+
+* Installation
+* Security
+* Performance
+* User experience
+
+inside the Replit ecosystem.
+
+⸻
+
+Option 2
+
+If successful, make get an official Replit Integration.
+
+The experience becomes:
+
+Build your app.
+
+Tell the Agent, “Add get.”
+
+Your client can immediately manage their own content.
+
+⸻
+
+Looking Ahead
+
+We also believe get could become part of Replit itself.
+
+If Replit sees long term strategic value, we’d welcome a conversation around partnership, licensing, or acquisition.
+
+Our goal is simple.
+
+Help every vibe coder ship applications that clients can confidently manage themselves while keeping builders focused on creating, not maintaining.

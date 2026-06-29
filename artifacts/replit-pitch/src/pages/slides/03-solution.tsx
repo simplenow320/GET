@@ -1,4 +1,4 @@
-export default function WhyNowSlide() {
+export default function SolutionSlide() {
   return (
     <div className="w-screen h-screen overflow-hidden relative bg-bg text-text font-body">
       <div
@@ -13,7 +13,7 @@ export default function WhyNowSlide() {
           zIndex: 0,
         }}
       >
-        07
+        02
       </div>
 
       <div
@@ -37,47 +37,72 @@ export default function WhyNowSlide() {
             className="font-body font-semibold text-muted uppercase"
             style={{ fontSize: "1vw", letterSpacing: "0.18em" }}
           >
-            Why now
+            The Solution
           </div>
         </div>
 
-        <div style={{ marginTop: "12vh", maxWidth: "65vw" }}>
+        <div style={{ marginTop: "8vh", maxWidth: "72vw" }}>
           <h2
             className="font-display font-bold text-text m-0"
             style={{
-              fontSize: "5.4vw",
+              fontSize: "4.6vw",
               lineHeight: 1.05,
               letterSpacing: "-0.03em",
               textWrap: "balance",
             }}
           >
-            Vibe coding is mainstream. Client handoff isn&apos;t solved.
+            Every Replit app gets a simple editing experience.
           </h2>
+
           <p
-            className="font-body font-normal text-muted"
+            className="font-body font-normal text-text"
             style={{
-              fontSize: "2.1vw",
               marginTop: "5vh",
+              fontSize: "2vw",
               lineHeight: 1.5,
-              maxWidth: "60vw",
+              maxWidth: "66vw",
               textWrap: "pretty",
             }}
           >
-            More builders on Replit are shipping work for paying clients.
-            They need a CMS that respects how their app is built — not one
-            that asks them to migrate off the platform that built it.
+            The vibe coder builds the app once. The client safely edits their
+            own content forever.
+          </p>
+
+          <p
+            className="font-display font-bold text-text"
+            style={{
+              marginTop: "4vh",
+              fontSize: "2.6vw",
+              lineHeight: 1.2,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            No code.{" "}
+            <span style={{ color: "var(--slide-muted)" }}>No prompts.</span> No
+            redeployments.
+          </p>
+
+          <p
+            className="font-body font-medium text-muted"
+            style={{
+              marginTop: "4vh",
+              fontSize: "1.6vw",
+              lineHeight: 1.5,
+              maxWidth: "66vw",
+              textWrap: "pretty",
+            }}
+          >
+            Clients can edit only what the builder has approved. Everything else
+            stays protected &mdash; a built-in content layer, without turning
+            the app into a CMS.
           </p>
         </div>
 
         <div
           className="font-body font-medium text-muted uppercase"
-          style={{
-            marginTop: "auto",
-            fontSize: "1vw",
-            letterSpacing: "0.2em",
-          }}
+          style={{ marginTop: "auto", fontSize: "1vw", letterSpacing: "0.2em" }}
         >
-          Replit Partnership Pitch
+          A Proposal for Replit
         </div>
       </div>
     </div>

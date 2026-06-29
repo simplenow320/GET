@@ -1,4 +1,4 @@
-export default function AskSlide() {
+export default function LookingAheadSlide() {
   return (
     <div className="w-screen h-screen overflow-hidden relative bg-bg text-text font-body">
       <div
@@ -13,7 +13,7 @@ export default function AskSlide() {
           zIndex: 0,
         }}
       >
-        08
+        06
       </div>
 
       <div
@@ -37,7 +37,7 @@ export default function AskSlide() {
             className="font-body font-semibold text-muted uppercase"
             style={{ fontSize: "1vw", letterSpacing: "0.18em" }}
           >
-            What I&apos;m looking for
+            Looking Ahead
           </div>
         </div>
 
@@ -45,52 +45,57 @@ export default function AskSlide() {
           className="flex-1 flex items-center"
           style={{ marginTop: "2vh", gap: "4vw" }}
         >
-          <div style={{ flex: "1 1 55%", maxWidth: "55vw" }}>
+          <div style={{ flex: "1 1 56%", maxWidth: "56vw" }}>
             <h2
               className="font-display font-bold text-text m-0"
               style={{
-                fontSize: "8vw",
-                lineHeight: 1,
+                fontSize: "5vw",
+                lineHeight: 1.02,
                 letterSpacing: "-0.04em",
+                textWrap: "balance",
               }}
             >
-              Let&apos;s partner.
+              get could become part of Replit itself.
             </h2>
+
             <p
               className="font-body font-normal text-text"
               style={{
-                fontSize: "1.9vw",
                 marginTop: "4vh",
+                fontSize: "1.6vw",
+                lineHeight: 1.5,
+                textWrap: "pretty",
+              }}
+            >
+              If Replit sees long-term strategic value, we&apos;d welcome a
+              conversation around partnership, licensing, or acquisition.
+            </p>
+
+            <p
+              className="font-body font-semibold text-text"
+              style={{
+                marginTop: "3vh",
+                fontSize: "1.5vw",
                 lineHeight: 1.45,
                 textWrap: "pretty",
               }}
             >
-              I&apos;d love to talk about how get fits into Replit&apos;s story
-              for builders shipping client work — pilot, integration, or
-              distribution.
-            </p>
-            <p
-              className="font-body font-semibold text-text"
-              style={{
-                fontSize: "1.6vw",
-                marginTop: "3vh",
-                lineHeight: 1.45,
-              }}
-            >
-              Happy to start anywhere.
+              Help every vibe coder ship applications their clients can
+              confidently manage &mdash; while builders stay focused on
+              creating, not maintaining.
             </p>
           </div>
 
           <div
             className="flex items-center justify-center"
-            style={{ flex: "1 1 45%" }}
+            style={{ flex: "1 1 44%" }}
           >
             <img
               src={`${import.meta.env.BASE_URL}get-partnership-clean.png`}
               crossOrigin="anonymous"
               alt="get and Replit, together"
               style={{
-                maxHeight: "55vh",
+                maxHeight: "54vh",
                 maxWidth: "38vw",
                 width: "auto",
                 height: "auto",
@@ -102,13 +107,9 @@ export default function AskSlide() {
 
         <div
           className="font-body font-medium text-muted uppercase"
-          style={{
-            marginTop: "auto",
-            fontSize: "1vw",
-            letterSpacing: "0.2em",
-          }}
+          style={{ marginTop: "auto", fontSize: "1vw", letterSpacing: "0.2em" }}
         >
-          Replit Partnership Pitch · 2026
+          A Proposal for Replit &middot; 2026
         </div>
       </div>
     </div>

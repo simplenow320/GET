@@ -13,7 +13,7 @@ export default function TitleSlide() {
           zIndex: 0,
         }}
       >
-        2026
+        get
       </div>
 
       <div
@@ -31,7 +31,7 @@ export default function TitleSlide() {
             className="font-body font-semibold text-muted uppercase"
             style={{ fontSize: "1vw", letterSpacing: "0.18em" }}
           >
-            Partnership Pitch &middot; 2026
+            A Proposal for Replit &middot; 2026
           </div>
         </div>
 
@@ -42,15 +42,28 @@ export default function TitleSlide() {
           <img
             src={`${import.meta.env.BASE_URL}get-hero.png`}
             crossOrigin="anonymous"
-            alt="get — let clients edit your app without breaking it"
+            alt="get"
             style={{
-              maxHeight: "62vh",
-              maxWidth: "78vw",
+              maxHeight: "44vh",
+              maxWidth: "70vw",
               width: "auto",
               height: "auto",
               display: "block",
             }}
           />
+
+          <h1
+            className="font-display font-bold text-text text-center m-0"
+            style={{
+              marginTop: "4vh",
+              fontSize: "4.2vw",
+              lineHeight: 1.05,
+              letterSpacing: "-0.03em",
+              textWrap: "balance",
+            }}
+          >
+            The Missing Layer for Vibe Coding
+          </h1>
 
           <p
             className="font-body font-semibold text-muted uppercase text-center"
@@ -60,7 +73,7 @@ export default function TitleSlide() {
               letterSpacing: "0.22em",
             }}
           >
-            For Replit builders shipping sites for real clients
+            A Proposal for Replit
           </p>
         </div>
       </div>
