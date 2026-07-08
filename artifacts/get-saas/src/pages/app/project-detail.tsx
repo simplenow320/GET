@@ -1277,6 +1277,7 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
   // Scan-from-site state
   const [syncState, setSyncState] = useState<"idle" | "loading" | "results" | "setup">("idle");
   const [syncUrl, setSyncUrl] = useState<string>("");
+  const [syncPageCount, setSyncPageCount] = useState<number>(1);
   const [syncCapturedAt, setSyncCapturedAt] = useState<string>("");
   const [sections, setSections] = useState<SiteSection[]>([]);
   // selectedKeys: "sectionIdx:fieldIdx"
@@ -1319,6 +1320,7 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
       });
       const data = r as any;
       setSyncUrl(data.url ?? "");
+      setSyncPageCount(data.pageCount ?? 1);
       setSyncCapturedAt(data.capturedAt ?? "");
       const scanned = (data.sections ?? []) as SiteSection[];
       setSections(scanned);
@@ -1744,7 +1746,9 @@ function ContentMapTab({ projectId, canManage }: { projectId: string; canManage:
             <p style={{ fontSize: type.xs, color: tone[500] }}>
               {syncCapturedAt && (
                 <>Captured {format(new Date(syncCapturedAt), "MMM d 'at' h:mm a")}
-                  {syncUrl ? <> from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span></> : null}
+                  {syncPageCount > 1
+                    ? <> across <strong>{syncPageCount} pages</strong> (latest: <span style={{ fontFamily: "monospace" }}>{syncUrl}</span>)</>
+                    : syncUrl ? <> from <span style={{ fontFamily: "monospace" }}>{syncUrl}</span></> : null}
                   {" — "}
                 </>
               )}
@@ -2198,6 +2202,7 @@ function DomainsTab({ projectId, canManage }: { projectId: string; canManage: bo
   const removeMutation = useRemoveDomain();
   const { toast } = useToast();
   const [hostname, setHostname] = useState("");
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   const handleAdd = () => {
     addMutation.mutate(
@@ -2211,6 +2216,29 @@ function DomainsTab({ projectId, canManage }: { projectId: string; canManage: bo
           toast({ variant: "destructive", title: "Couldn't add domain", description: err.message }),
       }
     );
+  };
+
+  const handleVerify = async (domainId: string) => {
+    setVerifyingId(domainId);
+    try {
+      const result = await apiFetch(`/api/projects/${projectId}/domains/${domainId}/verify`, {
+        method: "POST",
+      }) as { verified: boolean; lastCheckError: string | null };
+      await refetch();
+      if (result.verified) {
+        toast({ title: "Domain verified", description: "DNS resolves and the site responded." });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Couldn't verify domain",
+          description: result.lastCheckError ?? "The domain didn't respond.",
+        });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Verification failed", description: err.message });
+    } finally {
+      setVerifyingId(null);
+    }
   };
 
   return (
@@ -2247,35 +2275,61 @@ function DomainsTab({ projectId, canManage }: { projectId: string; canManage: bo
             description="Default Replit domains are allowed automatically."
           />
         ) : (
-          domains.map((d, idx) => (
+          domains.map((d: any, idx) => (
             <div
               key={d.id}
-              style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop }}
+              style={{ ...rowStyle, borderTop: idx === 0 ? "none" : rowStyle.borderTop, alignItems: "flex-start" }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <Globe style={{ width: 14, height: 14, color: tone[400], flexShrink: 0 }} />
-                <span
-                  style={{
-                    fontSize: type.base,
-                    fontWeight: 600,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {d.hostname}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <Globe style={{ width: 14, height: 14, color: tone[400], flexShrink: 0 }} />
+                  <span
+                    style={{
+                      fontSize: type.base,
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {d.hostname}
+                  </span>
+                  {d.verified ? (
+                    <Pill variant="active">Verified</Pill>
+                  ) : d.lastCheckedAt ? (
+                    <Pill variant="archived">Unreachable</Pill>
+                  ) : null}
+                </div>
+                <span style={{ fontSize: type.xs, color: tone[500], paddingLeft: 24 }}>
+                  {d.lastCheckedAt
+                    ? `Last checked ${format(new Date(d.lastCheckedAt), "MMM d, h:mm a")}${
+                        !d.verified && d.lastCheckError ? ` — ${d.lastCheckError}` : ""
+                      }`
+                    : "Not checked yet"}
                 </span>
-                {d.verified && <Pill variant="active">Verified</Pill>}
               </div>
-              {canManage && (
-                <IconDeleteButton
-                  onClick={() =>
-                    removeMutation.mutate(
-                      { projectId, domainId: d.id },
-                      { onSuccess: () => refetch() }
-                    )
-                  }
-                />
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                {canManage && (
+                  <SecondaryButton
+                    size="sm"
+                    onClick={() => handleVerify(d.id)}
+                    loading={verifyingId === d.id}
+                    disabled={verifyingId === d.id}
+                  >
+                    <RefreshCw style={{ width: 12, height: 12 }} />
+                    Verify
+                  </SecondaryButton>
+                )}
+                {canManage && (
+                  <IconDeleteButton
+                    onClick={() =>
+                      removeMutation.mutate(
+                        { projectId, domainId: d.id },
+                        { onSuccess: () => refetch() }
+                      )
+                    }
+                  />
+                )}
+              </div>
             </div>
           ))
         )}
@@ -2299,6 +2353,8 @@ function DraftsTab({
   const publishMutation = usePublishDraft();
   const { toast } = useToast();
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"publish" | "reject" | null>(null);
 
   const handleReject = async (draftId: string) => {
     setRejectingId(draftId);
@@ -2315,6 +2371,45 @@ function DraftsTab({
 
   const pendingDrafts = drafts?.filter((d) => d.status === "pending") || [];
   const pastDrafts = drafts?.filter((d) => d.status !== "pending") || [];
+
+  const toggleSelected = (draftId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(draftId)) next.delete(draftId);
+      else next.add(draftId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.size === pendingDrafts.length ? new Set() : new Set(pendingDrafts.map((d) => d.id))
+    );
+  };
+
+  const runBulk = async (action: "publish" | "reject") => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkAction(action);
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        apiFetch(`/api/projects/${projectId}/drafts/${id}/${action}`, { method: "POST" })
+      )
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setBulkAction(null);
+    setSelectedIds(new Set());
+    await refetch();
+    if (failed > 0) {
+      toast({
+        variant: "destructive",
+        title: `${ids.length - failed} of ${ids.length} ${action === "publish" ? "published" : "rejected"}`,
+        description: `${failed} failed — they may have already been resolved by someone else.`,
+      });
+    } else {
+      toast({ title: `${ids.length} draft${ids.length !== 1 ? "s" : ""} ${action === "publish" ? "published" : "rejected"}` });
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -2339,7 +2434,40 @@ function DraftsTab({
         </div>
       )}
       <div>
-        <SectionTitle description="Client edits wait here until you publish them. Once you publish, the change shows up on your site right away.">
+        <SectionTitle
+          description="Client edits wait here until you publish them. Once you publish, the change shows up on your site right away."
+          action={
+            canManage && pendingDrafts.length > 0 ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {selectedIds.size > 0 && (
+                  <>
+                    <span style={{ fontSize: type.xs, color: tone[500] }}>{selectedIds.size} selected</span>
+                    <DangerButton
+                      onClick={() => void runBulk("reject")}
+                      disabled={bulkAction !== null}
+                    >
+                      {bulkAction === "reject" ? "…" : "Reject selected"}
+                    </DangerButton>
+                    <PrimaryButton
+                      onClick={() => void runBulk("publish")}
+                      disabled={bulkAction !== null}
+                    >
+                      {bulkAction === "publish" ? "…" : "Publish selected"}
+                    </PrimaryButton>
+                  </>
+                )}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: type.xs, color: tone[500], cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === pendingDrafts.length}
+                    onChange={toggleSelectAll}
+                  />
+                  Select all
+                </label>
+              </div>
+            ) : undefined
+          }
+        >
           Pending review
         </SectionTitle>
         <Card>
@@ -2351,14 +2479,27 @@ function DraftsTab({
               description="When clients save edits, they'll appear here for review."
             />
           ) : (
-            pendingDrafts.map((d, idx) => (
+            pendingDrafts.map((d: any, idx) => {
+              const hasDiff = typeof d.previousValue === "string" && d.previousValue !== d.value;
+              return (
               <div
                 key={d.id}
                 style={{
                   padding: "20px 22px",
                   borderTop: idx > 0 ? `1px solid ${line.faint}` : "none",
+                  display: "flex",
+                  gap: 14,
                 }}
               >
+                {canManage && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(d.id)}
+                    onChange={() => toggleSelected(d.id)}
+                    style={{ marginTop: 4, flexShrink: 0 }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
                     display: "flex",
@@ -2396,22 +2537,44 @@ function DraftsTab({
                     </div>
                   )}
                 </div>
+                {hasDiff && (
+                  <div
+                    style={{
+                      background: "rgba(239,68,68,0.06)",
+                      border: "1px solid rgba(239,68,68,0.18)",
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                      fontSize: type.sm,
+                      fontFamily: "monospace",
+                      wordBreak: "break-all",
+                      lineHeight: 1.6,
+                      marginBottom: 6,
+                      textDecoration: "line-through",
+                      color: "#991b1b",
+                    }}
+                  >
+                    − {d.previousValue || <em style={{ fontStyle: "italic" }}>(empty)</em>}
+                  </div>
+                )}
                 <div
                   style={{
-                    background: tone[50],
-                    border: `1px solid ${line.faint}`,
+                    background: hasDiff ? "rgba(16,185,129,0.06)" : tone[50],
+                    border: hasDiff ? "1px solid rgba(16,185,129,0.18)" : `1px solid ${line.faint}`,
                     borderRadius: 10,
                     padding: "12px 14px",
                     fontSize: type.sm,
                     fontFamily: "monospace",
                     wordBreak: "break-all",
                     lineHeight: 1.6,
+                    color: hasDiff ? "#047857" : undefined,
                   }}
                 >
-                  {d.value}
+                  {hasDiff ? "+ " : ""}{d.value}
+                </div>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </Card>
       </div>

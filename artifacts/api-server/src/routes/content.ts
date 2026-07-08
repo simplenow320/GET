@@ -259,8 +259,10 @@ router.delete(
 );
 
 // POST /pull-from-site — admin+
-// Reads the latest snapshot captured by the browser scanner script.
-// No external URL fetch — the scanner pushes data to us from inside the app.
+// Reads the snapshots captured by the browser scanner script across every
+// page it has scanned so far (one row per page — see content_snapshots
+// schema) and merges them into a single field list. No external URL fetch —
+// the scanner pushes data to us from inside the app.
 router.post(
   "/pull-from-site",
   requireAuth,
@@ -279,11 +281,36 @@ router.post(
       });
     }
 
-    const snapshot = rows[0];
+    // Merge all scanned pages into one section/field list. Sections are keyed
+    // by title; within a section, fields are keyed by label — if the same
+    // label shows up on more than one page (e.g. a shared header element),
+    // the most recently captured page wins.
+    const byCaptureAsc = [...rows].sort(
+      (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
+    );
+    const sectionsByTitle = new Map<string, Map<string, unknown>>();
+    for (const row of byCaptureAsc) {
+      const sections = (row.sections ?? []) as Array<{ title?: string | null; fields: Array<{ label: string }> }>;
+      for (const section of sections) {
+        const key = section.title ?? "";
+        const fields = sectionsByTitle.get(key) ?? new Map<string, unknown>();
+        for (const field of section.fields ?? []) {
+          fields.set(field.label, field);
+        }
+        sectionsByTitle.set(key, fields);
+      }
+    }
+    const mergedSections = Array.from(sectionsByTitle.entries()).map(([title, fields]) => ({
+      title: title || undefined,
+      fields: Array.from(fields.values()),
+    }));
+
+    const latest = byCaptureAsc[byCaptureAsc.length - 1];
     return res.json({
-      url: snapshot.pageUrl ?? "",
-      capturedAt: snapshot.capturedAt,
-      sections: snapshot.sections,
+      url: latest.pageUrl ?? "",
+      pageCount: rows.length,
+      capturedAt: latest.capturedAt,
+      sections: mergedSections,
     });
   },
 );

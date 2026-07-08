@@ -13,6 +13,8 @@ export const domainsTable = pgTable(
       .references(() => projectsTable.id, { onDelete: "cascade" }),
     hostname: text("hostname").notNull(),
     verified: boolean("verified").notNull().default(false),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    lastCheckError: text("last_check_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

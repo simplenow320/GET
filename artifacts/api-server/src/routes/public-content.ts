@@ -218,7 +218,8 @@ router.post("/content", requireProjectKey, async (req: ProjectKeyRequest, res) =
  * POST /api/public/content/snapshot
  * Called by the browser scanner script embedded in the developer's app.
  * Saves the DOM scan result so the dashboard "Scan" button can read it.
- * Authenticated by a project key. One snapshot per project — overwrites on repeat.
+ * Authenticated by a project key. One snapshot per (project, page) — scanning
+ * a second page adds its own row instead of overwriting the first page's scan.
  */
 router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyRequest, res) => {
   const projectId = req.projectId!;
@@ -243,7 +244,9 @@ router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyReques
       selector: f.selector ? sanitizeContent(f.selector) : f.selector,
     })),
   }));
-  const cleanPageUrl = safePageUrl(parsed.data.pageUrl);
+  // "" (not null) so the (projectId, pageUrl) unique index below actually
+  // dedupes repeat scans of an unknown/unparseable page URL into one row.
+  const cleanPageUrl = safePageUrl(parsed.data.pageUrl) ?? "";
 
   await db
     .insert(contentSnapshotsTable)
@@ -254,10 +257,11 @@ router.post("/content/snapshot", requireProjectKey, async (req: ProjectKeyReques
       capturedAt: new Date(),
     })
     .onConflictDoUpdate({
-      target: contentSnapshotsTable.projectId,
+      // Keyed by (project, page) — each scanned page gets its own row so
+      // scanning page B no longer overwrites page A's snapshot.
+      target: [contentSnapshotsTable.projectId, contentSnapshotsTable.pageUrl],
       set: {
         sections: sql`excluded.sections`,
-        pageUrl: sql`excluded.page_url`,
         capturedAt: sql`excluded.captured_at`,
       },
     });

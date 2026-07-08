@@ -8,13 +8,17 @@ import { parseIdParam } from "../lib/validation";
 
 const router = Router({ mergeParams: true });
 
-function draftToResponse(d: typeof draftsTable.$inferSelect) {
+function draftToResponse(d: typeof draftsTable.$inferSelect, previousValue?: string | null) {
   return {
     id: String(d.id),
     projectId: String(d.projectId),
     fieldId: String(d.fieldId),
     fieldLabel: d.fieldLabel,
     value: d.value,
+    // The field's current live value at fetch time — lets the review queue
+    // show a before/after diff instead of just the proposed value in
+    // isolation. Undefined (not null) when the source field was deleted.
+    previousValue,
     status: d.status,
     authorName: d.authorName,
     createdAt: d.createdAt.toISOString(),
@@ -25,8 +29,12 @@ function draftToResponse(d: typeof draftsTable.$inferSelect) {
 // GET / — any member
 router.get("/", requireAuth, requireProjectAccess("viewer"), async (req: AuthRequest, res) => {
   const projectId = parseIdParam(req.params.projectId)!;
-  const drafts = await db.select().from(draftsTable).where(eq(draftsTable.projectId, projectId));
-  res.json(drafts.map(draftToResponse));
+  const rows = await db
+    .select({ draft: draftsTable, currentValue: contentFieldsTable.value })
+    .from(draftsTable)
+    .leftJoin(contentFieldsTable, eq(contentFieldsTable.id, draftsTable.fieldId))
+    .where(eq(draftsTable.projectId, projectId));
+  res.json(rows.map(({ draft, currentValue }) => draftToResponse(draft, currentValue)));
 });
 
 // POST /:draftId/publish — admin+, rate limited

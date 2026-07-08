@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { db, projectsTable, contentFieldsTable, projectUsersTable, activityTable, projectKeysTable } from "@workspace/db";
 import { eq, and, gte, inArray, sql, isNull } from "drizzle-orm";
-import { promises as dnsPromises } from "node:dns";
-import net from "node:net";
 import { requireAuth, requireProjectAccess, AuthRequest } from "../middlewares/auth";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
 import { ProjectName, ProjectDescription, parseIdParam } from "../lib/validation";
 import { logAudit } from "../lib/audit";
+import { guardedFetch } from "../lib/guarded-fetch";
 import { z } from "zod";
 
 const router = Router();
@@ -348,114 +347,16 @@ router.post(
       activeKeys.map((k) => k.keyPrefix).filter(Boolean),
     );
 
-    // ── SSRF defense ──────────────────────────────────────────────────
-    // The user can supply an arbitrary `url` here (or stored
-    // lastSeenOrigin can be tampered with). We must NEVER fetch internal
-    // services, link-local metadata endpoints (169.254.169.254), or
-    // private RFC1918 ranges. Strategy:
-    //   • Allow only http/https, reject embedded credentials.
-    //   • Resolve hostname → IPs and reject if any resolved address is
-    //     loopback/private/link-local/ULA/multicast/etc. This guards
-    //     against "internal-host.local" tricks.
-    //   • Disable redirect following (`redirect: "manual"`) so we don't
-    //     get bounced from a public host onto an internal one.
-    //   • Bound body to 2MB and the whole request to 8s.
-    function isPrivateAddr(ip: string): boolean {
-      if (net.isIP(ip) === 0) return true;
-      if (net.isIP(ip) === 4) {
-        const parts = ip.split(".").map((p) => parseInt(p, 10));
-        const [a, b] = parts;
-        if (a === 10) return true;
-        if (a === 127) return true;
-        if (a === 0) return true;
-        if (a === 169 && b === 254) return true; // link-local + AWS metadata
-        if (a === 172 && b >= 16 && b <= 31) return true;
-        if (a === 192 && b === 168) return true;
-        if (a >= 224) return true; // multicast + reserved
-        return false;
-      }
-      // IPv6
-      const lower = ip.toLowerCase();
-      if (lower === "::1" || lower === "::") return true;
-      if (lower.startsWith("fe80:")) return true; // link-local
-      if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // ULA
-      if (lower.startsWith("ff")) return true; // multicast
-      // IPv4-mapped (::ffff:a.b.c.d) — recurse on the embedded v4.
-      const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-      if (mapped) return isPrivateAddr(mapped[1]);
-      return false;
-    }
-
-    let html = "";
-    let status = 0;
-    let fetched = false;
-    let urlError: string | null = null;
-    try {
-      const parsed = new URL(siteUrl);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        urlError = `Unsupported scheme: ${parsed.protocol}`;
-      } else if (parsed.username || parsed.password) {
-        urlError = "URL must not contain credentials";
-      } else {
-        const host = parsed.hostname.replace(/^\[|\]$/g, "");
-        // Reject literal private IPs immediately.
-        if (net.isIP(host) !== 0) {
-          if (isPrivateAddr(host)) urlError = "Address is private/internal";
-        } else {
-          // Resolve and reject if any A/AAAA points internal. Limits
-          // DNS-rebinding by checking before the fetch — note this is
-          // best-effort (a malicious resolver could return different
-          // addresses to the OS), but it stops the obvious cases.
-          const addrs = await dnsPromises.lookup(host, { all: true });
-          if (addrs.length === 0) urlError = "DNS lookup returned no addresses";
-          else if (addrs.some((a) => isPrivateAddr(a.address))) {
-            urlError = "Resolves to a private/internal address";
-          }
-        }
-      }
-
-      if (!urlError) {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 8000);
-        const r = await fetch(siteUrl, {
-          signal: controller.signal,
-          // Don't follow redirects — a 302 to a private address would
-          // bypass the pre-flight DNS check above. Surface the redirect
-          // status so the user can see what happened.
-          redirect: "manual",
-          headers: {
-            "User-Agent":
-              "get-install-check/1.0 (+https://get-builder.replit.app)",
-            Accept: "text/html,*/*",
-          },
-        });
-        clearTimeout(t);
-        status = r.status;
-        const reader = r.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder();
-          let total = 0;
-          const MAX = 2 * 1024 * 1024;
-          try {
-            while (total < MAX) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              total += value.byteLength;
-              html += decoder.decode(value, { stream: true });
-            }
-          } finally {
-            // Always release the connection — even if we hit MAX or threw,
-            // we don't want to leave the socket draining in the background.
-            try { await reader.cancel(); } catch { /* ignore */ }
-          }
-        }
-        fetched = true;
-      }
-    } catch (err) {
-      req.log.warn({ err, siteUrl }, "install-check fetch failed");
-    }
-    if (urlError) {
-      req.log.warn({ siteUrl, urlError }, "install-check rejected URL");
+    // SSRF-guarded fetch (shared with the domain-verify route) — see
+    // guarded-fetch.ts for the private-address / DNS-rebinding defense.
+    const result = await guardedFetch(siteUrl, {
+      userAgent: "get-install-check/1.0 (+https://get-builder.replit.app)",
+    });
+    const html = result.body;
+    const status = result.status;
+    const fetched = result.fetched;
+    if (result.urlError) {
+      req.log.warn({ siteUrl, urlError: result.urlError }, "install-check rejected URL");
     }
 
     // Parse: look for the scanner tag and extract its data-key.
