@@ -1,0 +1,1 @@
+- [GitHub push setup](github-push-setup.md) — Git pane push fails via broken leftover remote; push directly with PAT (needs repo+workflow scopes).
