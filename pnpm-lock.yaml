@@ -70,8 +70,8 @@ catalogs:
       specifier: ^3.7.1
       version: 3.9.0
     zod:
-      specifier: 3.25.76
-      version: 3.25.76
+      specifier: 4.4.3
+      version: 4.4.3
 
 overrides:
   micromatch>picomatch: 2.3.2
@@ -228,7 +228,7 @@ importers:
         version: 1.0.15
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.4.3
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -460,7 +460,7 @@ importers:
         version: 3.9.0(react@19.1.0)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.4.3
 
   artifacts/mockup-sandbox:
     devDependencies:
@@ -643,7 +643,7 @@ importers:
         version: 7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.3)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.4.3
 
   artifacts/replit-pitch:
     devDependencies:
@@ -691,7 +691,7 @@ importers:
         version: 3.9.0(react@19.1.0)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.4.3
 
   lib/api-client-react:
     dependencies:
@@ -709,7 +709,7 @@ importers:
     dependencies:
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.4.3
 
   lib/db:
     dependencies:
@@ -718,13 +718,13 @@ importers:
         version: 0.45.2(@types/pg@8.18.0)(pg@8.20.0)
       drizzle-zod:
         specifier: ^0.8.3
-        version: 0.8.3(drizzle-orm@0.45.2(@types/pg@8.18.0)(pg@8.20.0))(zod@3.25.76)
+        version: 0.8.3(drizzle-orm@0.45.2(@types/pg@8.18.0)(pg@8.20.0))(zod@4.4.3)
       pg:
         specifier: ^8.20.0
         version: 8.20.0
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -3462,6 +3462,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -3687,6 +3688,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -3933,11 +3935,11 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -5721,10 +5723,10 @@ snapshots:
       '@types/pg': 8.18.0
       pg: 8.20.0
 
-  drizzle-zod@0.8.3(drizzle-orm@0.45.2(@types/pg@8.18.0)(pg@8.20.0))(zod@3.25.76):
+  drizzle-zod@0.8.3(drizzle-orm@0.45.2(@types/pg@8.18.0)(pg@8.20.0))(zod@4.4.3):
     dependencies:
       drizzle-orm: 0.45.2(@types/pg@8.18.0)(pg@8.20.0)
-      zod: 3.25.76
+      zod: 4.4.3
 
   dunder-proto@1.0.1:
     dependencies:
@@ -7182,6 +7184,6 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  zod@3.25.76: {}
-
   zod@4.3.6: {}
+
+  zod@4.4.3: {}
